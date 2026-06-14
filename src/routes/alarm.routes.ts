@@ -1,26 +1,67 @@
 import { Router } from 'express';
-import { AlarmController } from '../controllers/alarm.controller.js';
 import { validateQuery } from '../middlewares/validator.middleware.js';
-import {
-  QueryAlarmsSchema,
-  TimeSeriesCountSchema,
-  TimeSeriesDurationSchema,
-  TopNSchema,
-  RatioSchema,
-} from '../validators/alarm.validator.js';
-
-import { AlarmService } from '../services/alarm.service.js';
-import { AlarmRepository } from '../repositories/alarm.repository.js';
 import { DeviceRepository } from '../repositories/device.repository.js';
 import { ErrorRepository } from '../repositories/error.repository.js';
 
-const alarmRepo = new AlarmRepository();
+// 1. Detail Query
+import { QueryAlarmsSchema } from '../validators/query-alarms.validator.js';
+import { QueryAlarmsRepository } from '../repositories/query-alarms.repository.js';
+import { QueryAlarmsService } from '../services/query-alarms.service.js';
+import { QueryAlarmsController } from '../controllers/query-alarms.controller.js';
+
+// 2. TS Count
+import { TimeSeriesCountSchema } from '../validators/time-series-count.validator.js';
+import { TimeSeriesCountRepository } from '../repositories/time-series-count.repository.js';
+import { TimeSeriesCountService } from '../services/time-series-count.service.js';
+import { TimeSeriesCountController } from '../controllers/time-series-count.controller.js';
+
+// 3. TS Duration
+import { TimeSeriesDurationSchema } from '../validators/time-series-duration.validator.js';
+import { TimeSeriesDurationRepository } from '../repositories/time-series-duration.repository.js';
+import { TimeSeriesDurationService } from '../services/time-series-duration.service.js';
+import { TimeSeriesDurationController } from '../controllers/time-series-duration.controller.js';
+
+// 4. Top-N
+import { TopNSchema } from '../validators/top-n-analytics.validator.js';
+import { TopNAnalyticsRepository } from '../repositories/top-n-analytics.repository.js';
+import { TopNAnalyticsService } from '../services/top-n-analytics.service.js';
+import { TopNAnalyticsController } from '../controllers/top-n-analytics.controller.js';
+
+// 5. Ratio
+import { RatioSchema } from '../validators/ratio-analytics.validator.js';
+import { RatioAnalyticsRepository } from '../repositories/ratio-analytics.repository.js';
+import { RatioAnalyticsService } from '../services/ratio-analytics.service.js';
+import { RatioAnalyticsController } from '../controllers/ratio-analytics.controller.js';
+
 const deviceRepo = new DeviceRepository();
 const errorRepo = new ErrorRepository();
-const alarmService = new AlarmService(alarmRepo, deviceRepo, errorRepo);
+
+// 1. Detail Query
+const queryAlarmsRepo = new QueryAlarmsRepository();
+const queryAlarmsService = new QueryAlarmsService(queryAlarmsRepo, deviceRepo, errorRepo);
+const queryAlarmsController = new QueryAlarmsController(queryAlarmsService);
+
+// 2. TS Count
+const tsCountRepo = new TimeSeriesCountRepository();
+const tsCountService = new TimeSeriesCountService(tsCountRepo);
+const tsCountController = new TimeSeriesCountController(tsCountService);
+
+// 3. TS Duration
+const tsDurationRepo = new TimeSeriesDurationRepository();
+const tsDurationService = new TimeSeriesDurationService(tsDurationRepo);
+const tsDurationController = new TimeSeriesDurationController(tsDurationService);
+
+// 4. Top-N
+const topNRepo = new TopNAnalyticsRepository();
+const topNService = new TopNAnalyticsService(topNRepo, deviceRepo, errorRepo);
+const topNController = new TopNAnalyticsController(topNService);
+
+// 5. Ratio
+const ratioRepo = new RatioAnalyticsRepository();
+const ratioService = new RatioAnalyticsService(ratioRepo, deviceRepo);
+const ratioController = new RatioAnalyticsController(ratioService);
 
 const router = Router();
-const controller = new AlarmController(alarmService);
 
 /**
  * @swagger
@@ -245,7 +286,7 @@ const controller = new AlarmController(alarmService);
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.get('/alarms', validateQuery(QueryAlarmsSchema), controller.queryAlarms);
+router.get('/alarms', validateQuery(QueryAlarmsSchema), queryAlarmsController.queryAlarms);
 
 /**
  * @swagger
@@ -319,7 +360,7 @@ router.get('/alarms', validateQuery(QueryAlarmsSchema), controller.queryAlarms);
 router.get(
   '/analytics/time-series/count',
   validateQuery(TimeSeriesCountSchema),
-  controller.getTimeSeriesCount,
+  tsCountController.getTimeSeriesCount,
 );
 
 /**
@@ -391,7 +432,7 @@ router.get(
 router.get(
   '/analytics/time-series/duration',
   validateQuery(TimeSeriesDurationSchema),
-  controller.getTimeSeriesDuration,
+  tsDurationController.getTimeSeriesDuration,
 );
 
 /**
@@ -459,7 +500,7 @@ router.get(
  *                       type: integer
  *                       example: 80
  */
-router.get('/analytics/top-n', validateQuery(TopNSchema), controller.getTopNAnalytics);
+router.get('/analytics/top-n', validateQuery(TopNSchema), topNController.getTopNAnalytics);
 
 /**
  * @swagger
@@ -518,6 +559,6 @@ router.get('/analytics/top-n', validateQuery(TopNSchema), controller.getTopNAnal
  *                       type: integer
  *                       example: 90
  */
-router.get('/analytics/ratio', validateQuery(RatioSchema), controller.getRatioAnalytics);
+router.get('/analytics/ratio', validateQuery(RatioSchema), ratioController.getRatioAnalytics);
 
 export default router;

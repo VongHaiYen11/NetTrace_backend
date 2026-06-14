@@ -1,11 +1,9 @@
-import {
-  validateTimeRange,
-  QueryAlarmsSchema,
-  TimeSeriesCountSchema,
-  TimeSeriesDurationSchema,
-  TopNSchema,
-  RatioSchema,
-} from '../validators/alarm.validator.js';
+import { validateTimeRange } from '../validators/shared.js';
+import { QueryAlarmsSchema } from '../validators/query-alarms.validator.js';
+import { TimeSeriesCountSchema } from '../validators/time-series-count.validator.js';
+import { TimeSeriesDurationSchema } from '../validators/time-series-duration.validator.js';
+import { TopNSchema } from '../validators/top-n-analytics.validator.js';
+import { RatioSchema } from '../validators/ratio-analytics.validator.js';
 
 describe('Validation Layer Tests', () => {
   describe('Time Range Custom Validator', () => {

@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { ZodSchema, ZodError } from 'zod';
-import { validateTimeRange } from '../validators/alarm.validator.js';
+import { validateTimeRange } from '../validators/shared.js';
 
 export const validateQuery = (schema: ZodSchema) => {
   return (req: Request, res: Response, next: NextFunction) => {

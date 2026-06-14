@@ -1,24 +1,18 @@
-import { AlarmService, ServiceMetrics } from '../services/alarm.service.js';
-import { AlarmRepository, AlarmRecord } from '../repositories/alarm.repository.js';
+import { QueryAlarmsService } from '../services/query-alarms.service.js';
+import { QueryAlarmsRepository, AlarmRecord } from '../repositories/query-alarms.repository.js';
+import { TopNAnalyticsService } from '../services/top-n-analytics.service.js';
+import { TopNAnalyticsRepository } from '../repositories/top-n-analytics.repository.js';
+import { RatioAnalyticsService } from '../services/ratio-analytics.service.js';
+import { RatioAnalyticsRepository } from '../repositories/ratio-analytics.repository.js';
 import { DeviceRepository, DeviceMetadata } from '../repositories/device.repository.js';
 import { ErrorRepository, ErrorMetadata } from '../repositories/error.repository.js';
+import { ServiceMetrics } from '../services/shared.js';
 
 describe('Service Layer Federation Tests', () => {
-  let alarmService: AlarmService;
-  let mockAlarmRepo: jest.Mocked<AlarmRepository>;
   let mockDeviceRepo: jest.Mocked<DeviceRepository>;
   let mockErrorRepo: jest.Mocked<ErrorRepository>;
 
   beforeEach(() => {
-    mockAlarmRepo = {
-      queryAlarms: jest.fn(),
-      getTimeSeriesCount: jest.fn(),
-      getTimeSeriesDuration: jest.fn(),
-      getTopN: jest.fn(),
-      getRatioBySeverity: jest.fn(),
-      getRatioByDevice: jest.fn(),
-    } as unknown as jest.Mocked<AlarmRepository>;
-
     mockDeviceRepo = {
       getDevicesByIds: jest.fn(),
     } as unknown as jest.Mocked<DeviceRepository>;
@@ -26,12 +20,16 @@ describe('Service Layer Federation Tests', () => {
     mockErrorRepo = {
       getErrorsByCodes: jest.fn(),
     } as unknown as jest.Mocked<ErrorRepository>;
-
-    alarmService = new AlarmService(mockAlarmRepo, mockDeviceRepo, mockErrorRepo);
   });
 
-  describe('queryAlarms (Detail Queries with Keyset Federation)', () => {
+  describe('QueryAlarmsService (Detail Queries with Keyset Federation)', () => {
     it('should query alarms, extract distinct device/error IDs, fetch metadata in parallel, and stitch', async () => {
+      const mockQueryRepo = {
+        queryAlarms: jest.fn(),
+      } as unknown as jest.Mocked<QueryAlarmsRepository>;
+
+      const queryService = new QueryAlarmsService(mockQueryRepo, mockDeviceRepo, mockErrorRepo);
+
       const mockAlarms: AlarmRecord[] = [
         {
           alarm_id: 'a1',
@@ -46,7 +44,7 @@ describe('Service Layer Federation Tests', () => {
         },
       ];
 
-      mockAlarmRepo.queryAlarms.mockResolvedValue({
+      mockQueryRepo.queryAlarms.mockResolvedValue({
         alarms: mockAlarms,
         total: 1,
         durationMs: 50,
@@ -104,7 +102,7 @@ describe('Service Layer Federation Tests', () => {
         sort_order: 'desc' as const,
       };
 
-      const result = await alarmService.queryAlarms(params, metrics);
+      const result = await queryService.queryAlarms(params, metrics);
 
       expect(result.alarms.length).toBe(1);
       expect(result.alarms[0].device_details).toEqual(mockDevices[0]);
@@ -115,9 +113,15 @@ describe('Service Layer Federation Tests', () => {
     });
   });
 
-  describe('getTopNAnalytics', () => {
+  describe('TopNAnalyticsService', () => {
     it('should aggregate device top-n ranking and resolve station/device names', async () => {
-      mockAlarmRepo.getTopN.mockResolvedValue({
+      const mockTopNRepo = {
+        getTopN: jest.fn(),
+      } as unknown as jest.Mocked<TopNAnalyticsRepository>;
+
+      const topNService = new TopNAnalyticsService(mockTopNRepo, mockDeviceRepo, mockErrorRepo);
+
+      mockTopNRepo.getTopN.mockResolvedValue({
         rows: [{ entity_id: 'DEV001', alarm_count: 50 }],
         durationMs: 30,
       });
@@ -149,7 +153,7 @@ describe('Service Layer Federation Tests', () => {
         records_returned: 0,
       };
 
-      const result = await alarmService.getTopNAnalytics(
+      const result = await topNService.getTopNAnalytics(
         {
           from_time: new Date(),
           to_time: new Date(),
@@ -160,16 +164,23 @@ describe('Service Layer Federation Tests', () => {
       );
 
       expect(result.length).toBe(1);
-      const resItem = result[0] as { device_id: string; alarm_count: number; label: string };
+      const resItem = result[0] as Record<string, unknown>;
       expect(resItem.device_id).toBe('DEV001');
       expect(resItem.alarm_count).toBe(50);
       expect(resItem.label).toBe('Device Alpha (Hanoi Station)');
     });
   });
 
-  describe('getRatioAnalytics', () => {
+  describe('RatioAnalyticsService', () => {
     it('should compute ratios by severity directly', async () => {
-      mockAlarmRepo.getRatioBySeverity.mockResolvedValue({
+      const mockRatioRepo = {
+        getRatioBySeverity: jest.fn(),
+        getRatioByDevice: jest.fn(),
+      } as unknown as jest.Mocked<RatioAnalyticsRepository>;
+
+      const ratioService = new RatioAnalyticsService(mockRatioRepo, mockDeviceRepo);
+
+      mockRatioRepo.getRatioBySeverity.mockResolvedValue({
         rows: [
           { severity: 'critical', count: 60 },
           { severity: 'warning', count: 40 },
@@ -183,7 +194,7 @@ describe('Service Layer Federation Tests', () => {
         records_returned: 0,
       };
 
-      const result = await alarmService.getRatioAnalytics(
+      const result = await ratioService.getRatioAnalytics(
         {
           from_time: new Date(),
           to_time: new Date(),
@@ -198,7 +209,14 @@ describe('Service Layer Federation Tests', () => {
     });
 
     it('should federate device type from Postgres and coalesce ratios', async () => {
-      mockAlarmRepo.getRatioByDevice.mockResolvedValue({
+      const mockRatioRepo = {
+        getRatioBySeverity: jest.fn(),
+        getRatioByDevice: jest.fn(),
+      } as unknown as jest.Mocked<RatioAnalyticsRepository>;
+
+      const ratioService = new RatioAnalyticsService(mockRatioRepo, mockDeviceRepo);
+
+      mockRatioRepo.getRatioByDevice.mockResolvedValue({
         rows: [
           { device_id: 'DEV001', count: 60 },
           { device_id: 'DEV002', count: 40 },
@@ -248,8 +266,7 @@ describe('Service Layer Federation Tests', () => {
         records_returned: 0,
       };
 
-      // Query ratio by region (province)
-      const resultRegion = await alarmService.getRatioAnalytics(
+      const resultRegion = await ratioService.getRatioAnalytics(
         {
           from_time: new Date(),
           to_time: new Date(),
