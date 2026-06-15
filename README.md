@@ -18,6 +18,22 @@ Request ➔ Route ➔ Controller ➔ Service ➔ Repository ➔ Database
 * **Repository Layer**: Generates optimized ClickHouse queries and parameter-bound PostgreSQL queries.
 * **Database Connection Layer**: Manages PostgreSQL connection pools and the ClickHouse singleton client instance.
 
+## 📂 Folder Structure
+
+```text
+src/
+├── configs/       # App configurations (port, DB credentials, Swagger info)
+├── controllers/   # Route controllers (request extraction, response sending)
+├── database/      # Database clients and connection initialization (Postgres & ClickHouse)
+├── middlewares/   # Custom Express middlewares (validator wrapper, loggers)
+├── repositories/  # Data Access Object (DAO) layer (ClickHouse and Postgres raw queries)
+├── routes/        # Router files containing route declarations and Swagger JSDoc
+├── services/      # Core business logic and in-memory Data Federation
+├── tests/         # Unit tests for Services and Validators
+├── utils/         # Utility scripts (health checker, Pino logger config)
+└── validators/    # Zod schema validation files
+```
+
 ---
 
 ## 🔗 Data Federation Mechanism
