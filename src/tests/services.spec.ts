@@ -6,6 +6,7 @@ import { AnalyticsQueryService } from '../services/analytics-query.service.js';
 import { AnalyticsQueryRepository } from '../repositories/analytics-query.repository.js';
 import { HeatmapService } from '../services/heatmap.service.js';
 import { HeatmapRepository } from '../repositories/heatmap.repository.js';
+import { ExportService } from '../services/export.service.js';
 import { DeviceRepository } from '../repositories/device.repository.js';
 import { ErrorRepository } from '../repositories/error.repository.js';
 import { ServiceMetrics } from '../services/shared.js';
@@ -318,6 +319,69 @@ describe('Service Layer Tests', () => {
       expect(result.length).toBe(2);
       expect(result[0]).toEqual({ x: 13, y: 'Monday', value: 42 });
       expect(result[1]).toEqual({ x: 14, y: 'Tuesday', value: 18 });
+    });
+  });
+
+  describe('ExportService', () => {
+    it('should export alarms as CSV with selected columns', async () => {
+      const mockQueryRepo = {
+        queryAlarmsStream: jest.fn(),
+      } as unknown as jest.Mocked<QueryAlarmsRepository>;
+
+      const exportService = new ExportService(mockQueryRepo, mockDeviceRepo, mockErrorRepo);
+
+      const mockStream = new (require('stream').Readable)({
+        read() {
+          this.push(JSON.stringify({
+            alarm_id: 'a1',
+            device_id: 'DEV01',
+            error_code: 'ERR01',
+            time_created: '2026-06-15 00:00:00',
+            time_solved: null,
+            status: 'active',
+            severity: 'critical',
+            raw_log: 'link down',
+            description: 'port gi0/1 is down'
+          }) + '\n');
+          this.push(null);
+        }
+      });
+
+      mockQueryRepo.queryAlarmsStream.mockResolvedValue(mockStream);
+      mockDeviceRepo.getAllDevices.mockResolvedValue({ devices: [], durationMs: 0 });
+      mockErrorRepo.getAllErrors.mockResolvedValue({ errors: [], durationMs: 0 });
+
+      const chunks: string[] = [];
+      const { PassThrough } = require('stream');
+      const mockRes = new PassThrough() as any;
+      mockRes.setHeader = jest.fn();
+
+      mockRes.on('data', (chunk: any) => {
+        chunks.push(chunk.toString());
+      });
+
+      await exportService.exportAlarms(
+        {
+          format: 'csv',
+          columns: ['alarm_id', 'severity', 'status'],
+          filters: {
+            from_time: new Date(),
+            to_time: new Date(),
+            sort_by: 'timestamp',
+            sort_order: 'desc',
+          },
+        },
+        mockRes,
+        metrics,
+      );
+
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      expect(mockRes.setHeader).toHaveBeenCalledWith('Content-Type', 'text/csv; charset=utf-8');
+      
+      const fullCsv = chunks.join('');
+      expect(fullCsv).toContain('Alarm ID,Severity,Status');
+      expect(fullCsv).toContain('a1,critical,active');
     });
   });
 });

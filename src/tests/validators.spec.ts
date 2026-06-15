@@ -3,7 +3,7 @@ import { QueryAlarmsSchema } from '../validators/query-alarms.validator.js';
 import { SummarySchema } from '../validators/summary.validator.js';
 import { AnalyticsQuerySchema } from '../validators/analytics-query.validator.js';
 import { HeatmapSchema } from '../validators/heatmap.validator.js';
-import { ExportSchema } from '../validators/export.validator.js';
+import { ExportSchema, ExportQuerySchema } from '../validators/export.validator.js';
 
 describe('Validation Layer Tests', () => {
   describe('Time Range Custom Validator', () => {
@@ -143,5 +143,55 @@ describe('Validation Layer Tests', () => {
     it('should reject other export formats', () => {
       expect(ExportSchema.safeParse({ format: 'pdf' }).success).toBe(false);
     });
+
+    it('should accept sort and limit in filters', () => {
+      const parsed = ExportSchema.parse({
+        format: 'csv',
+        filters: {
+          sort_by: 'severity',
+          sort_order: 'asc',
+          limit: 100,
+        },
+      });
+      expect(parsed.filters.sort_by).toBe('severity');
+      expect(parsed.filters.sort_order).toBe('asc');
+      expect(parsed.filters.limit).toBe(100);
+    });
+  });
+
+  describe('ExportQuerySchema', () => {
+    it('should validate query params with columns and format', () => {
+      const parsed = ExportQuerySchema.parse({
+        format: 'csv',
+        columns: 'alarm_id,severity,status',
+        severity: 'critical',
+        sort_by: 'severity',
+        sort_order: 'asc',
+        limit: '10',
+      });
+      expect(parsed.format).toBe('csv');
+      expect(parsed.columns).toEqual(['alarm_id', 'severity', 'status']);
+      expect(parsed.severity).toEqual(['critical']);
+      expect(parsed.sort_by).toBe('severity');
+      expect(parsed.sort_order).toBe('asc');
+      expect(parsed.limit).toBe(10);
+    });
+
+    it('should fall back to defaults', () => {
+      const parsed = ExportQuerySchema.parse({});
+      expect(parsed.format).toBe('csv');
+      expect(parsed.columns).toBeUndefined();
+      expect(parsed.sort_by).toBe('timestamp');
+      expect(parsed.sort_order).toBe('desc');
+      expect(parsed.limit).toBeUndefined();
+    });
+
+    it('should reject invalid columns', () => {
+      const result = ExportQuerySchema.safeParse({
+        columns: 'alarm_id,invalid_column',
+      });
+      expect(result.success).toBe(false);
+    });
   });
 });
+

@@ -129,8 +129,11 @@ export class QueryAlarmsRepository {
     status?: string[];
     device_id?: string[];
     error_code?: string[];
+    sort_by?: 'timestamp' | 'severity' | 'status';
+    sort_order?: 'asc' | 'desc';
+    limit?: number;
   }) {
-    const { from_time, to_time } = params;
+    const { from_time, to_time, sort_by = 'timestamp', sort_order = 'desc', limit } = params;
 
     const fromStr = formatDate(from_time);
     const toStr = formatDate(to_time);
@@ -145,7 +148,21 @@ export class QueryAlarmsRepository {
     queryParams.from_time = fromStr;
     queryParams.to_time = toStr;
 
+    const sortFieldMap: Record<string, string> = {
+      timestamp: 'time_created',
+      severity: 'severity',
+      status: 'status',
+    };
+    const orderColumn = sortFieldMap[sort_by] || 'time_created';
+    const orderDirection = sort_order === 'asc' ? 'ASC' : 'DESC';
+
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    let limitClause = '';
+    if (limit) {
+      limitClause = `LIMIT {limit: UInt32}`;
+      queryParams.limit = limit;
+    }
 
     const query = `
       SELECT 
@@ -161,7 +178,8 @@ export class QueryAlarmsRepository {
       FROM alarms
       PREWHERE time_created BETWEEN {from_time: DateTime} AND {to_time: DateTime}
       ${whereClause}
-      ORDER BY time_created DESC, alarm_id DESC
+      ORDER BY ${orderColumn} ${orderDirection}, alarm_id ${orderDirection}
+      ${limitClause}
     `;
 
     const resultSet = await clickhouseClient.query({

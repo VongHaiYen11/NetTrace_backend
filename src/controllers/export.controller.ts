@@ -10,7 +10,50 @@ export class ExportController {
       const queryParams = res.locals.query;
       const metrics = res.locals.metrics;
 
-      await this.exportService.exportAlarms(queryParams, res, metrics);
+      let normalizedParams;
+      if (req.method === 'GET') {
+        const {
+          format,
+          columns,
+          from_time,
+          to_time,
+          severity,
+          status,
+          device_id,
+          error_code,
+          device_type,
+          vendor,
+          station,
+          province,
+          sort_by,
+          sort_order,
+          limit,
+        } = queryParams;
+
+        normalizedParams = {
+          format,
+          columns,
+          filters: {
+            from_time,
+            to_time,
+            severity,
+            status,
+            device_id,
+            error_code,
+            device_type,
+            vendor,
+            station,
+            province,
+            sort_by,
+            sort_order,
+            limit,
+          },
+        };
+      } else {
+        normalizedParams = queryParams;
+      }
+
+      await this.exportService.exportAlarms(normalizedParams, res, metrics);
     } catch (error) {
       next(error);
     }

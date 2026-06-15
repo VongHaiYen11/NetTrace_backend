@@ -28,7 +28,7 @@ import { HeatmapService } from '../services/heatmap.service.js';
 import { HeatmapController } from '../controllers/heatmap.controller.js';
 
 // 5. Export
-import { ExportSchema } from '../validators/export.validator.js';
+import { ExportSchema, ExportQuerySchema } from '../validators/export.validator.js';
 import { ExportService } from '../services/export.service.js';
 import { ExportController } from '../controllers/export.controller.js';
 
@@ -481,6 +481,94 @@ router.post('/analytics/heatmap', validateBody(HeatmapSchema), heatmapController
 /**
  * @swagger
  * /api/v1/export:
+ *   get:
+ *     summary: Export alarms list to Excel or CSV via GET
+ *     description: Streams a full/filtered copy of alarm telemetry formatted as comma-separated values or Excel spreadsheet using URL query parameters.
+ *     tags:
+ *       - Export
+ *     parameters:
+ *       - in: query
+ *         name: format
+ *         schema:
+ *           type: string
+ *           enum: [csv, xlsx]
+ *           default: csv
+ *         description: Format of export.
+ *       - in: query
+ *         name: columns
+ *         schema:
+ *           type: string
+ *         description: Comma-separated list of columns to export.
+ *       - in: query
+ *         name: from_time
+ *         schema:
+ *           type: string
+ *         description: Start time (ISO-8601). Defaults to 7 days before to_time.
+ *       - in: query
+ *         name: to_time
+ *         schema:
+ *           type: string
+ *         description: End time (ISO-8601). Defaults to now.
+ *       - in: query
+ *         name: severity
+ *         schema:
+ *           type: string
+ *         description: Comma-separated severities.
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *         description: Comma-separated statuses.
+ *       - in: query
+ *         name: device_id
+ *         schema:
+ *           type: string
+ *         description: Comma-separated device IDs.
+ *       - in: query
+ *         name: error_code
+ *         schema:
+ *           type: string
+ *         description: Comma-separated error codes.
+ *       - in: query
+ *         name: device_type
+ *         schema:
+ *           type: string
+ *         description: Comma-separated device types (Federated Postgres).
+ *       - in: query
+ *         name: vendor
+ *         schema:
+ *           type: string
+ *         description: Comma-separated vendors (Federated Postgres).
+ *       - in: query
+ *         name: station
+ *         schema:
+ *           type: string
+ *         description: Comma-separated stations (Federated Postgres).
+ *       - in: query
+ *         name: province
+ *         schema:
+ *           type: string
+ *         description: Comma-separated provinces (Federated Postgres).
+ *       - in: query
+ *         name: sort_by
+ *         schema:
+ *           type: string
+ *           enum: [timestamp, severity, status]
+ *           default: timestamp
+ *       - in: query
+ *         name: sort_order
+ *         schema:
+ *           type: string
+ *           enum: [asc, desc]
+ *           default: desc
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *         description: Optional max records limit to export.
+ *     responses:
+ *       200:
+ *         description: Stream download.
  *   post:
  *     summary: Export alarms list to Excel or CSV
  *     description: Streams a full/filtered copy of alarm telemetry formatted as comma-separated values or Excel spreadsheet.
@@ -499,12 +587,63 @@ router.post('/analytics/heatmap', validateBody(HeatmapSchema), heatmapController
  *                 type: string
  *                 enum: [csv, xlsx]
  *                 example: "csv"
+ *               columns:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                 example: ["alarm_id", "severity"]
  *               filters:
  *                 type: object
+ *                 properties:
+ *                   from_time:
+ *                     type: string
+ *                   to_time:
+ *                     type: string
+ *                   severity:
+ *                     type: array
+ *                     items:
+ *                       type: string
+ *                   status:
+ *                     type: array
+ *                     items:
+ *                       type: string
+ *                   device_id:
+ *                     type: array
+ *                     items:
+ *                       type: string
+ *                   error_code:
+ *                     type: array
+ *                     items:
+ *                       type: string
+ *                   device_type:
+ *                     type: array
+ *                     items:
+ *                       type: string
+ *                   vendor:
+ *                     type: array
+ *                     items:
+ *                       type: string
+ *                   station:
+ *                     type: array
+ *                     items:
+ *                       type: string
+ *                   province:
+ *                     type: array
+ *                     items:
+ *                       type: string
+ *                   sort_by:
+ *                     type: string
+ *                     enum: [timestamp, severity, status]
+ *                   sort_order:
+ *                     type: string
+ *                     enum: [asc, desc]
+ *                   limit:
+ *                     type: integer
  *     responses:
  *       200:
  *         description: Stream download.
  */
+router.get('/export', validateQuery(ExportQuerySchema), exportController.exportAlarms);
 router.post('/export', validateBody(ExportSchema), exportController.exportAlarms);
 
 export default router;
