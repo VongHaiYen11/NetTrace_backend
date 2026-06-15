@@ -47,12 +47,32 @@ To ensure maximum performance and separation of concerns, the PostgreSQL and Cli
 
 ---
 
-## ⚡ ClickHouse Optimization Rules
+## ⚡ Query Optimization & Rules of Thumb
 
-* **PREWHERE Clauses**: When filtering by timestamp ranges, queries use `PREWHERE time_created BETWEEN ...` which instructs ClickHouse to evaluate the range condition first before loading other columns from disk.
-* **LowCardinality Indexing**: Low-cardinality columns (`severity` and `status`) are positioned first in order keys and group-by aggregations.
-* **Avoiding SELECT \***: Queries explicitly request only required fields to minimize RAM and disk read bandwidth.
-* **Keyset Cursor Pagination**: The detail list endpoint utilizes cursor variables (`cursor_time`, `cursor_id`) to execute timeline queries (`(time_created, alarm_id) < (cursor_time, cursor_id)`), avoiding the heavy query scanning of `OFFSET`.
+To ensure the system handles hundreds of millions of alarm records efficiently and maintains sub-second query latency (SLA: P95 < 500ms for queries, P95 < 2s for analytics), the following rules of thumb and optimization techniques are strictly followed across the application:
+
+### 1. Data Federation (No Direct Joins)
+* **Rule**: PostgreSQL and ClickHouse must **never** be joined directly.
+* **Mechanism**: 
+  1. If PostgreSQL metadata filters are provided, query PostgreSQL first to resolve the matching `device_id` list.
+  2. Query ClickHouse using the resolved `device_id` list.
+  3. Enrich the returned ClickHouse rows with PostgreSQL metadata (`device_details`, `error_details`) in the Service layer using $O(1)$ Hash Map lookups on RAM.
+
+### 2. ClickHouse Performance Optimization
+* **Partition Pruning**: All queries must specify `from_time` and `to_time` to allow ClickHouse to exclude irrelevant data partitions (Partition Pruning). The time range must not exceed **90 days**.
+* **PREWHERE Clauses**: Time-range filtering must be performed in the `PREWHERE` clause (e.g., `PREWHERE time_created BETWEEN ...`) to load only the required columns and filter matching rows before reading the rest of the fields.
+* **No `SELECT *`**: All queries explicitly list the required columns to leverage ClickHouse's columnar-store architecture.
+* **LowCardinality fields**: Columns with low cardinality, such as `severity` and `status`, are stored as `LowCardinality(String)` to increase compression and speed up sorting/grouping.
+
+### 3. Keyset (Cursor-Based) Pagination
+* **Rule**: Traditional `OFFSET` pagination is forbidden on large datasets.
+* **Mechanism**: Pagination uses `cursor_time` and `cursor_id` to query only rows occurring before/after the current cursor (`(time_created, alarm_id) < (cursor_time, cursor_id)`), ensuring consistent $O(\log N)$ query time.
+
+### 4. Query Safety & Guardrails
+* **Max Top-N**: Limit for query results is strictly capped at $N \le 1000$.
+* **Max Group By Columns**: Group-by operations are limited to a maximum of 3 columns.
+* **Sorting Whitelist**: Sorting is restricted to whitelisted fields (`time_created`, `severity`, `status`, `count`). Raw SQL string inputs from clients are never injected directly into ORDER BY clauses.
+* **Database Timeouts**: PostgreSQL query timeout is capped at `5s` and ClickHouse is capped at `30s` to prevent long-running queries from locking system resources.
 
 ---
 
