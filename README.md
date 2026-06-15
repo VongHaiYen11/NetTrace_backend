@@ -75,7 +75,8 @@ To maintain a sub-second response SLA (P95 < 500ms for detail queries, P95 < 2s 
 
 * 🛡️ **No `SELECT *`**: Queries explicitly declare target fields to minimize disk read and memory footprint.
 * ✂️ **Partition Pruning**: The time range filter (`from_time` and `to_time`) is mandatory for all query/analytics APIs to prune partition directories. The query range is capped at **90 days**.
-* 🔍 **`PREWHERE` Clause**: Filtering by `time_created` utilizes ClickHouse's `PREWHERE` to evaluate conditions before loading other columns.
+* 🔍 **`PREWHERE` Clause**: Dynamic metadata filter conditions (`status`, `severity`, `device_id`, `error_code`) are explicitly placed in the ClickHouse `PREWHERE` clause along with `time_created`. This forces ClickHouse to perform primary key pruning first and avoid loading large string columns (`raw_log`, `description`) into RAM for discarded rows.
+* 🔗 **Dynamic PostgreSQL Joins**: The PostgreSQL query builder dynamically adds `INNER JOIN` statements only when filtering on vendor/station metadata. If filtering only on `device_type`, no joins are performed.
 * 📄 **No `OFFSET` Pagination**: Large-dataset pagination is achieved using **Keyset/Cursor Pagination** (`cursor_time`, `cursor_id`), resulting in $O(\log N)$ performance.
 * 🔒 **Query Guardrails**: 
   * Capped maximum Top-N results ($N \le 1000$).
