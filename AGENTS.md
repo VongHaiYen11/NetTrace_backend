@@ -205,6 +205,7 @@ Tất cả Analytics APIs phải sử dụng chung Filter DTO để tận dụng
 
 * **Default Time Window:** Nếu client bỏ trống: `to_time = now()`, `from_time = now() - 7 days`.
 * **Maximum Time Range:** Thời gian truy vấn tối đa không vượt quá **90 ngày** (Tránh làm quá tải CPU ClickHouse).
+* **Case-Insensitive Filtering:** Đối với tất cả các bộ lọc dạng chuỗi (String) như `severity`, `status`, `device_id`, `error_code`, `device_type`, `vendor`, `station`, `province`, hệ thống thực hiện chuyển tất cả giá trị query và giá trị trong database về chữ thường (`LOWER`) trước khi thực hiện so sánh. Cơ chế này áp dụng đồng bộ ở cả câu truy vấn ClickHouse, PostgreSQL và trong tầng xử lý logic ghép dữ liệu (Data Federation) ở tầng Service.
 
 ---
 

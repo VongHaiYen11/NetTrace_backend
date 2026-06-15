@@ -78,6 +78,7 @@ To maintain a sub-second response SLA (P95 < 500ms for detail queries, P95 < 2s 
 * 🔍 **`PREWHERE` Clause**: Dynamic metadata filter conditions (`status`, `severity`, `device_id`, `error_code`) are explicitly placed in the ClickHouse `PREWHERE` clause along with `time_created`. This forces ClickHouse to perform primary key pruning first and avoid loading large string columns (`raw_log`, `description`) into RAM for discarded rows.
 * 🔗 **Dynamic PostgreSQL Joins**: The PostgreSQL query builder dynamically adds `INNER JOIN` statements only when filtering on vendor/station metadata. If filtering only on `device_type`, no joins are performed.
 * 📄 **Offset-based Pagination**: API pagination is achieved using offset and limit parameters (`offset`, `limit`).
+* 🔠 **Case-Insensitive Filtering**: All string fields are compared case-insensitively. Inputs and database strings are mapped to lowercase (`LOWER`) in PostgreSQL, ClickHouse, and within the Service Layer mapping maps during Data Federation.
 * 🔒 **Query Guardrails**: 
   * Capped maximum Top-N results ($N \le 1000$).
   * Capped maximum `group_by` columns to 3.
