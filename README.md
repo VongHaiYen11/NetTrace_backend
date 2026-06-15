@@ -214,6 +214,8 @@ curl -X POST http://localhost:3000/api/v1/analytics/heatmap \
 
 ### 5. Stream Export (`POST /api/v1/export`)
 * Streams a full/filtered copy of alarm telemetry formatted as `csv` or `xlsx` spreadsheet download.
+* Supports **dynamic column selection** via the `columns` array (e.g., `["alarm_id", "time_created", "severity", "status"]`). If omitted, all columns are exported.
+* Supports all table-like filters, sorting (`sort_by`, `sort_order`), and size limit (`limit`) inside the `filters` object.
 * Uses native ClickHouse streams and `exceljs` streaming pipeline to maintain $O(1)$ memory usage.
 
 **cURL Call:**
@@ -222,8 +224,12 @@ curl -X POST http://localhost:3000/api/v1/export \
   -H "Content-Type: application/json" \
   -d '{
     "format": "csv",
+    "columns": ["alarm_id", "time_created", "severity", "status"],
     "filters": {
-      "severity": ["critical"]
+      "severity": ["critical"],
+      "sort_by": "timestamp",
+      "sort_order": "asc",
+      "limit": 100
     }
   }' --output alarms_export.csv
 ```
