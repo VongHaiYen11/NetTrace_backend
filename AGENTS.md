@@ -127,19 +127,23 @@ Response (Trả về client dữ liệu đã làm giàu)
   ```
 
 ---
-
 ## 📌 Common Analytics Filter Contract
 Tất cả Analytics APIs phải sử dụng chung Filter DTO để tận dụng cơ chế tái sử dụng code. Không định nghĩa DTO riêng.
 
 ### Supported Query Parameters
 ```typescript
 {
-  from_time: string;   // ISO-8601 string
-  to_time: string;     // ISO-8601 string
+  from_time?: string;   // ISO-8601 string (Optional, default to 7 days ago)
+  to_time?: string;     // ISO-8601 string (Optional, default to now)
   severity?: string[]; // Danh sách mức độ
   status?: string[];   // Danh sách trạng thái
   device_id?: string[];// Danh sách thiết bị lọc
   error_code?: string[];// Danh sách mã lỗi lọc
+  // Các bộ lọc Postgres liên hợp:
+  device_type?: string[];
+  vendor?: string[];
+  station?: string[];
+  province?: string[];
 }
 ```
 
@@ -160,14 +164,13 @@ Tất cả Analytics APIs phải sử dụng chung Filter DTO để tận dụng
 
 ### 1. Alarm Detail API
 * **Endpoint:** `GET /api/v1/alarms`
-* **Purpose:** Bảng danh sách alarm, Tìm kiếm, Drill-down từ biểu đồ.
+* **Purpose:** Bảng danh sách alarm, Drill-down từ biểu đồ.
 * **Parameters:**
   * Time Filter: `from_time`, `to_time`
   * Alarm Filter: `severity`, `status`, `error_code`
   * Device Filter: `device_id`, `device_type`, `vendor`, `station`, `province`
-  * Search: `alarm_id`, `keyword`
-  * Pagination: `cursor`, `limit`
-* **Search:** Tìm kiếm tương đối qua `alarm_id`, `device_id`, `error_code`, `keyword`.
+  * Sorting: `sort_by` (`timestamp`, `severity`, `status`), `sort_order` (`asc`, `desc`)
+  * Pagination: `cursor_time` (ISO-8601 string), `cursor_id` (string), `limit` (max 1000)
 * **Pagination (Keyset SQL):**
   ```sql
   WHERE (
@@ -187,17 +190,13 @@ Tất cả Analytics APIs phải sử dụng chung Filter DTO để tận dụng
 * **Endpoint:** `GET /api/v1/analytics/summary`
 * **Purpose:** Cung cấp dữ liệu cho các KPI Card của Dashboard.
 * **Supported Filters:**
-  * `from_time`, `to_time`
-  * `severity`, `status`
-  * `error_code`
-  * `device_id`, `device_type`
-  * `vendor`, `station`, `province`
-* **Metrics trả về:**
-  * Total Alarms
-  * Active Alarms
-  * Closed Alarms
-  * Critical Alarms
-  * Affected Devices
+  * Common Analytics Filter Contract (bao gồm các bộ lọc thời gian, severity, device, vendor...)
+* **Response Shape (HTTP 200):** Trả về đối tượng JSON chứa các metric sau trong phần `data` (dạng camelCase):
+  * `totalAlarms`: Tổng số lượng alarm.
+  * `activeAlarms`: Số lượng alarm đang hoạt động (`status` là `active` hoặc `ACTIVE`).
+  * `closedAlarms`: Số lượng alarm đã đóng (`status` thuộc `closed`, `solved`, `CLOSED`, `SOLVED`).
+  * `criticalAlarms`: Số lượng alarm có mức độ nghiêm trọng là `critical` hoặc `CRITICAL`.
+  * `affectedDevices`: Số lượng thiết bị duy nhất bị ảnh hưởng (`uniqExact(device_id)`).
 
 ---
 
@@ -380,11 +379,28 @@ hoặc
 * **Formats:**
   * `csv`
   * `xlsx`
-* **Nguồn dữ liệu:** Tái sử dụng filter từ Alarm Detail API.
 * **Yêu cầu:**
   * Sử dụng Stream.
   * Không load toàn bộ dữ liệu vào RAM.
   * Hỗ trợ export tập dữ liệu lớn.
+* **Request Body Schema:**
+  ```json
+  {
+    "format": "csv" | "xlsx",
+    "columns": ["alarm_id", "severity", "status", "device_name", "error_name", "..."], // Optional. Nếu không truyền, mặc định sẽ xuất tất cả các cột.
+    "filters": {
+      // Common Analytics Filter Contract:
+      "from_time": "2026-06-01T00:00:00Z",
+      "to_time": "2026-06-07T23:59:59Z",
+      "severity": ["critical"],
+      "device_type": ["wifi"],
+      // Sắp xếp và giới hạn bản ghi:
+      "sort_by": "timestamp" | "severity" | "status",
+      "sort_order": "asc" | "desc",
+      "limit": 1000
+    }
+  }
+  ```
 ---
 
 ## 📌 ClickHouse Optimization Rules
