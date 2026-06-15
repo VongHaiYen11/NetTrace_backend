@@ -111,19 +111,20 @@ export class HeatmapService {
       'Sunday',
     ];
 
-    return rows.map((r) => {
-      const x = r.hour !== undefined ? Number(r.hour) : 0;
-      const value = r.count !== undefined ? Number(r.count) : 0;
-
-      let y: string | number = '';
-      if (mode === 'weekday') {
+    if (mode === 'weekday') {
+      return rows.map((r) => {
+        const x = r.hour !== undefined ? Number(r.hour) : 0;
         const dayNum = Number(r.day_of_week);
-        y = weekdayNames[dayNum - 1] || 'Unknown';
-      } else {
-        y = r.day ? String(r.day) : '';
-      }
-
-      return { x, y, value };
-    });
+        const y = weekdayNames[dayNum - 1] || 'Unknown';
+        const value = r.count !== undefined ? Number(r.count) : 0;
+        return { x, y, value };
+      });
+    } else {
+      return rows.map((r) => {
+        const day = r.day ? String(r.day) : '';
+        const value = r.count !== undefined ? Number(r.count) : 0;
+        return { day, value };
+      });
+    }
   }
 }

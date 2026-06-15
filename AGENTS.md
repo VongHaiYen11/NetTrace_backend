@@ -381,20 +381,20 @@ GROUP BY day_of_week, hour;
 ```
 
 ### Mode: `calendar`
-Giờ × Ngày trong năm
+Từng ngày trong năm (Dạng GitHub contribution graph)
 
 ```sql
 SELECT
     toDate(time_created) AS day,
-    toHour(time_created) AS hour,
     count() AS count
 FROM alarms
 WHERE time_created BETWEEN :from_time AND :to_time
-GROUP BY day, hour;
+GROUP BY day;
 ```
 
 * **Response Shape:**
 
+### Mode: `weekday`
 ```json
 [
   {
@@ -405,13 +405,11 @@ GROUP BY day, hour;
 ]
 ```
 
-hoặc
-
+### Mode: `calendar`
 ```json
 [
   {
-    "x": 13,
-    "y": "2025-01-01",
+    "day": "2025-01-01",
     "value": 120
   }
 ]

@@ -320,6 +320,35 @@ describe('Service Layer Tests', () => {
       expect(result[0]).toEqual({ x: 13, y: 'Monday', value: 42 });
       expect(result[1]).toEqual({ x: 14, y: 'Tuesday', value: 18 });
     });
+
+    it('should map calendar mode to day-by-day counts (GitHub style)', async () => {
+      const mockHeatmapRepo = {
+        getHeatmap: jest.fn(),
+      } as unknown as jest.Mocked<HeatmapRepository>;
+
+      const heatmapService = new HeatmapService(mockHeatmapRepo, mockDeviceRepo);
+
+      mockHeatmapRepo.getHeatmap.mockResolvedValue({
+        rows: [
+          { day: '2026-06-15', count: 100 },
+          { day: '2026-06-16', count: 200 },
+        ],
+        durationMs: 10,
+      });
+
+      const result = await heatmapService.getHeatmap(
+        {
+          from_time: new Date(),
+          to_time: new Date(),
+          mode: 'calendar',
+        },
+        metrics,
+      );
+
+      expect(result.length).toBe(2);
+      expect(result[0]).toEqual({ day: '2026-06-15', value: 100 });
+      expect(result[1]).toEqual({ day: '2026-06-16', value: 200 });
+    });
   });
 
   describe('ExportService', () => {
