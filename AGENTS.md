@@ -78,12 +78,64 @@ ORDER BY (status, severity, device_id, time_created);
 > [!NOTE]
 > ClickHouse chịu trách nhiệm: Query alarms, Tìm kiếm, Lọc, Gom nhóm (Aggregation), Analytics, Time Series, và Tính toán thời gian xử lý. **Tuyệt đối không JOIN trực tiếp sang PostgreSQL.**
 
-### 🐘 PostgreSQL Tables
-Gồm 4 bảng metadata cấu hình:
-* `vendor`: Nhà cung cấp thiết bị.
-* `station`: Trạm vận hành thiết bị.
-* `device`: Thiết bị mạng chi tiết.
-* `error`: Định nghĩa thông tin mã lỗi.
+### 🐘 PostgreSQL Schema
+Gồm 4 bảng metadata cấu hình được thiết kế như sau:
+
+```sql
+CREATE TABLE vendor (
+    vendor_id VARCHAR(20) PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    country VARCHAR(50)
+);
+
+CREATE TABLE station (
+    station_id VARCHAR(20) PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    longitude DOUBLE PRECISION,
+    latitude DOUBLE PRECISION,
+    province VARCHAR(100)
+);
+
+CREATE TABLE device (
+    device_id VARCHAR(20) PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+
+    vendor_id VARCHAR(20),
+    station_id VARCHAR(20),
+
+    device_type VARCHAR(50),
+    ip_address VARCHAR(50),
+
+    longitude DOUBLE PRECISION,
+    latitude DOUBLE PRECISION,
+
+    additional_info TEXT,
+
+    CONSTRAINT fk_device_vendor
+        FOREIGN KEY (vendor_id)
+        REFERENCES vendor(vendor_id),
+
+    CONSTRAINT fk_device_station
+        FOREIGN KEY (station_id)
+        REFERENCES station(station_id)
+);
+
+CREATE TABLE error (
+    error_code VARCHAR(50) PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+
+    description TEXT,
+    domain VARCHAR(50),
+
+    default_severity VARCHAR(20)
+);
+
+CREATE INDEX idx_device_vendor ON device(vendor_id); 
+
+CREATE INDEX idx_device_station ON device(station_id);
+
+CREATE INDEX idx_device_type ON device(device_type);
+```
 
 > [!NOTE]
 > PostgreSQL chịu trách nhiệm: Tra cứu metadata, làm giàu dữ liệu (Label Enrichment), và lấy danh sách bộ lọc. **Không thực hiện tác vụ Analytics trên PostgreSQL.**
