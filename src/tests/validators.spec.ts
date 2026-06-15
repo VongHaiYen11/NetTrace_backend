@@ -1,9 +1,9 @@
 import { validateTimeRange } from '../validators/shared.js';
 import { QueryAlarmsSchema } from '../validators/query-alarms.validator.js';
-import { TimeSeriesCountSchema } from '../validators/time-series-count.validator.js';
-import { TimeSeriesDurationSchema } from '../validators/time-series-duration.validator.js';
-import { TopNSchema } from '../validators/top-n-analytics.validator.js';
-import { RatioSchema } from '../validators/ratio-analytics.validator.js';
+import { SummarySchema } from '../validators/summary.validator.js';
+import { AnalyticsQuerySchema } from '../validators/analytics-query.validator.js';
+import { HeatmapSchema } from '../validators/heatmap.validator.js';
+import { ExportSchema } from '../validators/export.validator.js';
 
 describe('Validation Layer Tests', () => {
   describe('Time Range Custom Validator', () => {
@@ -49,13 +49,13 @@ describe('Validation Layer Tests', () => {
       expect(parsed.cursor_id).toBeUndefined();
     });
 
-    it('should accept valid cursor parameters', () => {
+    it('should parse array filters correctly from strings', () => {
       const parsed = QueryAlarmsSchema.parse({
-        cursor_time: '2026-06-14T08:00:00Z',
-        cursor_id: 'a123',
+        severity: 'critical,major',
+        status: 'active',
       });
-      expect(parsed.cursor_time).toBe('2026-06-14T08:00:00Z');
-      expect(parsed.cursor_id).toBe('a123');
+      expect(parsed.severity).toEqual(['critical', 'major']);
+      expect(parsed.status).toEqual(['active']);
     });
 
     it('should reject limit higher than 1000', () => {
@@ -64,53 +64,77 @@ describe('Validation Layer Tests', () => {
     });
   });
 
-  describe('TimeSeriesCountSchema', () => {
-    it('should accept hour and day intervals', () => {
-      expect(TimeSeriesCountSchema.parse({ interval: 'hour' }).interval).toBe('hour');
-      expect(TimeSeriesCountSchema.parse({ interval: 'day' }).interval).toBe('day');
-    });
-
-    it('should reject other intervals', () => {
-      expect(TimeSeriesCountSchema.safeParse({ interval: 'month' }).success).toBe(false);
-    });
-  });
-
-  describe('TimeSeriesDurationSchema', () => {
-    it('should accept day, month, and year intervals', () => {
-      expect(TimeSeriesDurationSchema.parse({ interval: 'day' }).interval).toBe('day');
-      expect(TimeSeriesDurationSchema.parse({ interval: 'month' }).interval).toBe('month');
-      expect(TimeSeriesDurationSchema.parse({ interval: 'year' }).interval).toBe('year');
-    });
-
-    it('should reject other intervals', () => {
-      expect(TimeSeriesDurationSchema.safeParse({ interval: 'hour' }).success).toBe(false);
+  describe('SummarySchema', () => {
+    it('should accept valid filter params', () => {
+      const parsed = SummarySchema.parse({
+        severity: 'critical',
+        device_type: 'wifi,router',
+      });
+      expect(parsed.severity).toEqual(['critical']);
+      expect(parsed.device_type).toEqual(['wifi', 'router']);
     });
   });
 
-  describe('TopNSchema', () => {
-    it('should validate valid parameters', () => {
-      const parsed = TopNSchema.parse({ by: 'device', n: '50' });
-      expect(parsed.by).toBe('device');
-      expect(parsed.n).toBe(50);
+  describe('AnalyticsQuerySchema', () => {
+    it('should accept valid metrics and group_by values', () => {
+      const parsed = AnalyticsQuerySchema.parse({
+        metric: 'count',
+        group_by: ['severity', 'device_type'],
+        time_bucket: 'day',
+        filters: {
+          severity: 'critical',
+        },
+      });
+      expect(parsed.metric).toBe('count');
+      expect(parsed.group_by).toEqual(['severity', 'device_type']);
+      expect(parsed.time_bucket).toBe('day');
+      expect(parsed.filters.severity).toEqual(['critical']);
     });
 
-    it('should reject invalid dimensions', () => {
-      const result = TopNSchema.safeParse({ by: 'severity' });
+    it('should reject invalid metrics', () => {
+      const result = AnalyticsQuerySchema.safeParse({
+        metric: 'invalid_metric',
+      });
+      expect(result.success).toBe(false);
+    });
+
+    it('should reject group_by array larger than 3', () => {
+      const result = AnalyticsQuerySchema.safeParse({
+        metric: 'count',
+        group_by: ['severity', 'status', 'error_code', 'device'],
+      });
       expect(result.success).toBe(false);
     });
   });
 
-  describe('RatioSchema', () => {
-    it('should accept all valid composition dimensions', () => {
-      expect(RatioSchema.parse({ by: 'severity' }).by).toBe('severity');
-      expect(RatioSchema.parse({ by: 'type' }).by).toBe('type');
-      expect(RatioSchema.parse({ by: 'station' }).by).toBe('station');
-      expect(RatioSchema.parse({ by: 'site' }).by).toBe('site');
-      expect(RatioSchema.parse({ by: 'region' }).by).toBe('region');
+  describe('HeatmapSchema', () => {
+    it('should validate valid mode and filters', () => {
+      const parsed = HeatmapSchema.parse({
+        mode: 'weekday',
+        filters: {
+          severity: 'critical',
+        },
+      });
+      expect(parsed.mode).toBe('weekday');
+      expect(parsed.filters.severity).toEqual(['critical']);
     });
 
-    it('should reject invalid composition dimensions', () => {
-      expect(RatioSchema.safeParse({ by: 'invalid_dim' }).success).toBe(false);
+    it('should reject invalid modes', () => {
+      const result = HeatmapSchema.safeParse({
+        mode: 'invalid_mode',
+      });
+      expect(result.success).toBe(false);
+    });
+  });
+
+  describe('ExportSchema', () => {
+    it('should accept csv and xlsx formats', () => {
+      expect(ExportSchema.parse({ format: 'csv' }).format).toBe('csv');
+      expect(ExportSchema.parse({ format: 'xlsx' }).format).toBe('xlsx');
+    });
+
+    it('should reject other export formats', () => {
+      expect(ExportSchema.safeParse({ format: 'pdf' }).success).toBe(false);
     });
   });
 });

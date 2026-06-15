@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { validateQuery } from '../middlewares/validator.middleware.js';
+import { validateQuery, validateBody } from '../middlewares/validator.middleware.js';
 import { DeviceRepository } from '../repositories/device.repository.js';
 import { ErrorRepository } from '../repositories/error.repository.js';
 
@@ -9,29 +9,28 @@ import { QueryAlarmsRepository } from '../repositories/query-alarms.repository.j
 import { QueryAlarmsService } from '../services/query-alarms.service.js';
 import { QueryAlarmsController } from '../controllers/query-alarms.controller.js';
 
-// 2. TS Count
-import { TimeSeriesCountSchema } from '../validators/time-series-count.validator.js';
-import { TimeSeriesCountRepository } from '../repositories/time-series-count.repository.js';
-import { TimeSeriesCountService } from '../services/time-series-count.service.js';
-import { TimeSeriesCountController } from '../controllers/time-series-count.controller.js';
+// 2. Summary
+import { SummarySchema } from '../validators/summary.validator.js';
+import { SummaryRepository } from '../repositories/summary.repository.js';
+import { SummaryService } from '../services/summary.service.js';
+import { SummaryController } from '../controllers/summary.controller.js';
 
-// 3. TS Duration
-import { TimeSeriesDurationSchema } from '../validators/time-series-duration.validator.js';
-import { TimeSeriesDurationRepository } from '../repositories/time-series-duration.repository.js';
-import { TimeSeriesDurationService } from '../services/time-series-duration.service.js';
-import { TimeSeriesDurationController } from '../controllers/time-series-duration.controller.js';
+// 3. Analytics Query
+import { AnalyticsQuerySchema } from '../validators/analytics-query.validator.js';
+import { AnalyticsQueryRepository } from '../repositories/analytics-query.repository.js';
+import { AnalyticsQueryService } from '../services/analytics-query.service.js';
+import { AnalyticsQueryController } from '../controllers/analytics-query.controller.js';
 
-// 4. Top-N
-import { TopNSchema } from '../validators/top-n-analytics.validator.js';
-import { TopNAnalyticsRepository } from '../repositories/top-n-analytics.repository.js';
-import { TopNAnalyticsService } from '../services/top-n-analytics.service.js';
-import { TopNAnalyticsController } from '../controllers/top-n-analytics.controller.js';
+// 4. Heatmap
+import { HeatmapSchema } from '../validators/heatmap.validator.js';
+import { HeatmapRepository } from '../repositories/heatmap.repository.js';
+import { HeatmapService } from '../services/heatmap.service.js';
+import { HeatmapController } from '../controllers/heatmap.controller.js';
 
-// 5. Ratio
-import { RatioSchema } from '../validators/ratio-analytics.validator.js';
-import { RatioAnalyticsRepository } from '../repositories/ratio-analytics.repository.js';
-import { RatioAnalyticsService } from '../services/ratio-analytics.service.js';
-import { RatioAnalyticsController } from '../controllers/ratio-analytics.controller.js';
+// 5. Export
+import { ExportSchema } from '../validators/export.validator.js';
+import { ExportService } from '../services/export.service.js';
+import { ExportController } from '../controllers/export.controller.js';
 
 const deviceRepo = new DeviceRepository();
 const errorRepo = new ErrorRepository();
@@ -41,25 +40,24 @@ const queryAlarmsRepo = new QueryAlarmsRepository();
 const queryAlarmsService = new QueryAlarmsService(queryAlarmsRepo, deviceRepo, errorRepo);
 const queryAlarmsController = new QueryAlarmsController(queryAlarmsService);
 
-// 2. TS Count
-const tsCountRepo = new TimeSeriesCountRepository();
-const tsCountService = new TimeSeriesCountService(tsCountRepo);
-const tsCountController = new TimeSeriesCountController(tsCountService);
+// 2. Summary
+const summaryRepo = new SummaryRepository();
+const summaryService = new SummaryService(summaryRepo, deviceRepo);
+const summaryController = new SummaryController(summaryService);
 
-// 3. TS Duration
-const tsDurationRepo = new TimeSeriesDurationRepository();
-const tsDurationService = new TimeSeriesDurationService(tsDurationRepo);
-const tsDurationController = new TimeSeriesDurationController(tsDurationService);
+// 3. Analytics Query
+const analyticsQueryRepo = new AnalyticsQueryRepository();
+const analyticsQueryService = new AnalyticsQueryService(analyticsQueryRepo, deviceRepo);
+const analyticsQueryController = new AnalyticsQueryController(analyticsQueryService);
 
-// 4. Top-N
-const topNRepo = new TopNAnalyticsRepository();
-const topNService = new TopNAnalyticsService(topNRepo, deviceRepo, errorRepo);
-const topNController = new TopNAnalyticsController(topNService);
+// 4. Heatmap
+const heatmapRepo = new HeatmapRepository();
+const heatmapService = new HeatmapService(heatmapRepo, deviceRepo);
+const heatmapController = new HeatmapController(heatmapService);
 
-// 5. Ratio
-const ratioRepo = new RatioAnalyticsRepository();
-const ratioService = new RatioAnalyticsService(ratioRepo, deviceRepo);
-const ratioController = new RatioAnalyticsController(ratioService);
+// 5. Export
+const exportService = new ExportService(queryAlarmsRepo, deviceRepo, errorRepo);
+const exportController = new ExportController(exportService);
 
 const router = Router();
 
@@ -222,18 +220,42 @@ const router = Router();
  *         name: severity
  *         schema:
  *           type: string
+ *         description: Comma-separated severities.
  *       - in: query
  *         name: status
  *         schema:
  *           type: string
+ *         description: Comma-separated statuses.
  *       - in: query
  *         name: device_id
  *         schema:
  *           type: string
+ *         description: Comma-separated device IDs.
  *       - in: query
  *         name: error_code
  *         schema:
  *           type: string
+ *         description: Comma-separated error codes.
+ *       - in: query
+ *         name: device_type
+ *         schema:
+ *           type: string
+ *         description: Comma-separated device types (Federated Postgres).
+ *       - in: query
+ *         name: vendor
+ *         schema:
+ *           type: string
+ *         description: Comma-separated vendors (Federated Postgres).
+ *       - in: query
+ *         name: station
+ *         schema:
+ *           type: string
+ *         description: Comma-separated stations (Federated Postgres).
+ *       - in: query
+ *         name: province
+ *         schema:
+ *           type: string
+ *         description: Comma-separated provinces (Federated Postgres).
  *       - in: query
  *         name: sort_by
  *         schema:
@@ -290,10 +312,10 @@ router.get('/alarms', validateQuery(QueryAlarmsSchema), queryAlarmsController.qu
 
 /**
  * @swagger
- * /api/v1/analytics/time-series/count:
+ * /api/v1/analytics/summary:
  *   get:
- *     summary: Time Series count aggregation
- *     description: Retrieve alarm counts and active counts aggregated over specific time series intervals (hour, day).
+ *     summary: Retrieve operational summary KPIs
+ *     description: Returns overall count aggregates for critical cards (total, active, closed, critical, affected devices).
  *     tags:
  *       - Analytics
  *     parameters:
@@ -301,18 +323,10 @@ router.get('/alarms', validateQuery(QueryAlarmsSchema), queryAlarmsController.qu
  *         name: from_time
  *         schema:
  *           type: string
- *         required: true
  *       - in: query
  *         name: to_time
  *         schema:
  *           type: string
- *         required: true
- *       - in: query
- *         name: interval
- *         schema:
- *           type: string
- *           enum: [hour, day]
- *           default: hour
  *       - in: query
  *         name: severity
  *         schema:
@@ -323,6 +337,26 @@ router.get('/alarms', validateQuery(QueryAlarmsSchema), queryAlarmsController.qu
  *           type: string
  *       - in: query
  *         name: device_id
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: error_code
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: device_type
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: vendor
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: station
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: province
  *         schema:
  *           type: string
  *     responses:
@@ -337,228 +371,140 @@ router.get('/alarms', validateQuery(QueryAlarmsSchema), queryAlarmsController.qu
  *                   type: boolean
  *                   example: true
  *                 data:
- *                   type: array
- *                   items:
- *                     type: object
- *                     properties:
- *                       bucket:
- *                         type: string
- *                         example: "2026-06-14T08:00:00.000Z"
- *                       total_alarms:
- *                         type: integer
- *                         example: 250
- *                       active_alarms:
- *                         type: integer
- *                         example: 80
- *                 meta:
  *                   type: object
  *                   properties:
- *                     execution_time_ms:
+ *                     totalAlarms:
+ *                       type: integer
+ *                       example: 5400
+ *                     activeAlarms:
+ *                       type: integer
+ *                       example: 120
+ *                     closedAlarms:
+ *                       type: integer
+ *                       example: 5280
+ *                     criticalAlarms:
  *                       type: integer
  *                       example: 45
- */
-router.get(
-  '/analytics/time-series/count',
-  validateQuery(TimeSeriesCountSchema),
-  tsCountController.getTimeSeriesCount,
-);
-
-/**
- * @swagger
- * /api/v1/analytics/time-series/duration:
- *   get:
- *     summary: Average resolution duration time series
- *     description: Retrieve average operational resolution duration of alarms in seconds over intervals (day, month, year).
- *     tags:
- *       - Analytics
- *     parameters:
- *       - in: query
- *         name: from_time
- *         schema:
- *           type: string
- *         required: true
- *       - in: query
- *         name: to_time
- *         schema:
- *           type: string
- *         required: true
- *       - in: query
- *         name: interval
- *         schema:
- *           type: string
- *           enum: [day, month, year]
- *           default: day
- *       - in: query
- *         name: severity
- *         schema:
- *           type: string
- *       - in: query
- *         name: status
- *         schema:
- *           type: string
- *       - in: query
- *         name: device_id
- *         schema:
- *           type: string
- *     responses:
- *       200:
- *         description: Successful response.
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 data:
- *                   type: array
- *                   items:
- *                     type: object
- *                     properties:
- *                       bucket:
- *                         type: string
- *                         example: "2026-06-14T00:00:00.000Z"
- *                       avg_duration_seconds:
- *                         type: number
- *                         example: 1240.45
+ *                     affectedDevices:
+ *                       type: integer
+ *                       example: 12
  *                 meta:
  *                   type: object
  *                   properties:
  *                     execution_time_ms:
  *                       type: integer
- *                       example: 60
+ *                       example: 50
  */
-router.get(
-  '/analytics/time-series/duration',
-  validateQuery(TimeSeriesDurationSchema),
-  tsDurationController.getTimeSeriesDuration,
-);
+router.get('/analytics/summary', validateQuery(SummarySchema), summaryController.getSummary);
 
 /**
  * @swagger
- * /api/v1/analytics/top-n:
- *   get:
- *     summary: Repeat Alarms Top-N Ranking
- *     description: Retrieve top-N ranking entities. Stitch station details for devices, or descriptions for error codes.
+ * /api/v1/analytics/query:
+ *   post:
+ *     summary: Dynamic Analytics Query
+ *     description: Perform dynamic queries aggregating count, avg_duration, max_duration, and affected_devices.
  *     tags:
  *       - Analytics
- *     parameters:
- *       - in: query
- *         name: from_time
- *         schema:
- *           type: string
- *         required: true
- *       - in: query
- *         name: to_time
- *         schema:
- *           type: string
- *         required: true
- *       - in: query
- *         name: by
- *         schema:
- *           type: string
- *           enum: [device, error_code]
- *           default: device
- *       - in: query
- *         name: n
- *         schema:
- *           type: integer
- *           maximum: 1000
- *           default: 10
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - metric
+ *             properties:
+ *               metric:
+ *                 type: string
+ *                 enum: [count, avg_duration, max_duration, affected_devices]
+ *                 example: "count"
+ *               group_by:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                   enum: [severity, status, error_code, device, device_type, vendor, station, province]
+ *                 example: ["severity"]
+ *               time_bucket:
+ *                 type: string
+ *                 enum: [hour, day, week, month, year]
+ *                 nullable: true
+ *                 example: null
+ *               filters:
+ *                 type: object
+ *                 properties:
+ *                   from_time:
+ *                     type: string
+ *                   to_time:
+ *                     type: string
+ *                   severity:
+ *                     type: array
+ *                     items:
+ *                       type: string
+ *               limit:
+ *                 type: integer
+ *                 default: 20
  *     responses:
  *       200:
- *         description: Successful response.
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 data:
- *                   type: array
- *                   items:
- *                     type: object
- *                     properties:
- *                       device_id:
- *                         type: string
- *                         example: "DEV001"
- *                       alarm_count:
- *                         type: integer
- *                         example: 850
- *                       label:
- *                         type: string
- *                         example: "Core Switch (Hanoi Station)"
- *                       device_details:
- *                         $ref: '#/components/schemas/DeviceDetails'
- *                 meta:
- *                   type: object
- *                   properties:
- *                     execution_time_ms:
- *                       type: integer
- *                       example: 80
+ *         description: Query executed successfully.
  */
-router.get('/analytics/top-n', validateQuery(TopNSchema), topNController.getTopNAnalytics);
+router.post('/analytics/query', validateBody(AnalyticsQuerySchema), analyticsQueryController.executeQuery);
 
 /**
  * @swagger
- * /api/v1/analytics/ratio:
- *   get:
- *     summary: Composition Ratio (Pie Chart)
- *     description: Retrieve ratio breakdown. Supports severity (native), device type, station, site (station_id), and region (station province).
+ * /api/v1/analytics/heatmap:
+ *   post:
+ *     summary: Heatmap Density Analysis
+ *     description: Fetches heat distribution mapped by weekday (weekday index x hour) or calendar (day string x hour).
  *     tags:
  *       - Analytics
- *     parameters:
- *       - in: query
- *         name: from_time
- *         schema:
- *           type: string
- *         required: true
- *       - in: query
- *         name: to_time
- *         schema:
- *           type: string
- *         required: true
- *       - in: query
- *         name: by
- *         schema:
- *           type: string
- *           enum: [severity, type, station, site, region]
- *           default: severity
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - mode
+ *             properties:
+ *               mode:
+ *                 type: string
+ *                 enum: [weekday, calendar]
+ *                 example: "weekday"
+ *               filters:
+ *                 type: object
  *     responses:
  *       200:
- *         description: Successful response.
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 data:
- *                   type: array
- *                   items:
- *                     type: object
- *                     properties:
- *                       device_type:
- *                         type: string
- *                         example: "Switch"
- *                       count:
- *                         type: integer
- *                         example: 450
- *                       percentage:
- *                         type: number
- *                         example: 42.5
- *                 meta:
- *                   type: object
- *                   properties:
- *                     execution_time_ms:
- *                       type: integer
- *                       example: 90
+ *         description: Heatmap data retrieved.
  */
-router.get('/analytics/ratio', validateQuery(RatioSchema), ratioController.getRatioAnalytics);
+router.post('/analytics/heatmap', validateBody(HeatmapSchema), heatmapController.getHeatmap);
+
+/**
+ * @swagger
+ * /api/v1/export:
+ *   post:
+ *     summary: Export alarms list to Excel or CSV
+ *     description: Streams a full/filtered copy of alarm telemetry formatted as comma-separated values or Excel spreadsheet.
+ *     tags:
+ *       - Export
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - format
+ *             properties:
+ *               format:
+ *                 type: string
+ *                 enum: [csv, xlsx]
+ *                 example: "csv"
+ *               filters:
+ *                 type: object
+ *     responses:
+ *       200:
+ *         description: Stream download.
+ */
+router.post('/export', validateBody(ExportSchema), exportController.exportAlarms);
 
 export default router;

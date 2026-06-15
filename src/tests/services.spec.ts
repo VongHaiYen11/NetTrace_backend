@@ -1,98 +1,98 @@
 import { QueryAlarmsService } from '../services/query-alarms.service.js';
-import { QueryAlarmsRepository, AlarmRecord } from '../repositories/query-alarms.repository.js';
-import { TopNAnalyticsService } from '../services/top-n-analytics.service.js';
-import { TopNAnalyticsRepository } from '../repositories/top-n-analytics.repository.js';
-import { RatioAnalyticsService } from '../services/ratio-analytics.service.js';
-import { RatioAnalyticsRepository } from '../repositories/ratio-analytics.repository.js';
-import { DeviceRepository, DeviceMetadata } from '../repositories/device.repository.js';
-import { ErrorRepository, ErrorMetadata } from '../repositories/error.repository.js';
+import { QueryAlarmsRepository } from '../repositories/query-alarms.repository.js';
+import { SummaryService } from '../services/summary.service.js';
+import { SummaryRepository } from '../repositories/summary.repository.js';
+import { AnalyticsQueryService } from '../services/analytics-query.service.js';
+import { AnalyticsQueryRepository } from '../repositories/analytics-query.repository.js';
+import { HeatmapService } from '../services/heatmap.service.js';
+import { HeatmapRepository } from '../repositories/heatmap.repository.js';
+import { DeviceRepository } from '../repositories/device.repository.js';
+import { ErrorRepository } from '../repositories/error.repository.js';
 import { ServiceMetrics } from '../services/shared.js';
 
-describe('Service Layer Federation Tests', () => {
+describe('Service Layer Tests', () => {
   let mockDeviceRepo: jest.Mocked<DeviceRepository>;
   let mockErrorRepo: jest.Mocked<ErrorRepository>;
+  let metrics: ServiceMetrics;
 
   beforeEach(() => {
     mockDeviceRepo = {
       getDevicesByIds: jest.fn(),
+      getDeviceIdsByFilters: jest.fn(),
+      getAllDevices: jest.fn(),
     } as unknown as jest.Mocked<DeviceRepository>;
 
     mockErrorRepo = {
       getErrorsByCodes: jest.fn(),
+      getAllErrors: jest.fn(),
     } as unknown as jest.Mocked<ErrorRepository>;
+
+    metrics = {
+      clickhouse_query_time_ms: 0,
+      postgres_query_time_ms: 0,
+      records_returned: 0,
+    };
   });
 
-  describe('QueryAlarmsService (Detail Queries with Keyset Federation)', () => {
-    it('should query alarms, extract distinct device/error IDs, fetch metadata in parallel, and stitch', async () => {
+  describe('QueryAlarmsService', () => {
+    it('should query clickhouse, resolve postgres filters, and enrich details', async () => {
       const mockQueryRepo = {
         queryAlarms: jest.fn(),
       } as unknown as jest.Mocked<QueryAlarmsRepository>;
 
       const queryService = new QueryAlarmsService(mockQueryRepo, mockDeviceRepo, mockErrorRepo);
 
-      const mockAlarms: AlarmRecord[] = [
-        {
-          alarm_id: 'a1',
-          error_code: 'ERR001',
-          device_id: 'DEV001',
-          time_created: '2026-06-14 08:00:00',
-          time_solved: null,
-          status: 'active',
-          severity: 'critical',
-          raw_log: 'Interface down',
-          description: 'Interface Gi0/1 down',
-        },
-      ];
-
       mockQueryRepo.queryAlarms.mockResolvedValue({
-        alarms: mockAlarms,
+        alarms: [
+          {
+            alarm_id: 'a1',
+            error_code: 'ERR01',
+            device_id: 'DEV01',
+            time_created: '2026-06-15 00:00:00',
+            time_solved: null,
+            status: 'active',
+            severity: 'critical',
+            raw_log: 'link down',
+            description: 'port gi0/1 is down',
+          },
+        ],
         total: 1,
-        durationMs: 50,
+        durationMs: 40,
       });
-
-      const mockDevices: DeviceMetadata[] = [
-        {
-          device_id: 'DEV001',
-          name: 'Device Alpha',
-          vendor_id: 'V1',
-          vendor_name: 'Cisco Systems',
-          vendor_country: 'USA',
-          station_id: 'S1',
-          station_name: 'Hanoi Central',
-          station_province: 'Hanoi',
-          device_type: 'router',
-          ip_address: '192.168.1.1',
-          longitude: 105.8,
-          latitude: 21.0,
-          additional_info: 'Rack A',
-        },
-      ];
 
       mockDeviceRepo.getDevicesByIds.mockResolvedValue({
-        devices: mockDevices,
+        devices: [
+          {
+            device_id: 'DEV01',
+            name: 'Switch A',
+            vendor_id: 'V1',
+            vendor_name: 'Cisco',
+            vendor_country: 'USA',
+            station_id: 'ST1',
+            station_name: 'Hanoi Central',
+            station_province: 'Hanoi',
+            device_type: 'Switch',
+            ip_address: '10.0.0.1',
+            longitude: null,
+            latitude: null,
+            additional_info: null,
+          },
+        ],
         durationMs: 5,
       });
-
-      const mockErrors: ErrorMetadata[] = [
-        {
-          error_code: 'ERR001',
-          name: 'Link failure',
-          description: 'Link down description',
-          domain: 'Network',
-          default_severity: 'critical',
-        },
-      ];
 
       mockErrorRepo.getErrorsByCodes.mockResolvedValue({
-        errors: mockErrors,
+        errors: [
+          {
+            error_code: 'ERR01',
+            name: 'Link Down',
+            description: 'Link connection failure',
+            domain: 'Network',
+            default_severity: 'critical',
+          },
+        ],
         durationMs: 5,
       });
-
-      const metrics: ServiceMetrics = {
-        clickhouse_query_time_ms: 0,
-        postgres_query_time_ms: 0,
-        records_returned: 0,
-      };
 
       const params = {
         from_time: new Date(),
@@ -105,153 +105,164 @@ describe('Service Layer Federation Tests', () => {
       const result = await queryService.queryAlarms(params, metrics);
 
       expect(result.alarms.length).toBe(1);
-      expect(result.alarms[0].device_details).toEqual(mockDevices[0]);
-      expect(result.alarms[0].error_details).toEqual(mockErrors[0]);
-      expect(metrics.clickhouse_query_time_ms).toBe(50);
-      expect(metrics.postgres_query_time_ms).toBeGreaterThanOrEqual(0);
-      expect(metrics.records_returned).toBe(1);
+      expect(result.alarms[0].device_details?.name).toBe('Switch A');
+      expect(result.alarms[0].error_details?.name).toBe('Link Down');
+      expect(metrics.clickhouse_query_time_ms).toBe(40);
     });
-  });
 
-  describe('TopNAnalyticsService', () => {
-    it('should aggregate device top-n ranking and resolve station/device names', async () => {
-      const mockTopNRepo = {
-        getTopN: jest.fn(),
-      } as unknown as jest.Mocked<TopNAnalyticsRepository>;
+    it('should resolve metadata filters through Postgres getDeviceIdsByFilters', async () => {
+      const mockQueryRepo = {
+        queryAlarms: jest.fn(),
+      } as unknown as jest.Mocked<QueryAlarmsRepository>;
 
-      const topNService = new TopNAnalyticsService(mockTopNRepo, mockDeviceRepo, mockErrorRepo);
+      const queryService = new QueryAlarmsService(mockQueryRepo, mockDeviceRepo, mockErrorRepo);
 
-      mockTopNRepo.getTopN.mockResolvedValue({
-        rows: [{ entity_id: 'DEV001', alarm_count: 50 }],
-        durationMs: 30,
+      mockDeviceRepo.getDeviceIdsByFilters.mockResolvedValue({
+        deviceIds: ['DEV01'],
+        durationMs: 10,
       });
 
-      mockDeviceRepo.getDevicesByIds.mockResolvedValue({
-        devices: [
-          {
-            device_id: 'DEV001',
-            name: 'Device Alpha',
-            vendor_id: 'V1',
-            vendor_name: 'Cisco Systems',
-            vendor_country: 'USA',
-            station_id: 'S1',
-            station_name: 'Hanoi Station',
-            station_province: 'Hanoi',
-            device_type: 'router',
-            ip_address: '192.168.1.1',
-            longitude: 105.8,
-            latitude: 21.0,
-            additional_info: null,
-          },
-        ],
+      mockQueryRepo.queryAlarms.mockResolvedValue({
+        alarms: [],
+        total: 0,
         durationMs: 5,
       });
 
-      const metrics: ServiceMetrics = {
-        clickhouse_query_time_ms: 0,
-        postgres_query_time_ms: 0,
-        records_returned: 0,
+      const params = {
+        from_time: new Date(),
+        to_time: new Date(),
+        limit: 10,
+        device_type: ['Switch'],
+        sort_by: 'timestamp' as const,
+        sort_order: 'desc' as const,
       };
 
-      const result = await topNService.getTopNAnalytics(
+      await queryService.queryAlarms(params, metrics);
+
+      expect(mockDeviceRepo.getDeviceIdsByFilters).toHaveBeenCalledWith({
+        device_type: ['Switch'],
+        vendor: undefined,
+        station: undefined,
+        province: undefined,
+      });
+      expect(mockQueryRepo.queryAlarms).toHaveBeenCalledWith(
+        expect.objectContaining({
+          device_id: ['DEV01'],
+        }),
+      );
+    });
+  });
+
+  describe('SummaryService', () => {
+    it('should aggregate metrics', async () => {
+      const mockSummaryRepo = {
+        getSummary: jest.fn(),
+      } as unknown as jest.Mocked<SummaryRepository>;
+
+      const summaryService = new SummaryService(mockSummaryRepo, mockDeviceRepo);
+
+      mockSummaryRepo.getSummary.mockResolvedValue({
+        summary: {
+          totalAlarms: 100,
+          activeAlarms: 10,
+          closedAlarms: 90,
+          criticalAlarms: 5,
+          affectedDevices: 3,
+        },
+        durationMs: 15,
+      });
+
+      const result = await summaryService.getSummary(
         {
           from_time: new Date(),
           to_time: new Date(),
-          by: 'device',
-          n: 10,
         },
         metrics,
       );
 
-      expect(result.length).toBe(1);
-      const resItem = result[0] as Record<string, unknown>;
-      expect(resItem.device_id).toBe('DEV001');
-      expect(resItem.alarm_count).toBe(50);
-      expect(resItem.label).toBe('Device Alpha (Hanoi Station)');
+      expect(result.totalAlarms).toBe(100);
+      expect(result.activeAlarms).toBe(10);
+      expect(metrics.clickhouse_query_time_ms).toBe(15);
     });
   });
 
-  describe('RatioAnalyticsService', () => {
-    it('should compute ratios by severity directly', async () => {
-      const mockRatioRepo = {
-        getRatioBySeverity: jest.fn(),
-        getRatioByDevice: jest.fn(),
-      } as unknown as jest.Mocked<RatioAnalyticsRepository>;
+  describe('AnalyticsQueryService', () => {
+    it('should handle ClickHouse native grouping directly', async () => {
+      const mockQueryRepo = {
+        executeQuery: jest.fn(),
+      } as unknown as jest.Mocked<AnalyticsQueryRepository>;
 
-      const ratioService = new RatioAnalyticsService(mockRatioRepo, mockDeviceRepo);
+      const analyticsService = new AnalyticsQueryService(mockQueryRepo, mockDeviceRepo);
 
-      mockRatioRepo.getRatioBySeverity.mockResolvedValue({
+      mockQueryRepo.executeQuery.mockResolvedValue({
         rows: [
-          { severity: 'critical', count: 60 },
-          { severity: 'warning', count: 40 },
+          { severity: 'critical', value: 12 },
+          { severity: 'warning', value: 8 },
         ],
-        durationMs: 20,
+        durationMs: 25,
       });
 
-      const metrics: ServiceMetrics = {
-        clickhouse_query_time_ms: 0,
-        postgres_query_time_ms: 0,
-        records_returned: 0,
-      };
-
-      const result = await ratioService.getRatioAnalytics(
+      const result = await analyticsService.executeQuery(
         {
-          from_time: new Date(),
-          to_time: new Date(),
-          by: 'severity',
+          metric: 'count',
+          group_by: ['severity'],
+          filters: {
+            from_time: new Date(),
+            to_time: new Date(),
+          },
+          limit: 10,
         },
         metrics,
       );
 
       expect(result.length).toBe(2);
-      expect(result[0]).toEqual({ severity: 'critical', count: 60, percentage: 60 });
-      expect(result[1]).toEqual({ severity: 'warning', count: 40, percentage: 40 });
+      expect(result[0]).toEqual({ severity: 'critical', value: 12 });
+      expect(metrics.clickhouse_query_time_ms).toBe(25);
     });
 
-    it('should federate device type from Postgres and coalesce ratios', async () => {
-      const mockRatioRepo = {
-        getRatioBySeverity: jest.fn(),
-        getRatioByDevice: jest.fn(),
-      } as unknown as jest.Mocked<RatioAnalyticsRepository>;
+    it('should federate Postgres grouping dynamically', async () => {
+      const mockQueryRepo = {
+        executeQuery: jest.fn(),
+      } as unknown as jest.Mocked<AnalyticsQueryRepository>;
 
-      const ratioService = new RatioAnalyticsService(mockRatioRepo, mockDeviceRepo);
+      const analyticsService = new AnalyticsQueryService(mockQueryRepo, mockDeviceRepo);
 
-      mockRatioRepo.getRatioByDevice.mockResolvedValue({
+      mockQueryRepo.executeQuery.mockResolvedValue({
         rows: [
-          { device_id: 'DEV001', count: 60 },
-          { device_id: 'DEV002', count: 40 },
+          { device_id: 'DEV01', value: 20 },
+          { device_id: 'DEV02', value: 10 },
         ],
-        durationMs: 25,
+        durationMs: 20,
       });
 
       mockDeviceRepo.getDevicesByIds.mockResolvedValue({
         devices: [
           {
-            device_id: 'DEV001',
-            name: 'Dev1',
+            device_id: 'DEV01',
+            name: 'Device A',
+            device_type: 'Switch',
             vendor_id: 'V1',
             vendor_name: 'Cisco',
             vendor_country: 'USA',
-            station_id: 'ST1',
-            station_name: 'Stat1',
+            station_id: 'S1',
+            station_name: 'St1',
             station_province: 'Hanoi',
-            device_type: 'Switch',
-            ip_address: '1.1.1.1',
+            ip_address: null,
             longitude: null,
             latitude: null,
             additional_info: null,
           },
           {
-            device_id: 'DEV002',
-            name: 'Dev2',
+            device_id: 'DEV02',
+            name: 'Device B',
+            device_type: 'Router',
             vendor_id: 'V1',
             vendor_name: 'Cisco',
             vendor_country: 'USA',
-            station_id: 'ST2',
-            station_name: 'Stat2',
-            station_province: 'HCM',
-            device_type: 'Firewall',
-            ip_address: '2.2.2.2',
+            station_id: 'S2',
+            station_name: 'St2',
+            station_province: 'Hanoi',
+            ip_address: null,
             longitude: null,
             latitude: null,
             additional_info: null,
@@ -260,24 +271,53 @@ describe('Service Layer Federation Tests', () => {
         durationMs: 5,
       });
 
-      const metrics: ServiceMetrics = {
-        clickhouse_query_time_ms: 0,
-        postgres_query_time_ms: 0,
-        records_returned: 0,
-      };
-
-      const resultRegion = await ratioService.getRatioAnalytics(
+      const result = await analyticsService.executeQuery(
         {
-          from_time: new Date(),
-          to_time: new Date(),
-          by: 'region',
+          metric: 'count',
+          group_by: ['device_type'],
+          filters: {
+            from_time: new Date(),
+            to_time: new Date(),
+          },
+          limit: 10,
         },
         metrics,
       );
 
-      expect(resultRegion.length).toBe(2);
-      expect(resultRegion[0]).toEqual({ region_name: 'Hanoi', count: 60, percentage: 60 });
-      expect(resultRegion[1]).toEqual({ region_name: 'HCM', count: 40, percentage: 40 });
+      expect(result.length).toBe(2);
+      expect(result[0]).toEqual({ device_type: 'Switch', value: 20 });
+      expect(result[1]).toEqual({ device_type: 'Router', value: 10 });
+    });
+  });
+
+  describe('HeatmapService', () => {
+    it('should map weekday indices to string names', async () => {
+      const mockHeatmapRepo = {
+        getHeatmap: jest.fn(),
+      } as unknown as jest.Mocked<HeatmapRepository>;
+
+      const heatmapService = new HeatmapService(mockHeatmapRepo, mockDeviceRepo);
+
+      mockHeatmapRepo.getHeatmap.mockResolvedValue({
+        rows: [
+          { day_of_week: 1, hour: 13, count: 42 },
+          { day_of_week: 2, hour: 14, count: 18 },
+        ],
+        durationMs: 15,
+      });
+
+      const result = await heatmapService.getHeatmap(
+        {
+          from_time: new Date(),
+          to_time: new Date(),
+          mode: 'weekday',
+        },
+        metrics,
+      );
+
+      expect(result.length).toBe(2);
+      expect(result[0]).toEqual({ x: 13, y: 'Monday', value: 42 });
+      expect(result[1]).toEqual({ x: 14, y: 'Tuesday', value: 18 });
     });
   });
 });

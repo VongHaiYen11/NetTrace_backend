@@ -33,4 +33,22 @@ export class ErrorRepository {
     const { rows, durationMs } = await executePgQuery<ErrorMetadata>(query, [codes]);
     return { errors: rows, durationMs };
   }
+
+  /**
+   * Fetches all error definitions.
+   */
+  async getAllErrors(): Promise<{ errors: ErrorMetadata[]; durationMs: number }> {
+    const query = `
+      SELECT 
+        error_code,
+        name,
+        description,
+        domain,
+        default_severity
+      FROM error
+    `;
+    const { rows, durationMs } = await executePgQuery<ErrorMetadata>(query);
+    return { errors: rows, durationMs };
+  }
 }
+

@@ -13,12 +13,71 @@ export class QueryAlarmsService {
     private readonly errorRepo: ErrorRepository,
   ) {}
 
-  async queryAlarms(params: QueryAlarmsParams, metrics: ServiceMetrics) {
+  async queryAlarms(
+    params: QueryAlarmsParams & {
+      device_type?: string[];
+      vendor?: string[];
+      station?: string[];
+      province?: string[];
+    },
+    metrics: ServiceMetrics,
+  ) {
+    const { device_type, vendor, station, province } = params;
+    let finalDeviceIds = params.device_id;
+
+    // 1. Resolve PostgreSQL device filters if present
+    if (
+      (device_type && device_type.length > 0) ||
+      (vendor && vendor.length > 0) ||
+      (station && station.length > 0) ||
+      (province && province.length > 0)
+    ) {
+      const startPgFilter = performance.now();
+      const { deviceIds, durationMs } = await this.deviceRepo.getDeviceIdsByFilters({
+        device_type,
+        vendor,
+        station,
+        province,
+      });
+      metrics.postgres_query_time_ms += Math.round(performance.now() - startPgFilter);
+
+      if (deviceIds.length === 0) {
+        // No devices match the metadata filters, so no alarms can exist
+        return { alarms: [], total: 0 };
+      }
+
+      // If user also passed specific device_id filter, intersect them
+      if (params.device_id && params.device_id.length > 0) {
+        const set = new Set(deviceIds);
+        finalDeviceIds = params.device_id.filter((id) => set.has(id));
+        if (finalDeviceIds.length === 0) {
+          return { alarms: [], total: 0 };
+        }
+      } else {
+        finalDeviceIds = deviceIds;
+      }
+    }
+
+    // 2. Query ClickHouse with the resolved parameters
+    const clickhouseParams: QueryAlarmsParams = {
+      from_time: params.from_time,
+      to_time: params.to_time,
+      cursor_time: params.cursor_time,
+      cursor_id: params.cursor_id,
+      limit: params.limit,
+      severity: params.severity,
+      status: params.status,
+      device_id: finalDeviceIds,
+      error_code: params.error_code,
+      sort_by: params.sort_by,
+      sort_order: params.sort_order,
+    };
+
     const {
       alarms,
       total,
       durationMs: chDuration,
-    } = await this.queryAlarmsRepo.queryAlarms(params);
+    } = await this.queryAlarmsRepo.queryAlarms(clickhouseParams);
     metrics.clickhouse_query_time_ms += chDuration;
     metrics.records_returned += alarms.length;
 
@@ -26,13 +85,15 @@ export class QueryAlarmsService {
       return { alarms: [], total };
     }
 
-    const deviceIds = [...new Set(alarms.map((a) => a.device_id))];
-    const errorCodes = [...new Set(alarms.map((a) => a.error_code))];
+    // 3. Extract unique IDs from alarms result set
+    const resultDeviceIds = [...new Set(alarms.map((a) => a.device_id))];
+    const resultErrorCodes = [...new Set(alarms.map((a) => a.error_code))];
 
+    // 4. Enrich data in parallel from PostgreSQL
     const startPg = performance.now();
     const [deviceRes, errorRes] = await Promise.all([
-      this.deviceRepo.getDevicesByIds(deviceIds),
-      this.errorRepo.getErrorsByCodes(errorCodes),
+      this.deviceRepo.getDevicesByIds(resultDeviceIds),
+      this.errorRepo.getErrorsByCodes(resultErrorCodes),
     ]);
     const pgDuration = Math.round(performance.now() - startPg);
     metrics.postgres_query_time_ms += pgDuration;
