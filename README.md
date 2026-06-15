@@ -21,6 +21,7 @@ A high-performance Express.js backend API implemented in TypeScript. It combines
 * [🔗 Data Federation Mechanism](#-data-federation-mechanism)
 * [⚡ Query Optimization & Rules of Thumb](#-query-optimization--rules-of-thumb)
 * [📂 Folder Structure](#-folder-structure)
+* [💡 Key Notes & Important Constraints](#-key-notes--important-constraints)
 * [🧭 Implemented Endpoints & Examples](#-implemented-endpoints--examples)
   1. [Detail Queries (`GET /api/v1/alarms`)](#1-detail-queries-get-apiv1alarms)
   2. [Operational Summary KPIs (`GET /api/v1/analytics/summary`)](#2-operational-summary-kpis-get-apiv1analyticssummary)
@@ -99,6 +100,31 @@ src/
 ├── utils/         # Utility scripts (health checker, Pino logger config)
 └── validators/    # Zod schema validation files
 ```
+
+---
+
+## 💡 Key Notes & Important Constraints
+
+### 1. Max 90-Day Time Range Limit
+* **Constraint**: The difference between `from_time` and `to_time` cannot exceed **90 days**.
+* **Explanation**: Because ClickHouse stores massive volumes of raw alarm logs, allowing unrestricted time range queries could cause the engine to scan billions of rows, leading to high CPU/disk I/O usage and potentially causing the process to crash due to Out of Memory (OOM) errors. Restricting the window to 90 days guarantees sub-second execution times.
+* **Default values**: If omitted, `to_time` defaults to the current time, and `from_time` defaults to `to_time - 7 days`.
+
+### 2. Auto-Expansion of Date-Only (YYYY-MM-DD) Inputs
+* **Feature**: If you input a date-only string like `2026-06-15`, the system automatically expands it to a full 24-hour UTC timestamp:
+  * `from_time: 2026-06-15` ➔ `2026-06-15T00:00:00.000Z`
+  * `to_time: 2026-06-15` ➔ `2026-06-15T23:59:59.999Z`
+* **Explanation**: This ensures that when a user searches for alarms within a specific date (e.g. searching only on `2026-06-15`), the query correctly covers the entire day rather than just a single moment in time (midnight).
+
+### 3. Query Guardrails & Anti-OOM Limits
+* **Page Limit**: `limit` must be at least `1` and cannot exceed `1000`. Passing `0` will trigger a validation error.
+* **Group By Limits**: You can only group by a maximum of **3 columns** simultaneously in the dynamic analytics query. This prevents excessive cardinality in grouping keys, which could crash the Node.js memory when doing federated joins.
+* **Strict Whitelisting**: Sorting fields (`sort_by`) only accept `time_created` (or `timestamp`), `severity`, `status`, and `count`. Any other input is rejected at the validator layer to prevent SQL injection.
+
+### 4. SLA & Database Timeout Enforcement
+* **PostgreSQL Timeout**: Capped at `5s`.
+* **ClickHouse Timeout**: Capped at `30s`.
+* **Explanation**: If database connections hang or become locked under heavy load, the backend cancels the query immediately to avoid exhaustively holding connection pools, and returns a `504 Database Timeout` error response.
 
 ---
 
