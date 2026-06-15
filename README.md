@@ -18,7 +18,7 @@ A high-performance Express.js backend API implemented in TypeScript. It combines
 ## 📌 Table of Contents
 
 * [🏗️ Architecture Design](#%EF%B8%8F-architecture-design)
-* [🔗 Data Federation Flow](#-data-federation-flow)
+* [🔗 Data Federation Mechanism](#-data-federation-mechanism)
 * [⚡ Query Optimization & Rules of Thumb](#-query-optimization--rules-of-thumb)
 * [📂 Folder Structure](#-folder-structure)
 * [🧭 Implemented Endpoints & Examples](#-implemented-endpoints--examples)
@@ -57,36 +57,14 @@ graph TD
 
 ---
 
-## 🔗 Data Federation Flow
+## 🔗 Data Federation Mechanism
 
-To prevent database bottlenecks, PostgreSQL and ClickHouse are **never joined directly**. Federation is managed in-memory at the application level:
+To ensure maximum performance and separation of concerns, the PostgreSQL and ClickHouse databases are **never joined directly**. Instead, federation is managed at the Node.js application level:
 
-```mermaid
-sequenceDiagram
-    autonumber
-    actor Client
-    participant Controller
-    participant Service
-    participant Postgres as PostgreSQL (Metadata)
-    participant ClickHouse as ClickHouse (Alarms)
-
-    Client ->> Controller: POST /api/v1/export (filters)
-    Controller ->> Service: exportAlarms(params)
-    
-    alt Has Postgres Filters (device_type, vendor, station, province)
-        Service ->> Postgres: getDeviceIdsByFilters()
-        Postgres -->> Service: List of matching device_ids
-    end
-    
-    Service ->> ClickHouse: queryAlarmsStream(device_ids, severity, status, etc.)
-    ClickHouse -->> Service: Stream of Raw Alarms
-    
-    Service ->> Postgres: fetch all devices & errors metadata
-    Postgres -->> Service: Devices & Errors lookup maps
-    
-    Service ->> Service: Enrich & map Alarms using RAM HashMap O(1)
-    Service ->> Client: Pipe streamed CSV/Excel file directly (constant memory)
-```
+1. **Resolve Postgres filters**: If metadata filters like `device_type`, `vendor`, `station`, or `province` are specified, query PostgreSQL first to resolve the matching list of `device_id`s.
+2. **Query Clickhouse**: Fetch alarm records or aggregate values from ClickHouse using optimized filters (including the resolved `device_id` list) and indices.
+3. **Extract and Map metadata**: In the Service layer, map the ClickHouse rows with matching metadata fetched from PostgreSQL using $O(1)$ Hash Map lookups.
+4. **Stitch / Coalesce**: Merge the Postgres metadata fields (`device_details`, `error_details`) into the alarms payload or perform client-side grouping (e.g., aggregating count by `device_type`) before responding to the client.
 
 ---
 
