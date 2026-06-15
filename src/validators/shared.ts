@@ -8,7 +8,10 @@ export const QueryArraySchema = z.preprocess((val) => {
   if (val === undefined || val === null || val === '') return undefined;
   if (Array.isArray(val)) return val;
   if (typeof val === 'string') {
-    return val.split(',').map((s) => s.trim()).filter(Boolean);
+    return val
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
   }
   return [];
 }, z.array(z.string()).optional());
@@ -43,7 +46,9 @@ export function validateTimeRange(fromStr?: string, toStr?: string) {
 
   const now = new Date();
   const to = finalToStr ? new Date(finalToStr) : now;
-  const from = finalFromStr ? new Date(finalFromStr) : new Date(to.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const from = finalFromStr
+    ? new Date(finalFromStr)
+    : new Date(to.getTime() - 7 * 24 * 60 * 60 * 1000);
 
   if (from.getTime() > to.getTime()) {
     return {
@@ -70,4 +75,3 @@ export function validateTimeRange(fromStr?: string, toStr?: string) {
     to,
   };
 }
-

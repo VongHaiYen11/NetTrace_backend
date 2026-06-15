@@ -43,7 +43,8 @@ export class HeatmapRepository {
     let groupByClause = '';
 
     if (mode === 'weekday') {
-      selectClause = 'toDayOfWeek(time_created) AS day_of_week, toHour(time_created) AS hour, count() AS count';
+      selectClause =
+        'toDayOfWeek(time_created) AS day_of_week, toHour(time_created) AS hour, count() AS count';
       groupByClause = 'GROUP BY day_of_week, hour';
     } else {
       selectClause = 'toDate(time_created) AS day, count() AS count';

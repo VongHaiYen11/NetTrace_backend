@@ -1,4 +1,7 @@
-import { AnalyticsQueryRepository, AnalyticsQueryParams } from '../repositories/analytics-query.repository.js';
+import {
+  AnalyticsQueryRepository,
+  AnalyticsQueryParams,
+} from '../repositories/analytics-query.repository.js';
 import { DeviceRepository, DeviceMetadata } from '../repositories/device.repository.js';
 import { ServiceMetrics } from './shared.js';
 
@@ -31,7 +34,7 @@ export class AnalyticsQueryService {
       (province && province.length > 0)
     ) {
       const startPgFilter = performance.now();
-      const { deviceIds, durationMs } = await this.deviceRepo.getDeviceIdsByFilters({
+      const { deviceIds } = await this.deviceRepo.getDeviceIdsByFilters({
         device_type,
         vendor,
         station,
@@ -106,11 +109,14 @@ export class AnalyticsQueryService {
     }, {});
 
     // Aggregate by resolved Postgres field(s) + any time_bucket / native columns
-    const aggregationMap: Record<string, { value: number; count: number; max: number; keys: Record<string, unknown> }> = {};
+    const aggregationMap: Record<
+      string,
+      { value: number; count: number; max: number; keys: Record<string, unknown> }
+    > = {};
 
     for (const row of rows) {
       const dev = deviceMap[row.device_id as string];
-      
+
       const resolvedKeys: Record<string, unknown> = {};
       if (row.time_bucket) resolvedKeys.time_bucket = row.time_bucket;
       if (row.severity) resolvedKeys.severity = row.severity;
@@ -166,12 +172,15 @@ export class AnalyticsQueryService {
 
       return {
         ...agg.keys,
-        value: params.metric === 'count' || params.metric === 'affected_devices' ? Math.round(finalVal) : Math.round(finalVal * 100) / 100,
+        value:
+          params.metric === 'count' || params.metric === 'affected_devices'
+            ? Math.round(finalVal)
+            : Math.round(finalVal * 100) / 100,
       };
     });
 
     result.sort((a, b) => b.value - a.value);
-    
+
     const slicedResult = result.slice(0, params.limit);
     metrics.records_returned += slicedResult.length;
     return slicedResult;

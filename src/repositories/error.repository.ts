@@ -51,4 +51,3 @@ export class ErrorRepository {
     return { errors: rows, durationMs };
   }
 }
-

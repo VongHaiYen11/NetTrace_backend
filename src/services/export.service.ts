@@ -15,21 +15,71 @@ interface ColumnDef {
 
 const COLUMN_DEFS: Record<string, ColumnDef> = {
   alarm_id: { key: 'alarm_id', header: 'Alarm ID', width: 40, getValue: (r) => r.alarm_id },
-  time_created: { key: 'time_created', header: 'Time Created', width: 25, getValue: (r) => r.time_created },
-  time_solved: { key: 'time_solved', header: 'Time Solved', width: 25, getValue: (r) => r.time_solved || 'N/A' },
+  time_created: {
+    key: 'time_created',
+    header: 'Time Created',
+    width: 25,
+    getValue: (r) => r.time_created,
+  },
+  time_solved: {
+    key: 'time_solved',
+    header: 'Time Solved',
+    width: 25,
+    getValue: (r) => r.time_solved || 'N/A',
+  },
   status: { key: 'status', header: 'Status', width: 12, getValue: (r) => r.status },
   severity: { key: 'severity', header: 'Severity', width: 12, getValue: (r) => r.severity },
   error_code: { key: 'error_code', header: 'Error Code', width: 15, getValue: (r) => r.error_code },
-  error_name: { key: 'error_name', header: 'Error Name', width: 20, getValue: (r, d, e) => e.name || 'Unknown' },
-  error_domain: { key: 'error_domain', header: 'Error Domain', width: 15, getValue: (r, d, e) => e.domain || 'N/A' },
+  error_name: {
+    key: 'error_name',
+    header: 'Error Name',
+    width: 20,
+    getValue: (r, d, e) => e.name || 'Unknown',
+  },
+  error_domain: {
+    key: 'error_domain',
+    header: 'Error Domain',
+    width: 15,
+    getValue: (r, d, e) => e.domain || 'N/A',
+  },
   device_id: { key: 'device_id', header: 'Device ID', width: 15, getValue: (r) => r.device_id },
-  device_name: { key: 'device_name', header: 'Device Name', width: 20, getValue: (r, d) => d.name || 'Unknown' },
-  device_type: { key: 'device_type', header: 'Device Type', width: 15, getValue: (r, d) => d.device_type || 'N/A' },
-  station_name: { key: 'station_name', header: 'Station Name', width: 20, getValue: (r, d) => d.station_name || 'N/A' },
-  station_province: { key: 'station_province', header: 'Station Province', width: 15, getValue: (r, d) => d.station_province || 'N/A' },
-  vendor_name: { key: 'vendor_name', header: 'Vendor Name', width: 15, getValue: (r, d) => d.vendor_name || 'N/A' },
+  device_name: {
+    key: 'device_name',
+    header: 'Device Name',
+    width: 20,
+    getValue: (r, d) => d.name || 'Unknown',
+  },
+  device_type: {
+    key: 'device_type',
+    header: 'Device Type',
+    width: 15,
+    getValue: (r, d) => d.device_type || 'N/A',
+  },
+  station_name: {
+    key: 'station_name',
+    header: 'Station Name',
+    width: 20,
+    getValue: (r, d) => d.station_name || 'N/A',
+  },
+  station_province: {
+    key: 'station_province',
+    header: 'Station Province',
+    width: 15,
+    getValue: (r, d) => d.station_province || 'N/A',
+  },
+  vendor_name: {
+    key: 'vendor_name',
+    header: 'Vendor Name',
+    width: 15,
+    getValue: (r, d) => d.vendor_name || 'N/A',
+  },
   raw_log: { key: 'raw_log', header: 'Raw Log', width: 40, getValue: (r) => r.raw_log },
-  description: { key: 'description', header: 'Description', width: 40, getValue: (r) => r.description },
+  description: {
+    key: 'description',
+    header: 'Description',
+    width: 40,
+    getValue: (r) => r.description,
+  },
 };
 
 export class ExportService {
@@ -74,7 +124,7 @@ export class ExportService {
       (province && province.length > 0)
     ) {
       const startPgFilter = performance.now();
-      const { deviceIds, durationMs } = await this.deviceRepo.getDeviceIdsByFilters({
+      const { deviceIds } = await this.deviceRepo.getDeviceIdsByFilters({
         device_type,
         vendor,
         station,
@@ -139,7 +189,10 @@ export class ExportService {
       res.setHeader('Content-Type', 'text/csv; charset=utf-8');
       res.setHeader('Content-Disposition', 'attachment; filename="alarms_export.csv"');
     } else {
-      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader(
+        'Content-Type',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      );
       res.setHeader('Content-Disposition', 'attachment; filename="alarms_export.xlsx"');
     }
 
@@ -169,14 +222,22 @@ export class ExportService {
 
               const values = activeCols.map((col) => col.getValue(row, dev, err));
 
-              output += values.map((v) => {
-                if (v === null || v === undefined) return '';
-                const str = String(v);
-                if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
-                  return `"${str.replace(/"/g, '""')}"`;
-                }
-                return str;
-              }).join(',') + '\n';
+              output +=
+                values
+                  .map((v) => {
+                    if (v === null || v === undefined) return '';
+                    const str = String(v);
+                    if (
+                      str.includes(',') ||
+                      str.includes('"') ||
+                      str.includes('\n') ||
+                      str.includes('\r')
+                    ) {
+                      return `"${str.replace(/"/g, '""')}"`;
+                    }
+                    return str;
+                  })
+                  .join(',') + '\n';
             }
 
             callback(null, output);
@@ -196,7 +257,6 @@ export class ExportService {
         clickhouseStream.on('error', reject);
         csvTransform.on('error', reject);
       });
-
     } else {
       const options = {
         stream: res,
@@ -275,7 +335,10 @@ export class ExportService {
       res.write('No records found matching filters.\n');
       res.end();
     } else {
-      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader(
+        'Content-Type',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      );
       res.setHeader('Content-Disposition', 'attachment; filename="alarms_export.xlsx"');
       const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({ stream: res });
       const worksheet = workbook.addWorksheet('Alarms');

@@ -27,4 +27,3 @@ export const QueryAlarmsSchema = z.object({
   sort_by: z.enum(SORT_BY_WHITELIST).default('timestamp'),
   sort_order: z.enum(SORT_ORDER_WHITELIST).default('desc'),
 });
-

@@ -33,7 +33,7 @@ export class QueryAlarmsService {
       (province && province.length > 0)
     ) {
       const startPgFilter = performance.now();
-      const { deviceIds, durationMs } = await this.deviceRepo.getDeviceIdsByFilters({
+      const { deviceIds } = await this.deviceRepo.getDeviceIdsByFilters({
         device_type,
         vendor,
         station,

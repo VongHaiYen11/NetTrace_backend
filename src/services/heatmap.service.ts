@@ -1,4 +1,4 @@
-import { HeatmapRepository, HeatmapParams } from '../repositories/heatmap.repository.js';
+import { HeatmapRepository } from '../repositories/heatmap.repository.js';
 import { DeviceRepository } from '../repositories/device.repository.js';
 import { ServiceMetrics } from './shared.js';
 
@@ -64,7 +64,7 @@ export class HeatmapService {
       (province && province.length > 0)
     ) {
       const startPgFilter = performance.now();
-      const { deviceIds, durationMs } = await this.deviceRepo.getDeviceIdsByFilters({
+      const { deviceIds } = await this.deviceRepo.getDeviceIdsByFilters({
         device_type,
         vendor,
         station,

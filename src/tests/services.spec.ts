@@ -10,6 +10,7 @@ import { ExportService } from '../services/export.service.js';
 import { DeviceRepository } from '../repositories/device.repository.js';
 import { ErrorRepository } from '../repositories/error.repository.js';
 import { ServiceMetrics } from '../services/shared.js';
+import { Readable, PassThrough } from 'stream';
 
 describe('Service Layer Tests', () => {
   let mockDeviceRepo: jest.Mocked<DeviceRepository>;
@@ -361,21 +362,23 @@ describe('Service Layer Tests', () => {
 
       const exportService = new ExportService(mockQueryRepo, mockDeviceRepo, mockErrorRepo);
 
-      const mockStream = new (require('stream').Readable)({
+      const mockStream = new Readable({
         read() {
-          this.push(JSON.stringify({
-            alarm_id: 'a1',
-            device_id: 'DEV01',
-            error_code: 'ERR01',
-            time_created: '2026-06-15 00:00:00',
-            time_solved: null,
-            status: 'active',
-            severity: 'critical',
-            raw_log: 'link down',
-            description: 'port gi0/1 is down'
-          }) + '\n');
+          this.push(
+            JSON.stringify({
+              alarm_id: 'a1',
+              device_id: 'DEV01',
+              error_code: 'ERR01',
+              time_created: '2026-06-15 00:00:00',
+              time_solved: null,
+              status: 'active',
+              severity: 'critical',
+              raw_log: 'link down',
+              description: 'port gi0/1 is down',
+            }) + '\n',
+          );
           this.push(null);
-        }
+        },
       });
 
       mockQueryRepo.queryAlarmsStream.mockResolvedValue(mockStream);
@@ -383,7 +386,6 @@ describe('Service Layer Tests', () => {
       mockErrorRepo.getAllErrors.mockResolvedValue({ errors: [], durationMs: 0 });
 
       const chunks: string[] = [];
-      const { PassThrough } = require('stream');
       const mockRes = new PassThrough() as any;
       mockRes.setHeader = jest.fn();
 
@@ -409,7 +411,7 @@ describe('Service Layer Tests', () => {
       await new Promise((resolve) => setTimeout(resolve, 50));
 
       expect(mockRes.setHeader).toHaveBeenCalledWith('Content-Type', 'text/csv; charset=utf-8');
-      
+
       const fullCsv = chunks.join('');
       expect(fullCsv).toContain('Alarm ID,Severity,Status');
       expect(fullCsv).toContain('a1,critical,active');

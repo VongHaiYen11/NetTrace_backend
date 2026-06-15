@@ -7,7 +7,8 @@ const options: swaggerJsdoc.Options = {
     info: {
       title: 'NetTrace Alarms Analytics API',
       version: '1.0.0',
-      description: 'High-performance analytics APIs for NetTrace, powered by ClickHouse and PostgreSQL',
+      description:
+        'High-performance analytics APIs for NetTrace, powered by ClickHouse and PostgreSQL',
     },
     servers: [
       {

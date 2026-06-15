@@ -125,7 +125,10 @@ export class AnalyticsQueryRepository {
       const value = row.value !== undefined ? Number(row.value) : 0;
       return {
         ...row,
-        value: metric === 'count' || metric === 'affected_devices' ? Math.round(value) : Math.round(value * 100) / 100,
+        value:
+          metric === 'count' || metric === 'affected_devices'
+            ? Math.round(value)
+            : Math.round(value * 100) / 100,
       };
     });
 

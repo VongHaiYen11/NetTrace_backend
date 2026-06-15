@@ -136,5 +136,3 @@ export class DeviceRepository {
     return { devices: rows, durationMs };
   }
 }
-
-

@@ -5,7 +5,6 @@ export class ExportController {
   constructor(private readonly exportService: ExportService) {}
 
   exportAlarms = async (req: Request, res: Response, next: NextFunction) => {
-    const start = performance.now();
     try {
       const queryParams = res.locals.query;
       const metrics = res.locals.metrics;

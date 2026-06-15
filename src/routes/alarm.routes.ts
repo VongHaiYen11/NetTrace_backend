@@ -452,7 +452,11 @@ router.get('/analytics/summary', validateQuery(SummarySchema), summaryController
  *       200:
  *         description: Query executed successfully.
  */
-router.post('/analytics/query', validateBody(AnalyticsQuerySchema), analyticsQueryController.executeQuery);
+router.post(
+  '/analytics/query',
+  validateBody(AnalyticsQuerySchema),
+  analyticsQueryController.executeQuery,
+);
 
 /**
  * @swagger
