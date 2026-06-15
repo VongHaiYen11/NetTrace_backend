@@ -5,9 +5,9 @@ const options: swaggerJsdoc.Options = {
   definition: {
     openapi: '3.0.0',
     info: {
-      title: 'Alarms Analytics API',
+      title: 'NetTrace Alarms Analytics API',
       version: '1.0.0',
-      description: 'High-performance analytics APIs powered by ClickHouse and PostgreSQL',
+      description: 'High-performance analytics APIs for NetTrace, powered by ClickHouse and PostgreSQL',
     },
     servers: [
       {

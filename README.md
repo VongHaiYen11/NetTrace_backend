@@ -1,6 +1,6 @@
-# NOC Alarms Analytics API
+# NetTrace Alarms Analytics API
 
-A high-performance Express.js backend API implemented in TypeScript, combining **ClickHouse** (analytical logs) and **PostgreSQL** (relational configuration metadata) to deliver sub-second analytics, aggregations, and data federation for NOC alarms.
+A high-performance Express.js backend API implemented in TypeScript, combining **ClickHouse** (analytical logs) and **PostgreSQL** (relational configuration metadata) to deliver sub-second analytics, aggregations, and data federation for NetTrace alarms.
 
 ---
 
