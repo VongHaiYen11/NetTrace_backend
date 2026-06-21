@@ -3,6 +3,12 @@ import { DateStringSchema, QueryArraySchema } from './shared.js';
 
 const SORT_BY_WHITELIST = ['timestamp', 'severity', 'status'] as const;
 const SORT_ORDER_WHITELIST = ['asc', 'desc'] as const;
+const parseBoolean = (val: unknown) => {
+  if (val === undefined) return undefined;
+  if (typeof val === 'boolean') return val;
+  if (typeof val === 'string') return val.toLowerCase() !== 'false';
+  return Boolean(val);
+};
 
 export const QueryAlarmsSchema = z.object({
   from_time: DateStringSchema.optional(),
@@ -26,4 +32,6 @@ export const QueryAlarmsSchema = z.object({
   province: QueryArraySchema,
   sort_by: z.enum(SORT_BY_WHITELIST).default('timestamp'),
   sort_order: z.enum(SORT_ORDER_WHITELIST).default('desc'),
+  include_total: z.preprocess(parseBoolean, z.boolean().default(true)),
+  detail_level: z.enum(['compact', 'full']).default('full'),
 });

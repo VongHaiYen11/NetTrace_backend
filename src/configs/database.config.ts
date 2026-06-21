@@ -23,4 +23,8 @@ export const config = {
     database: process.env.CLICKHOUSE_DATABASE || 'default',
     requestTimeoutMs: 30000, // SLA: 30 seconds
   },
+  performance: {
+    federatedAnalyticsMaxRows: parseInt(process.env.FEDERATED_ANALYTICS_MAX_ROWS || '10000', 10),
+    metadataCacheTtlMs: parseInt(process.env.METADATA_CACHE_TTL_MS || '30000', 10),
+  },
 };

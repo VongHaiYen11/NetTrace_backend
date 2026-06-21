@@ -5,6 +5,11 @@ import {
 import { DeviceRepository, DeviceMetadata } from '../repositories/device.repository.js';
 import { ErrorRepository, ErrorMetadata } from '../repositories/error.repository.js';
 import { ServiceMetrics } from './shared.js';
+import { config } from '../configs/database.config.js';
+import { TtlMapCache } from './metadata-cache.js';
+
+const deviceMetadataCache = new TtlMapCache<DeviceMetadata>(config.performance.metadataCacheTtlMs);
+const errorMetadataCache = new TtlMapCache<ErrorMetadata>(config.performance.metadataCacheTtlMs);
 
 export class QueryAlarmsService {
   constructor(
@@ -24,6 +29,8 @@ export class QueryAlarmsService {
   ) {
     const { device_type, vendor, station, province } = params;
     let finalDeviceIds = params.device_id;
+    metrics.include_total = params.include_total ?? true;
+    metrics.detail_level = params.detail_level ?? 'full';
 
     // 1. Resolve PostgreSQL device filters if present
     if (
@@ -79,6 +86,7 @@ export class QueryAlarmsService {
     } = await this.queryAlarmsRepo.queryAlarms(clickhouseParams);
     metrics.clickhouse_query_time_ms += chDuration;
     metrics.records_returned += alarms.length;
+    metrics.clickhouse_rows_returned = (metrics.clickhouse_rows_returned ?? 0) + alarms.length;
 
     if (alarms.length === 0) {
       return { alarms: [], total };
@@ -87,23 +95,36 @@ export class QueryAlarmsService {
     // 3. Extract unique IDs from alarms result set
     const resultDeviceIds = [...new Set(alarms.map((a) => a.device_id))];
     const resultErrorCodes = [...new Set(alarms.map((a) => a.error_code))];
+    const missingDeviceIds = resultDeviceIds.filter((id) => !deviceMetadataCache.get(id));
+    const missingErrorCodes = resultErrorCodes.filter((code) => !errorMetadataCache.get(code));
 
     // 4. Enrich data in parallel from PostgreSQL
     const startPg = performance.now();
     const [deviceRes, errorRes] = await Promise.all([
-      this.deviceRepo.getDevicesByIds(resultDeviceIds),
-      this.errorRepo.getErrorsByCodes(resultErrorCodes),
+      this.deviceRepo.getDevicesByIds(missingDeviceIds),
+      this.errorRepo.getErrorsByCodes(missingErrorCodes),
     ]);
     const pgDuration = Math.round(performance.now() - startPg);
     metrics.postgres_query_time_ms += pgDuration;
+    metrics.metadata_ids_fetched =
+      (metrics.metadata_ids_fetched ?? 0) + missingDeviceIds.length + missingErrorCodes.length;
 
-    const deviceMap = deviceRes.devices.reduce<Record<string, DeviceMetadata>>((acc, d) => {
-      acc[d.device_id.toLowerCase()] = d;
+    for (const device of deviceRes.devices) {
+      deviceMetadataCache.set(device.device_id, device);
+    }
+    for (const error of errorRes.errors) {
+      errorMetadataCache.set(error.error_code, error);
+    }
+
+    const deviceMap = resultDeviceIds.reduce<Record<string, DeviceMetadata>>((acc, id) => {
+      const cached = deviceMetadataCache.get(id);
+      if (cached) acc[id.toLowerCase()] = cached;
       return acc;
     }, {});
 
-    const errorMap = errorRes.errors.reduce<Record<string, ErrorMetadata>>((acc, e) => {
-      acc[e.error_code.toLowerCase()] = e;
+    const errorMap = resultErrorCodes.reduce<Record<string, ErrorMetadata>>((acc, code) => {
+      const cached = errorMetadataCache.get(code);
+      if (cached) acc[code.toLowerCase()] = cached;
       return acc;
     }, {});
 

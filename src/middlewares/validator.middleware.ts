@@ -91,3 +91,72 @@ export const validateBody = (schema: ZodSchema) => {
     }
   };
 };
+
+export const validateBodyGeneric = (schema: ZodSchema) => {
+  return (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const parsed = schema.parse(req.body);
+      res.locals.body = parsed;
+      next();
+    } catch (error) {
+      if (error instanceof ZodError) {
+        const issue = error.issues[0];
+        const field = issue.path.join('.');
+        return res.status(400).json({
+          success: false,
+          error: {
+            code: 'VALIDATION_ERROR',
+            message: `Field '${field}': ${issue.message}`,
+          },
+        });
+      }
+      next(error);
+    }
+  };
+};
+
+export const validateQueryGeneric = (schema: ZodSchema) => {
+  return (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const parsed = schema.parse(req.query);
+      res.locals.query = parsed;
+      next();
+    } catch (error) {
+      if (error instanceof ZodError) {
+        const issue = error.issues[0];
+        const field = issue.path.join('.');
+        return res.status(400).json({
+          success: false,
+          error: {
+            code: 'VALIDATION_ERROR',
+            message: `Field '${field}': ${issue.message}`,
+          },
+        });
+      }
+      next(error);
+    }
+  };
+};
+
+export const validateParamsGeneric = (schema: ZodSchema) => {
+  return (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const parsed = schema.parse(req.params);
+      res.locals.params = parsed;
+      next();
+    } catch (error) {
+      if (error instanceof ZodError) {
+        const issue = error.issues[0];
+        const field = issue.path.join('.');
+        return res.status(400).json({
+          success: false,
+          error: {
+            code: 'VALIDATION_ERROR',
+            message: `Field '${field}': ${issue.message}`,
+          },
+        });
+      }
+      next(error);
+    }
+  };
+};

@@ -12,12 +12,15 @@ export class QueryAlarmsController {
       const metrics = res.locals.metrics;
 
       const { alarms, total } = await this.queryAlarmsService.queryAlarms(queryParams, metrics);
-
-      return sendSuccess(res, alarms, start, {
+      const meta: Record<string, unknown> = {
         offset: queryParams.offset,
         limit: queryParams.limit,
-        total,
-      });
+      };
+      if (queryParams.include_total !== false) {
+        meta.total = total ?? 0;
+      }
+
+      return sendSuccess(res, alarms, start, meta);
     } catch (error) {
       next(error);
     }

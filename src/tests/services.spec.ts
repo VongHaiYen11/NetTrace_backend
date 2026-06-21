@@ -292,6 +292,41 @@ describe('Service Layer Tests', () => {
       expect(result[0]).toEqual({ device_type: 'Switch', value: 20 });
       expect(result[1]).toEqual({ device_type: 'Router', value: 10 });
     });
+
+    it('should reject federated analytics when fanout reaches the configured cap', async () => {
+      const mockQueryRepo = {
+        executeQuery: jest.fn(),
+      } as unknown as jest.Mocked<AnalyticsQueryRepository>;
+
+      const analyticsService = new AnalyticsQueryService(mockQueryRepo, mockDeviceRepo);
+
+      mockQueryRepo.executeQuery.mockResolvedValue({
+        rows: Array.from({ length: 10000 }, (_, idx) => ({
+          device_id: `DEV${idx}`,
+          value: 1,
+        })),
+        durationMs: 20,
+      });
+
+      await expect(
+        analyticsService.executeQuery(
+          {
+            metric: 'count',
+            group_by: ['device_type'],
+            filters: {
+              from_time: new Date(),
+              to_time: new Date(),
+            },
+            limit: 10,
+          },
+          metrics,
+        ),
+      ).rejects.toMatchObject({
+        code: 'FEDERATED_FANOUT_LIMIT_EXCEEDED',
+        statusCode: 400,
+      });
+      expect(mockDeviceRepo.getDevicesByIds).not.toHaveBeenCalled();
+    });
   });
 
   describe('HeatmapService', () => {
@@ -382,8 +417,6 @@ describe('Service Layer Tests', () => {
       });
 
       mockQueryRepo.queryAlarmsStream.mockResolvedValue(mockStream);
-      mockDeviceRepo.getAllDevices.mockResolvedValue({ devices: [], durationMs: 0 });
-      mockErrorRepo.getAllErrors.mockResolvedValue({ errors: [], durationMs: 0 });
 
       const chunks: string[] = [];
       const mockRes = new PassThrough() as any;
@@ -415,6 +448,89 @@ describe('Service Layer Tests', () => {
       const fullCsv = chunks.join('');
       expect(fullCsv).toContain('Alarm ID,Severity,Status');
       expect(fullCsv).toContain('a1,critical,active');
+      expect(mockDeviceRepo.getDevicesByIds).not.toHaveBeenCalled();
+      expect(mockErrorRepo.getErrorsByCodes).not.toHaveBeenCalled();
+      expect(mockDeviceRepo.getAllDevices).not.toHaveBeenCalled();
+      expect(mockErrorRepo.getAllErrors).not.toHaveBeenCalled();
+    });
+
+    it('should batch metadata lookup only for selected metadata columns', async () => {
+      const mockQueryRepo = {
+        queryAlarmsStream: jest.fn(),
+      } as unknown as jest.Mocked<QueryAlarmsRepository>;
+
+      const exportService = new ExportService(mockQueryRepo, mockDeviceRepo, mockErrorRepo);
+
+      const mockStream = new Readable({
+        read() {
+          this.push(
+            JSON.stringify({
+              alarm_id: 'a1',
+              device_id: 'DEV01',
+              error_code: 'ERR01',
+              status: 'active',
+            }) + '\n',
+          );
+          this.push(
+            JSON.stringify({
+              alarm_id: 'a2',
+              device_id: 'DEV01',
+              error_code: 'ERR02',
+              status: 'closed',
+            }) + '\n',
+          );
+          this.push(null);
+        },
+      });
+
+      mockQueryRepo.queryAlarmsStream.mockResolvedValue(mockStream);
+      mockDeviceRepo.getDevicesByIds.mockResolvedValue({
+        devices: [
+          {
+            device_id: 'DEV01',
+            name: 'Switch A',
+            vendor_id: null,
+            vendor_name: null,
+            vendor_country: null,
+            station_id: null,
+            station_name: null,
+            station_province: null,
+            device_type: 'Switch',
+            ip_address: null,
+            longitude: null,
+            latitude: null,
+            additional_info: null,
+          },
+        ],
+        durationMs: 3,
+      });
+
+      const chunks: string[] = [];
+      const mockRes = new PassThrough() as any;
+      mockRes.setHeader = jest.fn();
+      mockRes.on('data', (chunk: any) => {
+        chunks.push(chunk.toString());
+      });
+
+      await exportService.exportAlarms(
+        {
+          format: 'csv',
+          columns: ['alarm_id', 'device_name'],
+          filters: {
+            from_time: new Date(),
+            to_time: new Date(),
+          },
+        },
+        mockRes,
+        metrics,
+      );
+
+      const fullCsv = chunks.join('');
+      expect(fullCsv).toContain('a1,Switch A');
+      expect(fullCsv).toContain('a2,Switch A');
+      expect(mockDeviceRepo.getDevicesByIds).toHaveBeenCalledWith(['DEV01']);
+      expect(mockErrorRepo.getErrorsByCodes).not.toHaveBeenCalled();
+      expect(metrics.metadata_ids_fetched).toBe(1);
     });
   });
 });

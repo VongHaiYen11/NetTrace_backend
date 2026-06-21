@@ -1,5 +1,4 @@
 import { Response } from 'express';
-import { Transform } from 'stream';
 import ExcelJS from 'exceljs';
 import { QueryAlarmsRepository } from '../repositories/query-alarms.repository.js';
 import { DeviceRepository } from '../repositories/device.repository.js';
@@ -115,6 +114,16 @@ export class ExportService {
     const { format, filters, columns } = params;
     const { device_type, vendor, station, province } = filters;
     let finalDeviceIds = filters.device_id;
+    const selectedKeys = columns && columns.length > 0 ? columns : Object.keys(COLUMN_DEFS);
+    const activeCols = selectedKeys.map((key) => COLUMN_DEFS[key]).filter(Boolean);
+    const needsDeviceMetadata = activeCols.some((col) =>
+      ['device_name', 'device_type', 'station_name', 'station_province', 'vendor_name'].includes(
+        col.key,
+      ),
+    );
+    const needsErrorMetadata = activeCols.some((col) =>
+      ['error_name', 'error_domain'].includes(col.key),
+    );
 
     // 1. Resolve PostgreSQL device filters if present
     if (
@@ -162,27 +171,8 @@ export class ExportService {
       limit: filters.limit,
     });
 
-    // 3. Pre-load PostgreSQL metadata for streaming mapping
-    const startPgMeta = performance.now();
-    const [devicesRes, errorsRes] = await Promise.all([
-      this.deviceRepo.getAllDevices(),
-      this.errorRepo.getAllErrors(),
-    ]);
-    metrics.postgres_query_time_ms += Math.round(performance.now() - startPgMeta);
-
-    const deviceMap = devicesRes.devices.reduce<Record<string, any>>((acc, d) => {
-      acc[d.device_id.toLowerCase()] = d;
-      return acc;
-    }, {});
-
-    const errorMap = errorsRes.errors.reduce<Record<string, any>>((acc, e) => {
-      acc[e.error_code.toLowerCase()] = e;
-      return acc;
-    }, {});
-
-    // Resolve active columns to export
-    const selectedKeys = columns && columns.length > 0 ? columns : Object.keys(COLUMN_DEFS);
-    const activeCols = selectedKeys.map((key) => COLUMN_DEFS[key]).filter(Boolean);
+    const deviceMap: Record<string, any> = {};
+    const errorMap: Record<string, any> = {};
 
     // Set Response Headers
     if (format === 'csv') {
@@ -203,60 +193,32 @@ export class ExportService {
       res.write('\ufeff');
       res.write(activeCols.map((col) => escapeCsvRef(col.header)).join(',') + '\n');
 
-      const csvTransform = new Transform({
-        objectMode: true,
-        transform(chunk, encoding, callback) {
-          try {
-            const line = chunk.toString().trim();
-            if (!line) return callback();
-
-            const lines = line.split('\n');
-            let output = '';
-            for (const item of lines) {
-              if (!item.trim()) continue;
-              const row = JSON.parse(item);
-              recordsCount++;
-
-              const dev = (row.device_id ? deviceMap[row.device_id.toLowerCase()] : null) || {};
-              const err = (row.error_code ? errorMap[row.error_code.toLowerCase()] : null) || {};
-
-              const values = activeCols.map((col) => col.getValue(row, dev, err));
-
-              output +=
-                values
-                  .map((v) => {
-                    if (v === null || v === undefined) return '';
-                    const str = String(v);
-                    if (
-                      str.includes(',') ||
-                      str.includes('"') ||
-                      str.includes('\n') ||
-                      str.includes('\r')
-                    ) {
-                      return `"${str.replace(/"/g, '""')}"`;
-                    }
-                    return str;
-                  })
-                  .join(',') + '\n';
-            }
-
-            callback(null, output);
-          } catch (e: any) {
-            callback(e);
-          }
-        },
-      });
-
-      clickhouseStream.pipe(csvTransform).pipe(res);
-
-      await new Promise<void>((resolve, reject) => {
-        res.on('finish', () => {
-          metrics.records_returned += recordsCount;
-          resolve();
+      for await (const chunk of clickhouseStream as AsyncIterable<Buffer>) {
+        const rows = this.parseJsonRows(chunk);
+        if (rows.length === 0) continue;
+        await this.enrichBatch(rows, {
+          needsDeviceMetadata,
+          needsErrorMetadata,
+          deviceMap,
+          errorMap,
+          metrics,
         });
-        clickhouseStream.on('error', reject);
-        csvTransform.on('error', reject);
-      });
+        metrics.export_batches = (metrics.export_batches ?? 0) + 1;
+        metrics.clickhouse_rows_returned = (metrics.clickhouse_rows_returned ?? 0) + rows.length;
+
+        let output = '';
+        for (const row of rows) {
+          recordsCount++;
+          const dev = (row.device_id ? deviceMap[row.device_id.toLowerCase()] : null) || {};
+          const err = (row.error_code ? errorMap[row.error_code.toLowerCase()] : null) || {};
+          const values = activeCols.map((col) => col.getValue(row, dev, err));
+          output += values.map((v) => this.escapeCsv(v)).join(',') + '\n';
+        }
+        res.write(output);
+      }
+
+      metrics.records_returned += recordsCount;
+      res.end();
     } else {
       const options = {
         stream: res,
@@ -273,44 +235,103 @@ export class ExportService {
         width: col.width,
       }));
 
-      await new Promise<void>((resolve, reject) => {
-        clickhouseStream.on('data', (chunk) => {
-          try {
-            const line = chunk.toString().trim();
-            if (!line) return;
+      for await (const chunk of clickhouseStream as AsyncIterable<Buffer>) {
+        const rows = this.parseJsonRows(chunk);
+        if (rows.length === 0) continue;
+        await this.enrichBatch(rows, {
+          needsDeviceMetadata,
+          needsErrorMetadata,
+          deviceMap,
+          errorMap,
+          metrics,
+        });
+        metrics.export_batches = (metrics.export_batches ?? 0) + 1;
+        metrics.clickhouse_rows_returned = (metrics.clickhouse_rows_returned ?? 0) + rows.length;
 
-            const lines = line.split('\n');
-            for (const item of lines) {
-              if (!item.trim()) continue;
-              const row = JSON.parse(item);
-              recordsCount++;
+        for (const row of rows) {
+          recordsCount++;
+          const dev = (row.device_id ? deviceMap[row.device_id.toLowerCase()] : null) || {};
+          const err = (row.error_code ? errorMap[row.error_code.toLowerCase()] : null) || {};
 
-              const dev = (row.device_id ? deviceMap[row.device_id.toLowerCase()] : null) || {};
-              const err = (row.error_code ? errorMap[row.error_code.toLowerCase()] : null) || {};
-
-              const rowData: Record<string, any> = {};
-              for (const col of activeCols) {
-                rowData[col.key] = col.getValue(row, dev, err);
-              }
-
-              worksheet.addRow(rowData).commit();
-            }
-          } catch (e) {
-            reject(e);
+          const rowData: Record<string, any> = {};
+          for (const col of activeCols) {
+            rowData[col.key] = col.getValue(row, dev, err);
           }
-        });
 
-        clickhouseStream.on('end', () => {
-          resolve();
-        });
-
-        clickhouseStream.on('error', (err) => {
-          reject(err);
-        });
-      });
+          worksheet.addRow(rowData).commit();
+        }
+      }
 
       await workbook.commit();
       metrics.records_returned += recordsCount;
+    }
+  }
+
+  private parseJsonRows(chunk: Buffer): any[] {
+    const line = chunk.toString().trim();
+    if (!line) return [];
+    return line
+      .split('\n')
+      .filter((item) => item.trim())
+      .map((item) => JSON.parse(item));
+  }
+
+  private async enrichBatch(
+    rows: any[],
+    context: {
+      needsDeviceMetadata: boolean;
+      needsErrorMetadata: boolean;
+      deviceMap: Record<string, any>;
+      errorMap: Record<string, any>;
+      metrics: ServiceMetrics;
+    },
+  ) {
+    const missingDeviceIds = context.needsDeviceMetadata
+      ? [
+          ...new Set(
+            rows
+              .map((row) => row.device_id)
+              .filter((id): id is string => Boolean(id))
+              .filter((id) => !context.deviceMap[id.toLowerCase()]),
+          ),
+        ]
+      : [];
+
+    const missingErrorCodes = context.needsErrorMetadata
+      ? [
+          ...new Set(
+            rows
+              .map((row) => row.error_code)
+              .filter((code): code is string => Boolean(code))
+              .filter((code) => !context.errorMap[code.toLowerCase()]),
+          ),
+        ]
+      : [];
+
+    if (missingDeviceIds.length === 0 && missingErrorCodes.length === 0) {
+      return;
+    }
+
+    const startPg = performance.now();
+    const [devicesRes, errorsRes] = await Promise.all([
+      missingDeviceIds.length > 0
+        ? this.deviceRepo.getDevicesByIds(missingDeviceIds)
+        : Promise.resolve({ devices: [], durationMs: 0 }),
+      missingErrorCodes.length > 0
+        ? this.errorRepo.getErrorsByCodes(missingErrorCodes)
+        : Promise.resolve({ errors: [], durationMs: 0 }),
+    ]);
+    context.metrics.postgres_query_time_ms += Math.round(performance.now() - startPg);
+    context.metrics.metadata_ids_fetched =
+      (context.metrics.metadata_ids_fetched ?? 0) +
+      missingDeviceIds.length +
+      missingErrorCodes.length;
+
+    for (const device of devicesRes.devices) {
+      context.deviceMap[device.device_id.toLowerCase()] = device;
+    }
+    for (const error of errorsRes.errors) {
+      context.errorMap[error.error_code.toLowerCase()] = error;
     }
   }
 

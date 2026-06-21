@@ -2,6 +2,7 @@ import express from 'express';
 import swaggerUi from 'swagger-ui-express';
 import { swaggerSpec } from './configs/swagger.config.js';
 import alarmRoutes from './routes/alarm.routes.js';
+import templateRoutes from './routes/template.routes.js';
 import { loggingMiddleware } from './middlewares/logging.middleware.js';
 import { errorMiddleware } from './middlewares/error.middleware.js';
 
@@ -19,6 +20,7 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 // 4. API Endpoints
 app.use('/api/v1', alarmRoutes);
+app.use('/api/v1/templates', templateRoutes);
 
 // 5. Catch-all for unhandled routes
 app.use((req, res) => {

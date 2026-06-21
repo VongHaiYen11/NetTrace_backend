@@ -46,6 +46,13 @@ export function loggingMiddleware(req: Request, res: Response, next: NextFunctio
       postgres_query_time_ms: Math.round(metrics.postgres_query_time_ms),
       execution_time_ms: durationMs,
       records_returned: metrics.records_returned,
+      include_total: metrics.include_total,
+      detail_level: metrics.detail_level,
+      clickhouse_rows_returned: metrics.clickhouse_rows_returned,
+      metadata_ids_fetched: metrics.metadata_ids_fetched,
+      export_batches: metrics.export_batches,
+      federated_fanout_rows: metrics.federated_fanout_rows,
+      federated_fanout_limit: metrics.federated_fanout_limit,
     };
 
     // Log the request completion
@@ -55,15 +62,16 @@ export function loggingMiddleware(req: Request, res: Response, next: NextFunctio
     let slaThreshold = 500; // Default: 500ms for standard query endpoints
     let apiType = 'Query API';
 
-    if (req.originalUrl.includes('/analytics/time-bucket')) {
-      slaThreshold = 2000;
-      apiType = 'Aggregation API';
-    } else if (
-      req.originalUrl.includes('/analytics/group-by') ||
-      req.originalUrl.includes('/analytics/top-n')
+    if (
+      req.originalUrl.includes('/analytics/query') ||
+      req.originalUrl.includes('/analytics/summary') ||
+      req.originalUrl.includes('/analytics/heatmap')
     ) {
+      slaThreshold = 2000;
+      apiType = 'Analytics API';
+    } else if (req.originalUrl.includes('/export')) {
       slaThreshold = 3000;
-      apiType = 'Group By / Top-N API';
+      apiType = 'Export API';
     }
 
     if (durationMs > slaThreshold) {

@@ -1,0 +1,82 @@
+import { QueryAlarmsRepository } from '../repositories/query-alarms.repository.js';
+import { executeClickhouseQuery } from '../database/clickhouse/connection.js';
+
+jest.mock('../database/clickhouse/connection.js', () => ({
+  executeClickhouseQuery: jest.fn(),
+  clickhouseClient: {
+    query: jest.fn(),
+  },
+}));
+
+describe('QueryAlarmsRepository performance query shape', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    (executeClickhouseQuery as jest.Mock).mockResolvedValue({
+      rows: [],
+      durationMs: 1,
+    });
+  });
+
+  it('should skip count query when include_total is false', async () => {
+    const repo = new QueryAlarmsRepository();
+
+    await repo.queryAlarms({
+      from_time: new Date('2026-06-01T00:00:00Z'),
+      to_time: new Date('2026-06-02T00:00:00Z'),
+      offset: 0,
+      limit: 10,
+      sort_by: 'timestamp',
+      sort_order: 'desc',
+      include_total: false,
+    });
+
+    expect(executeClickhouseQuery).toHaveBeenCalledTimes(1);
+  });
+
+  it('should omit large columns for compact detail level', async () => {
+    const repo = new QueryAlarmsRepository();
+
+    await repo.queryAlarms({
+      from_time: new Date('2026-06-01T00:00:00Z'),
+      to_time: new Date('2026-06-02T00:00:00Z'),
+      offset: 0,
+      limit: 10,
+      sort_by: 'timestamp',
+      sort_order: 'desc',
+      include_total: false,
+      detail_level: 'compact',
+    });
+
+    const query = (executeClickhouseQuery as jest.Mock).mock.calls[0][0] as string;
+    expect(query).not.toContain('raw_log');
+    expect(query).not.toContain('description');
+  });
+
+  it('should use normalized filter columns instead of lower(column)', async () => {
+    const repo = new QueryAlarmsRepository();
+
+    await repo.queryAlarms({
+      from_time: new Date('2026-06-01T00:00:00Z'),
+      to_time: new Date('2026-06-02T00:00:00Z'),
+      offset: 0,
+      limit: 10,
+      severity: ['Critical'],
+      status: ['Active'],
+      device_id: ['DEV01'],
+      error_code: ['ERR01'],
+      sort_by: 'timestamp',
+      sort_order: 'desc',
+      include_total: false,
+    });
+
+    const query = (executeClickhouseQuery as jest.Mock).mock.calls[0][0] as string;
+    expect(query).toContain('severity_normalized IN');
+    expect(query).toContain('status_normalized IN');
+    expect(query).toContain('device_id_normalized IN');
+    expect(query).toContain('error_code_normalized IN');
+    expect(query).not.toContain('lower(severity)');
+    expect(query).not.toContain('lower(status)');
+    expect(query).not.toContain('lower(device_id)');
+    expect(query).not.toContain('lower(error_code)');
+  });
+});

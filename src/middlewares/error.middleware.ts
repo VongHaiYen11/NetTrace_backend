@@ -4,7 +4,7 @@ import pino from 'pino';
 const logger = pino({ name: 'error-handler' });
 
 export function errorMiddleware(
-  err: Error & { code?: string },
+  err: Error & { code?: string; statusCode?: number },
   req: Request,
   res: Response,
   _next: NextFunction,
@@ -48,6 +48,16 @@ export function errorMiddleware(
       error: {
         code: 'DATABASE_TIMEOUT',
         message: 'ClickHouse query timed out (30s SLA)',
+      },
+    });
+  }
+
+  if (err.statusCode && err.statusCode >= 400 && err.statusCode < 500) {
+    return res.status(err.statusCode).json({
+      success: false,
+      error: {
+        code: err.code || 'REQUEST_ERROR',
+        message: err.message,
       },
     });
   }

@@ -68,6 +68,19 @@ describe('Validation Layer Tests', () => {
       const result = QueryAlarmsSchema.safeParse({ limit: '1001' });
       expect(result.success).toBe(false);
     });
+
+    it('should parse performance controls with backward-compatible defaults', () => {
+      const defaults = QueryAlarmsSchema.parse({});
+      expect(defaults.include_total).toBe(true);
+      expect(defaults.detail_level).toBe('full');
+
+      const parsed = QueryAlarmsSchema.parse({
+        include_total: 'false',
+        detail_level: 'compact',
+      });
+      expect(parsed.include_total).toBe(false);
+      expect(parsed.detail_level).toBe('compact');
+    });
   });
 
   describe('SummarySchema', () => {

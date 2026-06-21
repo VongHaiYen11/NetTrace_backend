@@ -4,6 +4,10 @@ import {
 } from '../repositories/analytics-query.repository.js';
 import { DeviceRepository, DeviceMetadata } from '../repositories/device.repository.js';
 import { ServiceMetrics } from './shared.js';
+import { config } from '../configs/database.config.js';
+import { TtlMapCache } from './metadata-cache.js';
+
+const deviceMetadataCache = new TtlMapCache<DeviceMetadata>(config.performance.metadataCacheTtlMs);
 
 export class AnalyticsQueryService {
   constructor(
@@ -81,11 +85,13 @@ export class AnalyticsQueryService {
     // If we need device details for grouping, we must request more rows from ClickHouse
     // because grouping by device_id yields many rows, which we then compress.
     if (needsDeviceFederation) {
-      clickhouseParams.limit = 10000;
+      clickhouseParams.limit = config.performance.federatedAnalyticsMaxRows;
+      metrics.federated_fanout_limit = clickhouseParams.limit;
     }
 
     const { rows, durationMs } = await this.analyticsQueryRepo.executeQuery(clickhouseParams);
     metrics.clickhouse_query_time_ms += durationMs;
+    metrics.clickhouse_rows_returned = (metrics.clickhouse_rows_returned ?? 0) + rows.length;
 
     if (rows.length === 0) {
       metrics.records_returned += 0;
@@ -97,14 +103,31 @@ export class AnalyticsQueryService {
       return rows.slice(0, params.limit);
     }
 
+    metrics.federated_fanout_rows = rows.length;
+    if (rows.length >= config.performance.federatedAnalyticsMaxRows) {
+      const error = new Error(
+        `Federated analytics fanout reached ${config.performance.federatedAnalyticsMaxRows} rows; narrow filters or increase FEDERATED_ANALYTICS_MAX_ROWS`,
+      ) as Error & { code: string; statusCode: number };
+      error.code = 'FEDERATED_FANOUT_LIMIT_EXCEEDED';
+      error.statusCode = 400;
+      throw error;
+    }
+
     // Perform Data Federation mapping
     const resultDeviceIds = [...new Set(rows.map((r) => r.device_id as string))];
+    const missingDeviceIds = resultDeviceIds.filter((id) => id && !deviceMetadataCache.get(id));
     const startPg = performance.now();
-    const { devices } = await this.deviceRepo.getDevicesByIds(resultDeviceIds);
+    const { devices } = await this.deviceRepo.getDevicesByIds(missingDeviceIds);
     metrics.postgres_query_time_ms += Math.round(performance.now() - startPg);
+    metrics.metadata_ids_fetched = (metrics.metadata_ids_fetched ?? 0) + missingDeviceIds.length;
 
-    const deviceMap = devices.reduce<Record<string, DeviceMetadata>>((acc, d) => {
-      acc[d.device_id.toLowerCase()] = d;
+    for (const device of devices) {
+      deviceMetadataCache.set(device.device_id, device);
+    }
+
+    const deviceMap = resultDeviceIds.reduce<Record<string, DeviceMetadata>>((acc, id) => {
+      const cached = deviceMetadataCache.get(id);
+      if (cached) acc[id.toLowerCase()] = cached;
       return acc;
     }, {});
 

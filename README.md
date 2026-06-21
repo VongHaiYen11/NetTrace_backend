@@ -23,11 +23,18 @@
 * [📂 Folder Structure](#-folder-structure)
 * [💡 Key Notes & Important Constraints](#-key-notes--important-constraints)
 * [🧭 Implemented Endpoints & Examples](#-implemented-endpoints--examples)
-  1. [Detail Queries (`GET /api/v1/alarms`)](#1-detail-queries-get-apiv1alarms)
-  2. [Operational Summary KPIs (`GET /api/v1/analytics/summary`)](#2-operational-summary-kpis-get-apiv1analyticssummary)
-  3. [Dynamic Analytics Query (`POST /api/v1/analytics/query`)](#3-dynamic-analytics-query-post-apiv1analyticsquery)
-  4. [Heatmap Density Analysis (`POST /api/v1/analytics/heatmap`)](#4-heatmap-density-analysis-post-apiv1analyticsheatmap)
-  5. [Stream Export (`POST /api/v1/export`)](#5-stream-export-post-apiv1export)
+  * [📊 Data Visualization & Analytics](#-data-visualization--analytics)
+    1. [Detail Queries (`GET /api/v1/alarms`)](#1-detail-queries-get-apiv1alarms)
+    2. [Operational Summary KPIs (`GET /api/v1/analytics/summary`)](#2-operational-summary-kpis-get-apiv1analyticssummary)
+    3. [Dynamic Analytics Query (`POST /api/v1/analytics/query`)](#3-dynamic-analytics-query-post-apiv1analyticsquery)
+    4. [Heatmap Density Analysis (`POST /api/v1/analytics/heatmap`)](#4-heatmap-density-analysis-post-apiv1analyticsheatmap)
+    5. [Stream Export (`POST /api/v1/export`)](#5-stream-export-post-apiv1export)
+  * [🎛️ Dashboard Template Management](#%EF%B8%8F-dashboard-template-management)
+    * [6.1. Create Template (`POST /api/v1/templates`)](#61-create-template-post-apiv1templates)
+    * [6.2. List Templates (`GET /api/v1/templates`)](#62-list-templates-get-apiv1templates)
+    * [6.3. Retrieve Detailed Template (`GET /api/v1/templates/:id`)](#63-retrieve-detailed-template-get-apiv1templatesid)
+    * [6.4. Update Template (`PUT /api/v1/templates/:id`)](#64-update-template-put-apiv1templatesid)
+    * [6.5. Delete Template (`DELETE /api/v1/templates/:id`)](#65-delete-template-delete-apiv1templatesid)
 * [🛠️ Tech Stack & Libraries](#%EF%B8%8F-tech-stack--libraries)
 * [🚀 Setting Up & Running](#-setting-up--running)
 
@@ -133,12 +140,17 @@ src/
 
 All endpoints are registered under the `/api/v1` namespace. Click below to view cURL examples and JSON response structures.
 
+### 📊 Data Visualization & Analytics
+
 <details>
 <summary><b>1. Detail Queries (<code>GET /api/v1/alarms</code>)</b></summary>
 
 * Retrieves a list of alarms with filters on `severity`, `status`, `device_id`, and `error_code`.
 * Supports federated filters: `device_type`, `vendor`, `station`, and `province`.
 * Uses offset-based pagination (`offset`, `limit`).
+* Optional performance controls:
+  * `include_total=false` skips the extra ClickHouse `count()` query and omits `meta.total`.
+  * `detail_level=compact` excludes large text fields (`raw_log`, `description`) from the ClickHouse SELECT.
 
 **cURL Call:**
 ```bash
@@ -331,7 +343,7 @@ curl -X POST http://localhost:3000/api/v1/analytics/heatmap \
 * Streams a full/filtered copy of alarm telemetry formatted as `csv` or `xlsx` spreadsheet download.
 * Supports **dynamic column selection** via the `columns` array. If omitted, all columns are exported.
 * Supports all table-like filters, sorting (`sort_by`, `sort_order`), and size limit (`limit`) inside the `filters` object.
-* Uses native ClickHouse streams and `exceljs` streaming pipeline to maintain $O(1)$ memory usage.
+* Streams ClickHouse alarm rows and uses the `exceljs` streaming writer for XLSX output. Device/error metadata is currently loaded into in-memory lookup maps for enrichment, so alarm row data is streamed while metadata memory usage scales with metadata table size.
 
 **cURL Call:**
 ```bash
@@ -350,6 +362,82 @@ curl -X POST http://localhost:3000/api/v1/export \
 ```
 
 *Note: The command streams the download and saves the output directly to the local file `alarms_export.csv`.*
+</details>
+
+### 🎛️ Dashboard Template Management
+
+<details>
+<summary><b>6. Dashboard Template Management (<code>/api/v1/templates</code>)</b></summary>
+
+Manages dashboard layout configurations (Template, Widget, Preset) in PostgreSQL. Supports atomic transactions for database consistency.
+
+#### 6.1. Create Template (<code>POST /api/v1/templates</code>)
+Creates a new layout template along with widgets and configuration presets.
+
+**cURL Call:**
+```bash
+curl -X POST http://localhost:3000/api/v1/templates \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "NOC Center Switch Board",
+    "selected_cards": "[\"totalAlarms\", \"activeAlarms\"]",
+    "widgets": [
+      {
+        "device_id": "DEV001",
+        "position": 1,
+        "chart_type": "line",
+        "status": "active",
+        "severity": "critical"
+      }
+    ]
+  }'
+```
+
+#### 6.2. List Templates (<code>GET /api/v1/templates</code>)
+Retrieves a paginated list of created templates.
+
+**cURL Call:**
+```bash
+curl -X GET "http://localhost:3000/api/v1/templates?limit=10&offset=0"
+```
+
+#### 6.3. Retrieve Detailed Template (<code>GET /api/v1/templates/:id</code>)
+Fetches a single template's metadata along with all associated widgets and their filters/presets.
+
+**cURL Call:**
+```bash
+curl -X GET http://localhost:3000/api/v1/templates/1
+```
+
+#### 6.4. Update Template (<code>PUT /api/v1/templates/:id</code>)
+Updates the template fields (name, selected cards) and synchronizes the widgets (adding/removing widgets as needed) inside a transaction.
+
+**cURL Call:**
+```bash
+curl -X PUT http://localhost:3000/api/v1/templates/1 \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Updated Switch Board Layout",
+    "selected_cards": "[\"totalAlarms\"]",
+    "widgets": [
+      {
+        "device_id": "DEV001",
+        "position": 1,
+        "chart_type": "bar",
+        "status": "active",
+        "severity": "critical"
+      }
+    ]
+  }'
+```
+
+#### 6.5. Delete Template (<code>DELETE /api/v1/templates/:id</code>)
+Deletes a template. Associated widgets are removed by the database cascade; presets tied only through remaining widget references may still exist if reused by other templates.
+
+**cURL Call:**
+```bash
+curl -X DELETE http://localhost:3000/api/v1/templates/1
+```
 </details>
 
 ---
@@ -388,6 +476,9 @@ CLICKHOUSE_HOST=http://localhost:8123
 CLICKHOUSE_USER=default
 CLICKHOUSE_PASSWORD=
 CLICKHOUSE_DATABASE=default
+
+FEDERATED_ANALYTICS_MAX_ROWS=10000
+METADATA_CACHE_TTL_MS=30000
 ```
 
 ### 2. Verify Database Connection
@@ -396,22 +487,28 @@ Run the health check utility script to inspect database connections:
 npm run db:check
 ```
 
-### 3. Start Development Server
+### 3. Initialize Performance Schema Helpers
+Run once after deploying the performance changes. This adds ClickHouse normalized filter columns/indexes and PostgreSQL functional indexes used by case-insensitive metadata filters:
+```bash
+npm run db:init:performance
+```
+
+### 4. Start Development Server
 ```bash
 npm run dev
 ```
 
-### 4. Run Build (TypeScript Compilation)
+### 5. Run Build (TypeScript Compilation)
 ```bash
 npm run build
 ```
 
-### 5. Run Unit Tests
+### 6. Run Unit Tests
 ```bash
 npm test
 ```
 
-### 6. Code Style & Lint Checks
+### 7. Code Style & Lint Checks
 ```bash
 npm run lint
 ```

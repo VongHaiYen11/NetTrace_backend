@@ -9,8 +9,8 @@ export interface AlarmRecord {
   time_solved: string | null;
   status: string;
   severity: string;
-  raw_log: string;
-  description: string;
+  raw_log?: string;
+  description?: string;
 }
 
 export interface QueryAlarmsParams {
@@ -24,13 +24,24 @@ export interface QueryAlarmsParams {
   error_code?: string[];
   sort_by: 'timestamp' | 'severity' | 'status';
   sort_order: 'asc' | 'desc';
+  include_total?: boolean;
+  detail_level?: 'compact' | 'full';
 }
 
 export class QueryAlarmsRepository {
   async queryAlarms(
     params: QueryAlarmsParams,
-  ): Promise<{ alarms: AlarmRecord[]; total: number; durationMs: number }> {
-    const { from_time, to_time, offset, limit, sort_by, sort_order } = params;
+  ): Promise<{ alarms: AlarmRecord[]; total?: number; durationMs: number }> {
+    const {
+      from_time,
+      to_time,
+      offset,
+      limit,
+      sort_by,
+      sort_order,
+      include_total = true,
+      detail_level = 'full',
+    } = params;
 
     const fromStr = formatDate(from_time);
     const toStr = formatDate(to_time);
@@ -63,8 +74,18 @@ export class QueryAlarmsRepository {
     const orderColumn = sortFieldMap[sort_by] || 'time_created';
     const orderDirection = sort_order === 'asc' ? 'ASC' : 'DESC';
 
-    const dataQuery = `
-      SELECT 
+    const selectColumns =
+      detail_level === 'compact'
+        ? `
+        alarm_id,
+        error_code,
+        device_id,
+        time_created,
+        time_solved,
+        status,
+        severity
+      `
+        : `
         alarm_id,
         error_code,
         device_id,
@@ -74,6 +95,11 @@ export class QueryAlarmsRepository {
         severity,
         raw_log,
         description
+      `;
+
+    const dataQuery = `
+      SELECT 
+        ${selectColumns}
       FROM alarms
       ${prewhereClause}
       ORDER BY ${orderColumn} ${orderDirection}, alarm_id ${orderDirection}
@@ -86,13 +112,15 @@ export class QueryAlarmsRepository {
       ${prewhereClause}
     `;
 
-    const [dataResult, countResult] = await Promise.all([
-      executeClickhouseQuery<AlarmRecord>(dataQuery, queryParams),
-      executeClickhouseQuery<{ total: string }>(countQuery, queryParams),
-    ]);
+    const dataPromise = executeClickhouseQuery<AlarmRecord>(dataQuery, queryParams);
+    const countPromise = include_total
+      ? executeClickhouseQuery<{ total: string }>(countQuery, queryParams)
+      : Promise.resolve(null);
 
-    const total = countResult.rows.length > 0 ? parseInt(countResult.rows[0].total, 10) : 0;
-    const totalDuration = dataResult.durationMs + countResult.durationMs;
+    const [dataResult, countResult] = await Promise.all([dataPromise, countPromise]);
+
+    const total = countResult?.rows.length ? parseInt(countResult.rows[0].total, 10) : undefined;
+    const totalDuration = dataResult.durationMs + (countResult?.durationMs ?? 0);
 
     return {
       alarms: dataResult.rows,

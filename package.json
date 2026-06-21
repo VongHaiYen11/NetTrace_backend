@@ -9,6 +9,7 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "db:check": "node --import tsx/esm src/utils/db-check.ts",
+    "db:init:performance": "node --import tsx/esm src/database/clickhouse/run-init-performance.ts && node --import tsx/esm src/database/postgres/run-init.ts",
     "test": "jest --passWithNoTests",
     "lint": "eslint 'src/**/*.ts'",
     "lint:fix": "eslint --fix 'src/**/*.ts'",
