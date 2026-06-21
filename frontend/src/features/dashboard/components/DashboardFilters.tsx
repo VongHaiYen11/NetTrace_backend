@@ -70,8 +70,7 @@ export function DashboardFilters({ values, onApply }: DashboardFiltersProps) {
             <Select {...register('status')}>
               <option value="">Tất cả</option>
               <option value="active">Đang hoạt động</option>
-              <option value="closed">Đã đóng</option>
-              <option value="acknowledged">Đã xác nhận</option>
+              <option value="archived">Đã đóng</option>
             </Select>
           </Field>
           <Field label="Mã thiết bị" hint="Phân tách bằng dấu phẩy">

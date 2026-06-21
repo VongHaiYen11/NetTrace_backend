@@ -51,7 +51,7 @@ const columns: ColumnDef<Alarm>[] = [
     accessorKey: 'status',
     cell: ({ row }) => (
       <Badge tone={row.original.status.toLowerCase() === 'active' ? 'amber' : 'green'}>
-        {row.original.status.toLowerCase() === 'active' ? 'Đã chặn' : 'Thành công'}
+        {row.original.status.toLowerCase() === 'active' ? 'Hoạt động' : 'Đã đóng'}
       </Badge>
     ),
   },

@@ -47,6 +47,16 @@ const darkTooltipProps = {
   },
 };
 
+function formatNumberWithSuffix(val: number): string {
+  if (val >= 1000000) {
+    return (val / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
+  }
+  if (val >= 1000) {
+    return (val / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
+  }
+  return String(val);
+}
+
 function rowLabel(row: AnalyticsRow) {
   if (row.label) return String(row.label);
   if (row.time_bucket) return formatBucket(String(row.time_bucket));
@@ -102,8 +112,8 @@ export function AnalyticsCharts({
                   </defs>
                   <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />
                   <XAxis dataKey="name" tickLine={false} axisLine={false} minTickGap={24} />
-                  <YAxis tickLine={false} axisLine={false} width={44} />
-                  <Tooltip {...darkTooltipProps} />
+                  <YAxis tickLine={false} axisLine={false} width={44} tickFormatter={formatNumberWithSuffix} />
+                  <Tooltip {...darkTooltipProps} formatter={(value: any) => [formatNumberWithSuffix(Number(value)), 'Số lượng']} />
                   <Area
                     type="monotone"
                     dataKey="value"
