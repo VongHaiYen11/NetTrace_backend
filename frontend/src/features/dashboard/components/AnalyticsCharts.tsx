@@ -83,7 +83,7 @@ export function AnalyticsCharts({
     <section className="grid gap-6 xl:grid-cols-5">
       <Card className="xl:col-span-3">
         <CardHeader>
-          <h2 className="text-xl font-bold">Cảnh báo (năm nay)</h2>
+          <h2 className="text-xl font-bold">Cảnh báo theo ngày</h2>
         </CardHeader>
         <CardContent>
           {isTrendLoading ? (

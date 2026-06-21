@@ -47,10 +47,10 @@ export class SummaryRepository {
       SELECT
         count() as total_alarms,
         countIf(lower(status) = 'active') as active_alarms,
-        countIf(lower(status) = 'closed' OR lower(status) = 'solved') as closed_alarms,
+        countIf(lower(status) = 'archived') as closed_alarms,
         countIf(lower(severity) = 'critical') as critical_alarms,
         uniqExact(device_id) as affected_devices
-      FROM alarms
+      FROM alarm
       ${prewhereClause}
     `;
 

@@ -53,7 +53,7 @@ export class HeatmapRepository {
 
     const query = `
       SELECT ${selectClause}
-      FROM alarms
+      FROM alarm
       ${prewhereClause}
       ${groupByClause}
     `;

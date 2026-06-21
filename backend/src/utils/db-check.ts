@@ -58,26 +58,26 @@ async function checkClickhouse() {
     );
     logger.info(`ClickHouse Connected. Version: ${versionCheck[0].version}`);
 
-    // 2. Check if table 'alarms' exists
+    // 2. Check if table 'alarm' exists
     const { rows: tableCheck } = await executeClickhouseQuery<{ name: string }>(
-      "SHOW TABLES LIKE 'alarms'",
+      "SHOW TABLES LIKE 'alarm'",
     );
 
     if (tableCheck.length > 0) {
       const { rows: countRes } = await executeClickhouseQuery<{ count: string }>(
-        'SELECT count() as count FROM alarms',
+        'SELECT count() as count FROM alarm',
       );
-      logger.info(`Table "alarms": ${countRes[0].count} rows`);
+      logger.info(`Table "alarm": ${countRes[0].count} rows`);
 
       const { rows: columns } = await executeClickhouseQuery<{ name: string; type: string }>(
-        'DESCRIBE TABLE alarms',
+        'DESCRIBE TABLE alarm',
       );
-      logger.info('ClickHouse table "alarms" columns:');
+      logger.info('ClickHouse table "alarm" columns:');
       columns.forEach((col) => {
         logger.info(`  - ${col.name}: ${col.type}`);
       });
     } else {
-      logger.warn('Table "alarms" is MISSING in ClickHouse database!');
+      logger.warn('Table "alarm" is MISSING in ClickHouse database!');
     }
   } catch (error: unknown) {
     logger.error(

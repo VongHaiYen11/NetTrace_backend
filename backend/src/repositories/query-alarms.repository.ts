@@ -100,7 +100,7 @@ export class QueryAlarmsRepository {
     const dataQuery = `
       SELECT 
         ${selectColumns}
-      FROM alarms
+      FROM alarm
       ${prewhereClause}
       ORDER BY ${orderColumn} ${orderDirection}, alarm_id ${orderDirection}
       LIMIT {limit: UInt32} OFFSET {offset: UInt32}
@@ -108,7 +108,7 @@ export class QueryAlarmsRepository {
 
     const countQuery = `
       SELECT count() as total
-      FROM alarms
+      FROM alarm
       ${prewhereClause}
     `;
 
@@ -188,7 +188,7 @@ export class QueryAlarmsRepository {
         severity,
         raw_log,
         description
-      FROM alarms
+      FROM alarm
       ${prewhereClause}
       ORDER BY ${orderColumn} ${orderDirection}, alarm_id ${orderDirection}
       ${limitClause}

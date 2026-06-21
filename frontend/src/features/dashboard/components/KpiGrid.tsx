@@ -17,7 +17,10 @@ const cards = [
     border: 'border-[#ff2d85]/70',
     iconBg: 'bg-[#ff2d85]/20',
     tone: 'text-[#ff2d85]',
-    delta: '↑ 12.5% so với giờ trước',
+    subtitle: (data: SummaryResult) =>
+      `${data.activeAlarms.toLocaleString('vi-VN')} đang hoạt động · ${data.closedAlarms.toLocaleString(
+        'vi-VN',
+      )} đã đóng`,
   },
   {
     key: 'affectedDevices',
@@ -26,7 +29,8 @@ const cards = [
     border: 'border-[#00f5d4]/70',
     iconBg: 'bg-[#00f5d4]/15',
     tone: 'text-[#00f5d4]',
-    delta: '↑ 4.2% so với giờ trước',
+    subtitle: (data: SummaryResult) =>
+      `${data.affectedDevices.toLocaleString('vi-VN')} thiết bị duy nhất`,
   },
   {
     key: 'criticalAlarms',
@@ -35,7 +39,8 @@ const cards = [
     border: 'border-[#f8e231]/70',
     iconBg: 'bg-[#f8e231]/15',
     tone: 'text-[#f8e231]',
-    delta: 'ⓘ phát hiện cảnh báo nghiêm trọng',
+    subtitle: (data: SummaryResult) =>
+      `${data.criticalAlarms.toLocaleString('vi-VN')} cảnh báo nghiêm trọng`,
   },
 ] as const;
 
@@ -61,7 +66,7 @@ export function KpiGrid({ data, isLoading, isError }: KpiGridProps) {
         const value =
           card.key === 'criticalAlarms' && data.criticalAlarms > 0
             ? 'Cảnh báo'
-            : data[card.key].toLocaleString();
+            : data[card.key].toLocaleString('vi-VN');
         return (
           <Card key={card.key} className={card.border}>
             <CardContent className="min-h-[136px] pt-5">
@@ -72,10 +77,7 @@ export function KpiGrid({ data, isLoading, isError }: KpiGridProps) {
                     {value}
                   </p>
                   <p className="mt-4 text-sm text-[#a69db6]">
-                    <span className={card.key === 'criticalAlarms' ? 'font-semibold text-[#f8e231]' : 'font-semibold text-[#00f5d4]'}>
-                      {card.delta.split(' ').slice(0, 2).join(' ')}
-                    </span>{' '}
-                    {card.delta.split(' ').slice(2).join(' ')}
+                    {card.subtitle(data)}
                   </p>
                 </div>
                 <div className="flex flex-col items-end gap-2">

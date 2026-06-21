@@ -1,11 +1,9 @@
-import { subDays, formatISO } from 'date-fns';
 import type { DashboardFilterFormValues, DashboardFilters } from './types';
 
 export function defaultFilterValues(): DashboardFilterFormValues {
-  const now = new Date();
   return {
-    fromDate: toDateInputValue(subDays(now, 7)),
-    toDate: toDateInputValue(now),
+    fromDate: '2026-06-01',
+    toDate: '2026-06-30',
     severity: '',
     status: '',
     deviceId: '',
@@ -19,16 +17,17 @@ export function toDateInputValue(date: Date) {
 }
 
 function splitCsv(value: string) {
-  return value
+  const values = value
     .split(',')
     .map((item) => item.trim())
     .filter(Boolean);
+  return values.length > 0 ? values : undefined;
 }
 
 export function toDashboardFilters(values: DashboardFilterFormValues): DashboardFilters {
   return {
-    from_time: values.fromDate ? formatISO(new Date(`${values.fromDate}T00:00:00`)) : undefined,
-    to_time: values.toDate ? formatISO(new Date(`${values.toDate}T23:59:59`)) : undefined,
+    from_time: values.fromDate || undefined,
+    to_time: values.toDate || undefined,
     severity: values.severity ? [values.severity] : undefined,
     status: values.status ? [values.status] : undefined,
     device_id: splitCsv(values.deviceId),

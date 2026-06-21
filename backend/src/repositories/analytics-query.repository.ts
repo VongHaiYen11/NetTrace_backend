@@ -108,7 +108,7 @@ export class AnalyticsQueryRepository {
 
     const query = `
       SELECT ${selectClause}
-      FROM alarms
+      FROM alarm
       ${prewhereClause}
       ${groupByClause}
       ${orderByClause}
