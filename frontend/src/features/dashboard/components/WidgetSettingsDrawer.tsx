@@ -8,6 +8,15 @@ import type { GroupBy, Metric, TimeBucket } from '../../../services/generated/ne
 
 type HeatmapMode = 'weekday' | 'calendar';
 
+const drawerIconButtonClass =
+  'flex h-10 w-10 shrink-0 items-center justify-center rounded bg-transparent text-[#00f5d4] transition hover:text-[#9ef7ee] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00f5d4]/30';
+
+const drawerMutedIconButtonClass =
+  'flex h-10 w-10 shrink-0 items-center justify-center rounded bg-transparent text-[#a69db6] transition hover:text-[#f3edff] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00f5d4]/30';
+
+const drawerDangerIconButtonClass =
+  'flex h-10 w-10 shrink-0 items-center justify-center rounded bg-transparent text-[#ff5a9d] transition hover:text-[#ff8fbd] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff2d85]/30';
+
 export type WidgetKind =
   | 'kpi-count'
   | 'kpi-devices'
@@ -267,11 +276,7 @@ export function WidgetSettingsDrawer({
                 type="button"
                 title={layoutSpan === 2 ? 'Full width. Click for half width.' : 'Half width. Click for full width.'}
                 onClick={() => setValue('layoutSpan', layoutSpan === 2 ? 1 : 2)}
-                className={`flex h-10 w-10 items-center justify-center rounded border transition ${
-                  layoutSpan === 2
-                    ? 'border-[#00f5d4]/50 bg-[#00f5d4]/10 text-[#00f5d4] shadow-[0_0_16px_rgba(0,245,212,0.25)]'
-                    : 'border-[#2b2740] bg-[#151421] text-[#a69db6] hover:border-[#ff2d85]/60 hover:text-[#f3edff]'
-                }`}
+                className={layoutSpan === 2 ? drawerIconButtonClass : drawerMutedIconButtonClass}
               >
                 {layoutSpan === 2 ? (
                   <Minimize2 size={18} />
@@ -285,11 +290,7 @@ export function WidgetSettingsDrawer({
               aria-checked={visible}
               title={visible ? 'Visible on dashboard' : 'Hidden from dashboard'}
               onClick={() => setValue('visible', !visible)}
-              className={`flex h-10 w-10 items-center justify-center rounded border transition ${
-                visible
-                  ? 'border-[#00f5d4]/50 bg-[#00f5d4]/10 text-[#00f5d4] shadow-[0_0_16px_rgba(0,245,212,0.25)]'
-                  : 'border-[#ff2d85]/50 bg-[#ff2d85]/10 text-[#ff2d85] shadow-[0_0_16px_rgba(255,45,133,0.25)]'
-              }`}
+              className={visible ? drawerIconButtonClass : drawerDangerIconButtonClass}
             >
               {visible ? (
                 <Eye size={18} />

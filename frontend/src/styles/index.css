@@ -43,36 +43,49 @@ select {
 
 input[type="date"] {
   appearance: none;
-  color-scheme: dark;
+  accent-color: #00f5d4;
 }
 
 input[type="date"]::-webkit-calendar-picker-indicator {
+  background-color: rgba(0, 245, 212, 0.12);
+  border: 1px solid rgba(0, 245, 212, 0.72);
+  border-radius: 6px;
+  box-shadow:
+    0 0 0 1px rgba(0, 245, 212, 0.08),
+    0 0 12px rgba(0, 245, 212, 0.24);
   cursor: pointer;
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
+  padding: 3px;
   filter:
-    invert(92%)
-    sepia(27%)
-    saturate(660%)
-    hue-rotate(122deg)
-    brightness(108%)
-    contrast(98%)
-    drop-shadow(0 0 5px rgba(0, 245, 212, 0.46));
-  opacity: 0.92;
-  transition: opacity 150ms ease, filter 150ms ease;
+    invert(89%)
+    sepia(98%)
+    saturate(694%)
+    hue-rotate(111deg)
+    brightness(105%)
+    contrast(105%);
+  opacity: 1;
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease,
+    box-shadow 150ms ease,
+    filter 150ms ease;
 }
 
 input[type="date"]:hover::-webkit-calendar-picker-indicator,
 input[type="date"]:focus::-webkit-calendar-picker-indicator {
+  background-color: rgba(255, 45, 133, 0.16);
+  border-color: rgba(255, 45, 133, 0.82);
+  box-shadow:
+    0 0 0 1px rgba(255, 45, 133, 0.1),
+    0 0 14px rgba(255, 45, 133, 0.34);
   filter:
-    invert(96%)
-    sepia(9%)
-    saturate(580%)
-    hue-rotate(190deg)
+    invert(46%)
+    sepia(98%)
+    saturate(2654%)
+    hue-rotate(307deg)
     brightness(112%)
-    contrast(100%)
-    drop-shadow(0 0 7px rgba(158, 247, 238, 0.62));
-  opacity: 1;
+    contrast(105%);
 }
 
 .recharts-cartesian-axis-tick text,

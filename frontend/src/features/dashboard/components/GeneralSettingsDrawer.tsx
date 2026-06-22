@@ -23,8 +23,10 @@ import {
 } from 'lucide-react';
 import { Button } from '../../../components/ui/Button';
 import { Field, Input, Select } from '../../../components/ui/Field';
+import { nettraceApi, type TemplateSummary } from '../../../services/generated/nettrace-api';
 import { cn } from '../../../utils/cn';
 import type { WidgetKind, WidgetSettingsValues } from './WidgetSettingsDrawer';
+import { toast } from 'sonner';
 
 type DashboardWidgetConfig = WidgetSettingsValues & {
   id: string;
@@ -45,8 +47,10 @@ interface DashboardTemplate {
 interface GeneralSettingsDrawerProps {
   isOpen: boolean;
   widgets: DashboardWidgetConfig[];
+  activeTemplate: { id: string; name: string } | null;
   onClose: () => void;
   onSave: (widgets: DashboardWidgetConfig[]) => void;
+  onTemplateChange: (template: { id: string; name: string } | null) => void;
 }
 
 const summaryOptions = [
@@ -303,6 +307,15 @@ const extraTemplate = {
   description: 'CLI / RAW_DATA',
 };
 
+const drawerIconButtonClass =
+  'flex shrink-0 items-center justify-center rounded bg-transparent text-[#00f5d4] transition hover:text-[#9ef7ee] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00f5d4]/30';
+
+const drawerMutedIconButtonClass =
+  'flex shrink-0 items-center justify-center rounded bg-transparent text-[#a69db6] transition hover:text-[#f3edff] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00f5d4]/30';
+
+const drawerDangerIconButtonClass =
+  'flex shrink-0 items-center justify-center rounded bg-transparent text-[#ff5a9d] transition hover:text-[#ff8fbd] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff2d85]/30';
+
 function getVisibleChartCount(widgets: DashboardWidgetConfig[]) {
   const count = widgets.filter((widget) => !widget.type.startsWith('kpi') && widget.visible).length;
   if (count <= 2) return 2;
@@ -337,16 +350,54 @@ function normalizeWidgetTitle(widget: DashboardWidgetConfig) {
   };
 }
 
+function buildTemplateSnapshot(widgets: DashboardWidgetConfig[]) {
+  return JSON.stringify({
+    version: 1,
+    widgets: widgets.map(normalizeWidgetTitle),
+  });
+}
+
+function readTemplateSnapshot(value: string | null) {
+  if (!value) return null;
+  try {
+    const parsed = JSON.parse(value) as { widgets?: DashboardWidgetConfig[] };
+    return Array.isArray(parsed.widgets) ? parsed.widgets : null;
+  } catch {
+    return null;
+  }
+}
+
+function getSavedTemplateName(template: TemplateSummary) {
+  return template.name || `Saved template ${template.template_id}`;
+}
+
+function createDashboardTemplateFromSaved(template: TemplateSummary): DashboardTemplate | null {
+  const snapshotWidgets = readTemplateSnapshot(template.selected_cards);
+  if (!snapshotWidgets) return null;
+
+  return {
+    id: `db:${template.template_id}`,
+    name: getSavedTemplateName(template),
+    description: 'POSTGRES / SAVED_LAYOUT',
+    layoutCount: getLayoutCapacity(snapshotWidgets),
+    apply: () => snapshotWidgets,
+  };
+}
+
 export function GeneralSettingsDrawer({
   isOpen,
   widgets,
+  activeTemplate,
   onClose,
   onSave,
+  onTemplateChange,
 }: GeneralSettingsDrawerProps) {
   const [draftWidgets, setDraftWidgets] = useState(widgets);
   const [detailDraftWidgets, setDetailDraftWidgets] = useState(widgets);
   const [selectedTemplateId, setSelectedTemplateId] = useState('none');
+  const [savedTemplates, setSavedTemplates] = useState<DashboardTemplate[]>([]);
   const [templateSearch, setTemplateSearch] = useState('');
+  const [creatingTemplate, setCreatingTemplate] = useState(false);
   const [dashboardStatusOpen, setDashboardStatusOpen] = useState(false);
   const [templateDropdownOpen, setTemplateDropdownOpen] = useState(false);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
@@ -358,7 +409,7 @@ export function GeneralSettingsDrawer({
     if (isOpen) {
       setDraftWidgets(widgets);
       setDetailDraftWidgets(widgets);
-      setSelectedTemplateId('none');
+      setSelectedTemplateId(activeTemplate?.id ?? 'none');
       setTemplateSearch('');
       setDashboardStatusOpen(false);
       setTemplateDropdownOpen(false);
@@ -367,7 +418,30 @@ export function GeneralSettingsDrawer({
       setSelectedSlotId(null);
       setRestoreWidgetId(null);
     }
-  }, [isOpen, widgets]);
+  }, [activeTemplate?.id, isOpen, widgets]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    let cancelled = false;
+
+    async function loadSavedTemplates() {
+      try {
+        const response = await nettraceApi.listTemplates({ limit: 50, offset: 0 });
+        if (cancelled) return;
+        const parsedTemplates = response.data
+          .map(createDashboardTemplateFromSaved)
+          .filter((template): template is DashboardTemplate => template !== null);
+        setSavedTemplates(parsedTemplates);
+      } catch {
+        // The drawer can still work with built-in templates if Postgres is unavailable.
+      }
+    }
+
+    void loadSavedTemplates();
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen]);
 
   const layoutCount = useMemo(() => getLayoutCapacity(detailDraftWidgets), [detailDraftWidgets]);
   const kpiWidgets = detailDraftWidgets.filter((widget) => widget.type.startsWith('kpi'));
@@ -382,9 +456,19 @@ export function GeneralSettingsDrawer({
     { length: Math.max(0, sidebarLayoutCount - sidebarVisibleCharts.length) },
     (_, index) => sidebarVisibleCharts.length + index + 1,
   );
-  const selectedSlot = chartWidgets.find((widget) => widget.id === selectedSlotId) ?? visibleChartWidgets[0] ?? chartWidgets[0];
-  const selectedTemplate = templates.find((template) => template.id === selectedTemplateId);
-  const filteredTemplates = templates.filter((template) =>
+  const selectedEmptySlot = selectedSlotId?.startsWith('empty:')
+    ? Number(selectedSlotId.replace('empty:', ''))
+    : null;
+  const selectedSlot = selectedSlotId?.startsWith('empty:')
+    ? null
+    : chartWidgets.find((widget) => widget.id === selectedSlotId) ?? visibleChartWidgets[0] ?? chartWidgets[0];
+  const allTemplates = [...templates, ...savedTemplates];
+  const selectedTemplate = allTemplates.find((template) => template.id === selectedTemplateId);
+  const displayedTemplateName =
+    selectedTemplateId === 'none'
+      ? 'Current setup'
+      : selectedTemplate?.name ?? activeTemplate?.name ?? 'Current setup';
+  const filteredTemplates = allTemplates.filter((template) =>
     `${template.name} ${template.description}`.toLowerCase().includes(templateSearch.toLowerCase()),
   );
 
@@ -393,7 +477,7 @@ export function GeneralSettingsDrawer({
   function applyTemplate(templateId: string) {
     setSelectedTemplateId(templateId);
     setRestoreWidgetId(null);
-    const template = templates.find((item) => item.id === templateId);
+    const template = allTemplates.find((item) => item.id === templateId);
     if (!template) {
       setDraftWidgets(widgets);
       return;
@@ -423,6 +507,12 @@ export function GeneralSettingsDrawer({
     setRestoreWidgetId(null);
   }
 
+  function restoreDetailWidget(widgetId: string, slot?: number) {
+    setSelectedTemplateId('none');
+    setDetailDraftWidgets((current) => restoreChartWidget(current, widgetId, slot));
+    setSelectedSlotId(widgetId);
+  }
+
   function toggleSidebarKpi(widgetId: string) {
     setSelectedTemplateId('none');
     setDraftWidgets((current) =>
@@ -438,7 +528,11 @@ export function GeneralSettingsDrawer({
   }
 
   function saveAndClose() {
-    onSave(draftWidgets.map(normalizeWidgetTitle));
+    const normalizedWidgets = draftWidgets.map(normalizeWidgetTitle);
+    onSave(normalizedWidgets);
+    onTemplateChange(
+      selectedTemplate ? { id: selectedTemplate.id, name: selectedTemplate.name } : null,
+    );
     onClose();
   }
 
@@ -452,7 +546,41 @@ export function GeneralSettingsDrawer({
   function saveDetailDraft() {
     setDraftWidgets(detailDraftWidgets.map(normalizeWidgetTitle));
     setSelectedTemplateId('none');
+    onTemplateChange(null);
     setDetailModalOpen(false);
+  }
+
+  async function createTemplateFromDraft() {
+    setCreatingTemplate(true);
+    try {
+      const normalizedWidgets = draftWidgets.map(normalizeWidgetTitle);
+      const baseName =
+        selectedTemplate?.name && selectedTemplate.id !== 'none'
+          ? `${selectedTemplate.name} copy`
+          : 'Current setup';
+      const created = await nettraceApi.createTemplate({
+        name: `${baseName} ${new Date().toLocaleString('en-US', {
+          month: 'short',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+        })}`,
+        selected_cards: buildTemplateSnapshot(normalizedWidgets),
+        widgets: [],
+      });
+      const savedTemplate = createDashboardTemplateFromSaved(created.data);
+      if (savedTemplate) {
+        setSavedTemplates((current) => [savedTemplate, ...current]);
+        setSelectedTemplateId(savedTemplate.id);
+        setDraftWidgets(savedTemplate.apply(normalizedWidgets));
+      }
+      toast.success('Template saved');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Could not save template.';
+      toast.error(message);
+    } finally {
+      setCreatingTemplate(false);
+    }
   }
 
   function renderTemplatePreview(templateId: string) {
@@ -482,9 +610,14 @@ export function GeneralSettingsDrawer({
       <div className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm" onClick={onClose} />
       <aside className="fixed bottom-0 right-0 top-0 z-50 flex w-[480px] max-w-[calc(100vw-1rem)] flex-col border-l border-white/10 bg-[#151421] text-[#f3edff] shadow-2xl">
         <div className="flex items-center justify-between border-b border-[#ff2d85]/30 px-6 py-5">
-          <h2 className="text-2xl font-black text-[#f3edff] drop-shadow-[0_0_14px_rgba(255,45,133,0.7)]">
-            Customize dashboard
-          </h2>
+          <div>
+            <h2 className="text-2xl font-black text-[#f3edff] drop-shadow-[0_0_14px_rgba(255,45,133,0.7)]">
+              Customize dashboard
+            </h2>
+            <p className="mt-1 font-mono text-xs text-[#a69db6]">
+              Template: <span className="text-[#00f5d4]">{displayedTemplateName}</span>
+            </p>
+          </div>
           <button className="rounded p-1.5 text-[#ff2d85] hover:bg-[#ff2d85]/10" onClick={onClose}>
             <X size={20} />
           </button>
@@ -515,7 +648,7 @@ export function GeneralSettingsDrawer({
             {dashboardStatusOpen ? (
               <div className="space-y-5 px-1 pb-2">
                 <div>
-                  <p className="font-mono text-base font-black text-[#f3edff]">
+                  <p className="font-mono text-base font-black text-[#00f5d4]">
                     Current state
                   </p>
                   <div className="mt-3 grid grid-cols-2 gap-3">
@@ -536,7 +669,7 @@ export function GeneralSettingsDrawer({
 
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <p className="font-mono text-base font-black text-[#f3edff]">Card KPI</p>
+                    <p className="font-mono text-base font-black text-[#00f5d4]">Card KPI</p>
                     <span className="font-mono text-xs text-[#a69db6]">
                       {sidebarKpiWidgets.filter((widget) => widget.visible).length}/{sidebarKpiWidgets.length}
                     </span>
@@ -564,10 +697,8 @@ export function GeneralSettingsDrawer({
                             title={widget.visible ? 'Hide KPI card' : 'Show KPI card'}
                             onClick={() => toggleSidebarKpi(widget.id)}
                             className={cn(
-                              'flex h-9 w-9 shrink-0 items-center justify-center rounded border transition',
-                              widget.visible
-                                ? 'border-[#00f5d4]/50 bg-[#00f5d4]/10 text-[#00f5d4] hover:bg-[#00f5d4]/15'
-                                : 'border-[#ff2d85]/50 bg-[#ff2d85]/10 text-[#ff2d85] hover:bg-[#ff2d85]/15',
+                              'h-9 w-9',
+                              widget.visible ? drawerIconButtonClass : drawerDangerIconButtonClass,
                             )}
                           >
                             {widget.visible ? <Eye size={17} /> : <EyeOff size={17} />}
@@ -580,7 +711,7 @@ export function GeneralSettingsDrawer({
 
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <p className="font-mono text-base font-black text-[#f3edff]">Visible widgets</p>
+                    <p className="font-mono text-base font-black text-[#00f5d4]">Widgets</p>
                     <span className="font-mono text-xs text-[#a69db6]">{sidebarVisibleCharts.length}/{getChartWidgets(draftWidgets).length}</span>
                   </div>
                   <div className="space-y-2">
@@ -608,10 +739,10 @@ export function GeneralSettingsDrawer({
                               );
                             }}
                             className={cn(
-                              'flex h-9 w-9 items-center justify-center rounded border transition',
+                              'h-9 w-9',
                               widget.layoutSpan === 2
-                                ? 'border-[#00f5d4]/50 bg-[#00f5d4]/10 text-[#00f5d4] shadow-[0_0_16px_rgba(0,245,212,0.25)]'
-                                : 'border-[#2b2740] bg-[#151421] text-[#a69db6] hover:border-[#ff2d85]/60 hover:text-[#f3edff]'
+                                ? drawerIconButtonClass
+                                : drawerMutedIconButtonClass
                             )}
                           >
                             {widget.layoutSpan === 2 ? (
@@ -624,7 +755,7 @@ export function GeneralSettingsDrawer({
                             type="button"
                             title="Hide widget"
                             onClick={() => hideSidebarWidget(widget.id)}
-                            className="flex h-9 w-9 items-center justify-center rounded border border-[#00f5d4]/50 bg-[#00f5d4]/10 text-[#00f5d4] transition hover:bg-[#00f5d4]/15"
+                            className={cn('h-9 w-9', drawerIconButtonClass)}
                           >
                             <Eye size={17} />
                           </button>
@@ -635,7 +766,7 @@ export function GeneralSettingsDrawer({
                 </div>
 
                 <div className="space-y-3">
-                  <p className="font-mono text-base font-black text-[#f3edff]">Hidden widgets</p>
+                  <p className="font-mono text-base font-black text-[#00f5d4]">Hidden widgets</p>
                   {sidebarHiddenCharts.length > 0 ? (
                     <div className="space-y-2">
                       {sidebarHiddenCharts.map((widget) => {
@@ -657,10 +788,8 @@ export function GeneralSettingsDrawer({
                                 title="Restore widget"
                                 onClick={() => startRestoreSidebarWidget(widget.id)}
                                 className={cn(
-                                  "flex h-9 w-9 shrink-0 items-center justify-center rounded border transition",
-                                  isRestoring
-                                    ? "border-[#ff2d85] bg-[#ff2d85]/20 text-[#ff2d85]"
-                                    : "border-[#ff2d85]/50 bg-[#ff2d85]/10 text-[#ff2d85] hover:bg-[#ff2d85]/15"
+                                  'h-9 w-9',
+                                  isRestoring ? drawerDangerIconButtonClass : drawerDangerIconButtonClass,
                                 )}
                               >
                                 <EyeOff size={17} />
@@ -793,9 +922,11 @@ export function GeneralSettingsDrawer({
 
                 <button
                   type="button"
+                  onClick={createTemplateFromDraft}
+                  disabled={creatingTemplate}
                   className="h-12 w-full rounded border border-dashed border-[#ff2d85]/50 bg-transparent font-mono text-sm font-bold text-[#ff2d85] transition hover:bg-[#ff2d85]/10"
                 >
-                  + Add template
+                  {creatingTemplate ? 'Saving template...' : '+ Add template'}
                 </button>
               </div>
             ) : null}
@@ -823,16 +954,19 @@ export function GeneralSettingsDrawer({
       {detailModalOpen ? (
         <>
           <div className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm" onClick={closeDetailModal} />
-          <div className="fixed inset-x-4 top-8 z-[70] mx-auto max-h-[calc(100vh-4rem)] w-[min(920px,calc(100vw-2rem))] overflow-y-auto rounded border border-white/10 bg-[#151421] text-[#f3edff] shadow-2xl">
-            <div className="flex items-center justify-between border-b border-white/10 px-6 py-4">
+          <div className="fixed inset-x-4 top-8 z-[70] mx-auto max-h-[calc(100vh-4rem)] w-[min(1080px,calc(100vw-2rem))] overflow-y-auto rounded-md border border-white/10 bg-[#151421] text-[#f3edff] shadow-2xl">
+            <div className="flex items-center justify-between border-b border-white/10 px-7 py-5">
               <div>
-                <h2 className="font-mono text-3xl font-black text-[#f3edff] drop-shadow-[0_0_12px_rgba(255,45,133,0.55)]">
-                  Edit template
+                <p className="font-mono text-xs font-bold uppercase tracking-[0.18em] text-[#00f5d4]">
+                  Advanced settings
+                </p>
+                <h2 className="mt-1 font-mono text-3xl font-black text-[#f3edff]">
+                  {detailStep === 'template' ? 'Template setup' : 'Widget editor'}
                 </h2>
                 <p className="mt-1 font-mono text-xs text-[#a69db6]">
                   {detailStep === 'template'
-                    ? 'Choose layout and KPI cards first.'
-                    : 'Pick a slot, then configure API parameters.'}
+                    ? 'Choose the layout, KPI cards, and baseline dashboard structure.'
+                    : 'Select an existing widget or an empty slot to configure the dashboard.'}
                 </p>
               </div>
               <button className="rounded p-1.5 text-[#a69db6] hover:bg-white/10 hover:text-white" onClick={closeDetailModal}>
@@ -841,148 +975,159 @@ export function GeneralSettingsDrawer({
             </div>
 
             {detailStep === 'template' ? (
-              <div className="space-y-7 px-6 py-6">
-                <Field label="Template name">
-                  <Input value="Current template" readOnly />
-                </Field>
-
-                <div>
-                  <p className="font-mono text-lg font-black text-[#f3edff]">Layout</p>
-                  <div className="mt-3 grid gap-3 md:grid-cols-3">
-                    {[
-                      { count: 2, icon: Grid2X2 },
-                      { count: 4, icon: LayoutGrid },
-                      { count: 6, icon: Grid3X3 },
-                    ].map((option) => {
-                      const Icon = option.icon;
-                      const selected = layoutCount === option.count;
-                      return (
-                        <button
-                          key={option.count}
-                          type="button"
-                          onClick={() => applyLayoutCount(option.count as 2 | 4 | 6)}
-                          className={cn(
-                            'flex h-28 flex-col items-center justify-center gap-2 rounded border transition',
-                            selected
-                              ? 'border-[#ff2d85] bg-[#ff2d85]/10 text-[#ff2d85]'
-                              : 'border-white/10 bg-[#151421] text-[#a69db6] hover:border-white/25',
-                          )}
-                        >
-                          <Icon size={24} />
-                          <span className="font-mono text-sm font-bold">{option.count} widget</span>
-                        </button>
-                      );
-                    })}
+              <div className="grid gap-7 px-7 py-7 lg:grid-cols-[280px_1fr]">
+                <aside className="rounded-md border border-white/10 bg-[#0f0e19] p-5">
+                  <p className="font-mono text-sm font-black text-[#00f5d4]">Current template</p>
+                  <p className="mt-3 font-mono text-xl font-black text-[#f3edff]">{displayedTemplateName}</p>
+                  <div className="mt-5 grid grid-cols-2 gap-3">
+                    <div className="rounded bg-[#191727] p-3">
+                      <p className="font-mono text-[10px] uppercase text-[#777086]">Layout</p>
+                      <p className="mt-1 font-mono text-sm font-black">{getLayoutCountLabel(layoutCount)}</p>
+                    </div>
+                    <div className="rounded bg-[#191727] p-3">
+                      <p className="font-mono text-[10px] uppercase text-[#777086]">Widgets</p>
+                      <p className="mt-1 font-mono text-sm font-black">{visibleChartWidgets.length}/{chartWidgets.length}</p>
+                    </div>
                   </div>
-                </div>
+                  <p className="mt-5 text-sm leading-6 text-[#a69db6]">
+                    This step controls the template shell. Use the widget editor for slot-level data, sizing, and date ranges.
+                  </p>
+                </aside>
 
-                <div>
-                  <div className="flex items-center justify-between">
-                    <p className="font-mono text-lg font-black text-[#f3edff]">
-                      KPI cards
-                    </p>
-                    <span className="font-mono text-[11px] text-[#777086]">
-                      Summary API fields
-                    </span>
+                <div className="space-y-7">
+                  <div>
+                    <div className="flex items-end justify-between gap-3">
+                      <div>
+                        <p className="font-mono text-lg font-black text-[#f3edff]">Layout</p>
+                        <p className="mt-1 text-sm text-[#a69db6]">Pick the canvas density for desktop dashboards.</p>
+                      </div>
+                    </div>
+                    <div className="mt-3 grid gap-3 md:grid-cols-3">
+                      {[
+                        { count: 2, icon: Grid2X2, label: 'Focused' },
+                        { count: 4, icon: LayoutGrid, label: 'Balanced' },
+                        { count: 6, icon: Grid3X3, label: 'Dense' },
+                      ].map((option) => {
+                        const Icon = option.icon;
+                        const selected = layoutCount === option.count;
+                        return (
+                          <button
+                            key={option.count}
+                            type="button"
+                            onClick={() => applyLayoutCount(option.count as 2 | 4 | 6)}
+                            className={cn(
+                              'rounded-md border p-4 text-left transition',
+                              selected
+                                ? 'border-[#ff2d85] bg-[#2b1020] text-[#f3edff] shadow-[0_0_22px_rgba(255,45,133,0.22)]'
+                                : 'border-white/10 bg-[#0f0e19] text-[#a69db6] hover:border-white/25 hover:text-[#f3edff]',
+                            )}
+                          >
+                            <div className="flex items-center justify-between">
+                              <Icon size={22} className={selected ? 'text-[#ff5a9d]' : 'text-[#00f5d4]'} />
+                              {selected ? <Check size={16} className="text-[#ff5a9d]" /> : null}
+                            </div>
+                            <p className="mt-4 font-mono text-base font-black">{option.count} widgets</p>
+                            <p className="mt-1 font-mono text-xs text-[#a69db6]">{option.label}</p>
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
-                  <div className="mt-3 space-y-3">
-                    {kpiWidgets.map((widget) => {
-                      const option = summaryOptions.find((item) => item.key === widget.type);
-                      const Icon = option?.icon ?? Activity;
-                      return (
-                        <div key={widget.id} className="rounded border border-white/10 bg-[#151421] p-4">
-                          <div className="grid gap-4">
-                            <div className="flex items-center justify-between gap-3">
-                              <div className="flex min-w-0 items-center gap-3">
-                                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded bg-[#ff2d85]/15 text-[#ff2d85]">
-                                  <Icon size={18} />
-                                </span>
-                                <div className="min-w-0">
-                                  <p className="truncate font-bold text-[#f3edff]">{option?.title ?? widget.title}</p>
-                                  <p className="mt-1 text-sm text-[#a69db6]">{option?.description}</p>
-                                </div>
+
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-mono text-lg font-black text-[#f3edff]">
+                          KPI cards
+                        </p>
+                        <p className="mt-1 text-sm text-[#a69db6]">Choose summary cards and light display details.</p>
+                      </div>
+                      <span className="font-mono text-[11px] text-[#777086]">
+                        Summary API fields
+                      </span>
+                    </div>
+                    <div className="mt-3 divide-y divide-white/10 rounded-md border border-white/10 bg-[#0f0e19]">
+                      {kpiWidgets.map((widget) => {
+                        const option = summaryOptions.find((item) => item.key === widget.type);
+                        const Icon = option?.icon ?? Activity;
+                        return (
+                          <div key={widget.id} className="grid gap-3 p-4 lg:grid-cols-[minmax(220px,1fr)_minmax(220px,320px)_auto] lg:items-center">
+                            <div className="flex min-w-0 items-center gap-3">
+                              <Icon size={18} className="shrink-0 text-[#00f5d4]" />
+                              <div className="min-w-0">
+                                <p className="truncate font-bold text-[#f3edff]">{option?.title ?? widget.title}</p>
+                                <p className="mt-1 truncate text-sm text-[#a69db6]">{option?.description}</p>
                               </div>
+                            </div>
+
+                            <Select
+                              value={widget.type}
+                              onChange={(event) =>
+                                setDetailDraftWidgets((current) =>
+                                  updateKpiContent(current, widget.id, event.target.value as KpiWidgetKind),
+                                )
+                              }
+                            >
+                              {summaryOptions.map((item) => (
+                                <option key={item.key} value={item.key}>
+                                  {item.title}
+                                </option>
+                              ))}
+                            </Select>
+
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                type="button"
+                                title={widget.info1 ? 'Description visible' : 'Description hidden'}
+                                onClick={() => setDetailDraftWidgets((current) => updateWidget(current, widget.id, { info1: !widget.info1 }))}
+                                className={cn(
+                                  'h-9 w-9',
+                                  widget.info1 ? drawerIconButtonClass : drawerMutedIconButtonClass,
+                                )}
+                              >
+                                <TypeIcon size={16} />
+                              </button>
+                              <button
+                                type="button"
+                                title={widget.info2 ? 'Icon visible' : 'Icon hidden'}
+                                onClick={() => setDetailDraftWidgets((current) => updateWidget(current, widget.id, { info2: !widget.info2 }))}
+                                className={cn(
+                                  'h-9 w-9',
+                                  widget.info2 ? drawerIconButtonClass : drawerMutedIconButtonClass,
+                                )}
+                              >
+                                <Icon size={16} />
+                              </button>
                               <button
                                 type="button"
                                 title={widget.visible ? 'Hide KPI card' : 'Show KPI card'}
                                 onClick={() => toggleKpi(widget.id)}
                                 className={cn(
-                                  'flex h-9 w-9 shrink-0 items-center justify-center rounded border transition',
-                                  widget.visible
-                                    ? 'border-[#00f5d4]/50 bg-[#00f5d4]/10 text-[#00f5d4]'
-                                    : 'border-[#ff2d85]/50 bg-[#ff2d85]/10 text-[#ff2d85]',
+                                  'h-9 w-9',
+                                  widget.visible ? drawerIconButtonClass : drawerDangerIconButtonClass,
                                 )}
                               >
                                 {widget.visible ? <Eye size={17} /> : <EyeOff size={17} />}
                               </button>
                             </div>
-
-                            <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
-                              <Field label="Card content">
-                                <Select
-                                  value={widget.type}
-                                  onChange={(event) =>
-                                    setDetailDraftWidgets((current) =>
-                                      updateKpiContent(current, widget.id, event.target.value as KpiWidgetKind),
-                                    )
-                                  }
-                                >
-                                  {summaryOptions.map((item) => (
-                                    <option key={item.key} value={item.key}>
-                                      {item.title}
-                                    </option>
-                                  ))}
-                                </Select>
-                              </Field>
-
-                              <div className="flex items-center gap-2">
-                                <button
-                                  type="button"
-                                  title={widget.info1 ? 'Description visible' : 'Description hidden'}
-                                  onClick={() => setDetailDraftWidgets((current) => updateWidget(current, widget.id, { info1: !widget.info1 }))}
-                                  className={cn(
-                                    'flex h-11 w-11 items-center justify-center rounded border transition',
-                                    widget.info1
-                                      ? 'border-[#00f5d4]/50 bg-[#00f5d4]/10 text-[#00f5d4]'
-                                      : 'border-[#2b2740] bg-[#191727] text-[#a69db6] hover:border-[#ff2d85]/60',
-                                  )}
-                                >
-                                  <TypeIcon size={17} />
-                                </button>
-                                <button
-                                  type="button"
-                                  title={widget.info2 ? 'Icon visible' : 'Icon hidden'}
-                                  onClick={() => setDetailDraftWidgets((current) => updateWidget(current, widget.id, { info2: !widget.info2 }))}
-                                  className={cn(
-                                    'flex h-11 w-11 items-center justify-center rounded border transition',
-                                    widget.info2
-                                      ? 'border-[#00f5d4]/50 bg-[#00f5d4]/10 text-[#00f5d4]'
-                                      : 'border-[#2b2740] bg-[#191727] text-[#a69db6] hover:border-[#ff2d85]/60',
-                                  )}
-                                >
-                                  <Icon size={17} />
-                                </button>
-                              </div>
-                            </div>
                           </div>
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
 
-                <div className="flex items-center justify-end gap-3 border-t border-white/10 pt-5">
-                  <Button variant="ghost" className="h-11 px-5" onClick={closeDetailModal}>Cancel</Button>
-                  <Button variant="secondary" className="h-11 px-6 border-[#00f5d4] text-[#00f5d4]" onClick={goToWidgetStep}>
-                    Edit widgets
-                  </Button>
-                  <Button className="h-11 px-6" onClick={saveDetailDraft}>Save changes</Button>
+                  <div className="flex items-center justify-end gap-3 border-t border-white/10 pt-5">
+                    <Button variant="ghost" className="h-11 px-5" onClick={closeDetailModal}>Cancel</Button>
+                    <Button variant="secondary" className="h-11 px-6 border-[#00f5d4] text-[#00f5d4]" onClick={goToWidgetStep}>
+                      Edit widgets
+                    </Button>
+                    <Button className="h-11 px-6" onClick={saveDetailDraft}>Save changes</Button>
+                  </div>
                 </div>
               </div>
             ) : (
               <div className="px-6 py-6">
-                <h3 className="text-5xl font-black text-[#f3edff] drop-shadow-[0_0_14px_rgba(255,45,133,0.45)]">Edit widget</h3>
-                <div className="mt-8 grid gap-7 lg:grid-cols-[260px_1fr]">
+                <div className="grid gap-7 lg:grid-cols-[300px_1fr]">
                   <div>
                     <p className="font-mono text-lg font-black text-[#00f5d4] drop-shadow-[0_0_8px_rgba(0,245,212,0.5)]">
                       Layout map
@@ -993,14 +1138,23 @@ export function GeneralSettingsDrawer({
                           const slot = index + 1;
                           const widget = visibleChartWidgets.find((item) => item.layoutOrder === slot);
                           if (!widget) {
+                            const selected = selectedEmptySlot === slot;
                             return (
-                              <div
+                              <button
                                 key={`empty-${slot}`}
-                                className="flex min-h-28 flex-col items-center justify-center rounded border border-dashed border-[#2b2740] bg-[#151421]/70 p-3 text-[#777086]"
+                                type="button"
+                                onClick={() => setSelectedSlotId(`empty:${slot}`)}
+                                className={cn(
+                                  'flex min-h-28 flex-col items-center justify-center rounded border border-dashed p-3 transition',
+                                  selected
+                                    ? 'border-[#00f5d4] bg-[#102321] text-[#00f5d4] shadow-[0_0_20px_rgba(0,245,212,0.16)]'
+                                    : 'border-[#2b2740] bg-[#151421]/70 text-[#777086] hover:border-[#00f5d4]/45 hover:text-[#f3edff]',
+                                )}
                               >
                                 <span className="text-2xl font-black">+</span>
                                 <span className="mt-2 font-mono text-xs">Slot {slot}</span>
-                              </div>
+                                <span className="mt-1 font-mono text-[10px]">Empty</span>
+                              </button>
                             );
                           }
                           const selected = selectedSlot?.id === widget.id;
@@ -1031,38 +1185,77 @@ export function GeneralSettingsDrawer({
                   </div>
 
                   <div>
-                    <p className="font-mono text-2xl font-black text-[#f3edff]">
-                      Slot {selectedSlot?.layoutOrder ?? 1} settings
-                    </p>
-                    {selectedSlot ? (
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="font-mono text-2xl font-black text-[#f3edff]">
+                        Slot {selectedSlot?.layoutOrder ?? selectedEmptySlot ?? 1} settings
+                      </p>
+                      {selectedSlot ? (
+                        <button
+                          type="button"
+                          aria-pressed={selectedSlot.visible}
+                          title={selectedSlot.visible ? 'Hide widget' : 'Show widget'}
+                          onClick={() =>
+                            setDetailDraftWidgets((current) => {
+                              const nextWidgets = selectedSlot.visible
+                                ? hideChartWidget(current, selectedSlot.id)
+                                : restoreChartWidget(current, selectedSlot.id);
+                              const nextSelected = getVisibleChartWidgets(nextWidgets)[0]?.id ?? getChartWidgets(nextWidgets)[0]?.id ?? null;
+                              setSelectedSlotId(selectedSlot.visible ? nextSelected : selectedSlot.id);
+                              return nextWidgets;
+                            })
+                          }
+                          className={cn(
+                            'inline-flex h-9 items-center gap-2 rounded-full border px-3 font-mono text-xs font-black transition focus-visible:outline-none focus-visible:ring-2',
+                            selectedSlot.visible
+                              ? 'border-[#00f5d4]/45 bg-[#00f5d4]/10 text-[#00f5d4] hover:bg-[#00f5d4]/15 focus-visible:ring-[#00f5d4]/30'
+                              : 'border-[#ff2d85]/45 bg-[#ff2d85]/10 text-[#ff5a9d] hover:bg-[#ff2d85]/15 focus-visible:ring-[#ff2d85]/30',
+                          )}
+                        >
+                          {selectedSlot.visible ? <Eye size={15} /> : <EyeOff size={15} />}
+                          {selectedSlot.visible ? 'Visible' : 'Hidden'}
+                        </button>
+                      ) : null}
+                    </div>
+                    {selectedEmptySlot ? (
+                      <div className="mt-4 rounded border border-[#00f5d4]/45 bg-[#0c0b14] p-6">
+                        <p className="font-mono text-lg font-black text-[#00f5d4]">Empty slot</p>
+                        <p className="mt-2 text-sm leading-6 text-[#a69db6]">
+                          Add a hidden widget to this slot, then configure its data and display options.
+                        </p>
+
+                        <div className="mt-5 space-y-3">
+                          {hiddenChartWidgets.length > 0 ? (
+                            hiddenChartWidgets.map((widget) => (
+                              <button
+                                key={widget.id}
+                                type="button"
+                                onClick={() => restoreDetailWidget(widget.id, selectedEmptySlot)}
+                                className="flex w-full items-center justify-between gap-4 rounded-md border border-white/10 bg-[#151421] p-4 text-left transition hover:border-[#00f5d4]/50 hover:bg-[#102321]"
+                              >
+                                <span className="min-w-0">
+                                  <span className="block truncate font-mono text-sm font-black text-[#f3edff]">
+                                    {widget.title}
+                                  </span>
+                                  <span className="mt-1 block font-mono text-xs text-[#a69db6]">
+                                    {widget.chartType} · prefers {widget.layoutSpan === 2 ? '2 cells' : '1 cell'}
+                                  </span>
+                                </span>
+                                <span className="font-mono text-xs font-black text-[#00f5d4]">Add</span>
+                              </button>
+                            ))
+                          ) : (
+                            <div className="rounded-md border border-dashed border-white/10 bg-[#151421]/70 p-5">
+                              <p className="font-mono text-sm font-black text-[#f3edff]">No hidden widgets</p>
+                              <p className="mt-2 text-sm leading-6 text-[#a69db6]">
+                                Hide a widget first or increase the layout density to create available widgets for this slot.
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ) : selectedSlot ? (
                       <div className="mt-4 rounded border border-[#ff2d85]/70 bg-[#0c0b14] p-6">
                         <div className="grid gap-4">
-                          <div className="flex items-center justify-end">
-                            <button
-                              type="button"
-                              aria-checked={selectedSlot.visible}
-                              title={selectedSlot.visible ? 'Visible on dashboard' : 'Hidden from dashboard'}
-                              onClick={() =>
-                                setDetailDraftWidgets((current) => {
-                                  const nextWidgets = selectedSlot.visible
-                                    ? hideChartWidget(current, selectedSlot.id)
-                                    : restoreChartWidget(current, selectedSlot.id);
-                                  const nextSelected = getVisibleChartWidgets(nextWidgets)[0]?.id ?? getChartWidgets(nextWidgets)[0]?.id ?? null;
-                                  setSelectedSlotId(selectedSlot.visible ? nextSelected : selectedSlot.id);
-                                  return nextWidgets;
-                                })
-                              }
-                              className={cn(
-                                'flex h-10 w-10 items-center justify-center rounded border transition',
-                                selectedSlot.visible
-                                  ? 'border-[#00f5d4]/50 bg-[#00f5d4]/10 text-[#00f5d4] shadow-[0_0_16px_rgba(0,245,212,0.25)]'
-                                  : 'border-[#ff2d85]/50 bg-[#ff2d85]/10 text-[#ff2d85] shadow-[0_0_16px_rgba(255,45,133,0.25)]',
-                              )}
-                            >
-                              {selectedSlot.visible ? <Eye size={18} /> : <EyeOff size={18} />}
-                            </button>
-                          </div>
-
                           <Field label="Widget name" hint="Leave blank to use data + time range.">
                             <Input
                               value={selectedSlot.title}

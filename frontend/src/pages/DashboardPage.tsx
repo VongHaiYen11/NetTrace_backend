@@ -212,6 +212,7 @@ export function DashboardPage() {
 
   const [activeWidgetId, setActiveWidgetId] = useState<string | null>(null);
   const [generalSettingsOpen, setGeneralSettingsOpen] = useState(false);
+  const [activeTemplate, setActiveTemplate] = useState<{ id: string; name: string } | null>(null);
 
   const activeWidget = useMemo(() => {
     return widgets.find((w) => w.id === activeWidgetId);
@@ -232,6 +233,7 @@ export function DashboardPage() {
 
   function handleApplySettings(newValues: WidgetSettingsValues) {
     if (!activeWidgetId) return;
+    setActiveTemplate(null);
     setWidgets((prev) =>
       prev.map((w) => (w.id === activeWidgetId ? { ...w, ...newValues } : w))
     );
@@ -313,8 +315,10 @@ export function DashboardPage() {
       <GeneralSettingsDrawer
         isOpen={generalSettingsOpen}
         widgets={widgets}
+        activeTemplate={activeTemplate}
         onClose={() => setGeneralSettingsOpen(false)}
         onSave={setWidgets}
+        onTemplateChange={setActiveTemplate}
       />
 
       {/* Settings Drawer */}

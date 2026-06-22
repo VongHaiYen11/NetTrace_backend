@@ -143,6 +143,23 @@ export interface TemplateSummary {
   time_updated: string;
 }
 
+export interface TemplateWidgetInput {
+  device_id: string;
+  position: number;
+  chart_type: string;
+  status?: string | null;
+  severity?: string | null;
+  error_code?: string | null;
+  vendor_id?: string | null;
+  device_type?: string | null;
+}
+
+export interface CreateTemplateRequest {
+  name: string;
+  selected_cards?: string | null;
+  widgets?: TemplateWidgetInput[];
+}
+
 export type ExportColumn =
   | 'alarm_id'
   | 'time_created'
@@ -258,6 +275,13 @@ export const nettraceApi = {
     if (params.limit) query.set('limit', String(params.limit));
     if (params.offset) query.set('offset', String(params.offset));
     return requestJson<TemplateSummary[]>(`/api/v1/templates${query.size ? `?${query}` : ''}`);
+  },
+
+  async createTemplate(request: CreateTemplateRequest) {
+    return requestJson<TemplateSummary>('/api/v1/templates', {
+      method: 'POST',
+      body: JSON.stringify(request),
+    });
   },
 
   async exportAlarms(request: ExportRequest) {
