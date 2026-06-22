@@ -7,6 +7,7 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  Legend,
   Pie,
   PieChart,
   ResponsiveContainer,
@@ -44,6 +45,11 @@ interface DashboardWidgetProps {
       | 'chart-heatmap'
       | 'chart-extra'
       | 'table-alarms';
+  };
+  layoutContext?: {
+    isLastVisibleWidget: boolean;
+    hasRowMate: boolean;
+    tableHeightMode: 'paired' | 'middle' | 'roomy';
   };
   onSettingsClick: () => void;
 }
@@ -99,13 +105,46 @@ function getCurrentIsoDate() {
   return new Date().toISOString().slice(0, 10);
 }
 
+function addDays(date: Date, days: number) {
+  const nextDate = new Date(date);
+  nextDate.setDate(nextDate.getDate() + days);
+  return nextDate;
+}
+
+function toIsoDate(date: Date) {
+  return date.toISOString().slice(0, 10);
+}
+
 function getCalendarYearRange(startDate: string) {
   const year = Number(startDate.slice(0, 4)) || new Date().getFullYear();
   const currentYear = new Date().getFullYear();
+  const yearEnd = new Date(`${year}-12-31T00:00:00.000Z`);
+  const requestedEnd = year === currentYear ? new Date(`${getCurrentIsoDate()}T00:00:00.000Z`) : yearEnd;
+  const end = requestedEnd > yearEnd ? yearEnd : requestedEnd;
+
   return {
     from_time: `${year}-01-01`,
-    to_time: year === currentYear ? getCurrentIsoDate() : `${year}-12-31`,
+    to_time: toIsoDate(end),
   };
+}
+
+function getCalendarYearChunks(startDate: string) {
+  const range = getCalendarYearRange(startDate);
+  const chunks: Array<{ from_time: string; to_time: string }> = [];
+  let cursor = new Date(`${range.from_time}T00:00:00.000Z`);
+  const end = new Date(`${range.to_time}T00:00:00.000Z`);
+
+  while (cursor <= end) {
+    const chunkEnd = addDays(cursor, 88);
+    const boundedEnd = chunkEnd > end ? end : chunkEnd;
+    chunks.push({
+      from_time: toIsoDate(cursor),
+      to_time: toIsoDate(boundedEnd),
+    });
+    cursor = addDays(boundedEnd, 1);
+  }
+
+  return chunks;
 }
 
 function getTimeBucketMs(row: AnalyticsRow) {
@@ -124,55 +163,55 @@ function getSortedTrendRows(rows: AnalyticsRow[]) {
 }
 
 const metricLabels: Record<Metric, string> = {
-  count: 'Số lượng',
-  avg_duration: 'Thời gian TB',
-  max_duration: 'Thời gian tối đa',
-  affected_devices: 'Thiết bị ảnh hưởng',
+  count: 'Count',
+  avg_duration: 'Avg time',
+  max_duration: 'Max time',
+  affected_devices: 'Affected devices',
 };
 
 const groupLabels: Record<GroupBy, string> = {
-  severity: 'Mức độ',
-  status: 'Trạng thái',
-  error_code: 'Mã lỗi',
-  device: 'Thiết bị',
-  device_type: 'Loại thiết bị',
-  vendor: 'Nhà cung cấp',
-  station: 'Trạm',
-  province: 'Tỉnh thành',
+  severity: 'Severity',
+  status: 'Status',
+  error_code: 'Error code',
+  device: 'Device',
+  device_type: 'Device type',
+  vendor: 'Vendor',
+  station: 'Station',
+  province: 'Province',
 };
 
 const chartTypeLabels: Record<WidgetSettingsValues['chartType'], string> = {
-  line: 'Đường',
-  bar: 'Cột',
-  pie: 'Tròn',
-  table: 'Bảng',
-  heatmap: 'Bản đồ nhiệt',
+  line: 'Line',
+  bar: 'Bar',
+  pie: 'Pie',
+  table: 'Table',
+  heatmap: 'Heatmap',
 };
 
 const timeBucketLabels: Record<WidgetSettingsValues['timeBucket'], string> = {
-  hour: 'giờ',
-  day: 'ngày',
-  week: 'tuần',
-  month: 'tháng',
-  year: 'năm',
+  hour: 'h',
+  day: 'day',
+  week: 'week',
+  month: 'month',
+  year: 'year',
 };
 
 const heatmapModeLabels: Record<WidgetSettingsValues['heatmapMode'], string> = {
-  weekday: 'theo tuần',
-  calendar: 'theo năm',
+  weekday: 'theo week',
+  calendar: 'theo year',
 };
 
 function getRowGroupLabel(row: AnalyticsRow, groupBy: WidgetSettingsValues['groupBy']) {
-  if (groupBy === 'none') return row.label ? String(row.label) : 'Tổng';
+  if (groupBy === 'none') return row.label ? String(row.label) : 'Total';
   const value = row[groupBy];
-  return value === null || value === undefined || value === '' ? 'Không xác định' : String(value);
+  return value === null || value === undefined || value === '' ? 'Unknown' : String(value);
 }
 
 function formatMetricValue(value: number, metric: Metric) {
   if (metric === 'avg_duration' || metric === 'max_duration') {
-    if (value >= 3600) return `${(value / 3600).toFixed(1).replace(/\.0$/, '')} giờ`;
-    if (value >= 60) return `${(value / 60).toFixed(1).replace(/\.0$/, '')} phút`;
-    return `${Math.round(value).toLocaleString('vi-VN')} giây`;
+    if (value >= 3600) return `${(value / 3600).toFixed(1).replace(/\.0$/, '')} h`;
+    if (value >= 60) return `${(value / 60).toFixed(1).replace(/\.0$/, '')} min`;
+    return `${Math.round(value).toLocaleString('vi-VN')} sec`;
   }
   return formatNumberWithSuffix(value);
 }
@@ -200,7 +239,13 @@ function readCalendarHeatmapValue(params: unknown) {
   return [String(rawValue[0] ?? ''), Number(rawValue[1] ?? 0)] as const;
 }
 
-export function DashboardWidget({ id, config, onSettingsClick }: DashboardWidgetProps) {
+const tableHeightClassByMode: Record<NonNullable<DashboardWidgetProps['layoutContext']>['tableHeightMode'], string> = {
+  paired: 'max-h-[320px]',
+  middle: 'max-h-[360px]',
+  roomy: 'max-h-[520px]',
+};
+
+export function DashboardWidget({ id, config, layoutContext, onSettingsClick }: DashboardWidgetProps) {
   if (!config.visible) return null;
 
   const isSummary = config.type.startsWith('kpi');
@@ -216,6 +261,8 @@ export function DashboardWidget({ id, config, onSettingsClick }: DashboardWidget
   const analyticsGroupBy: GroupBy[] = chartUsesGroup && selectedGroupBy ? [selectedGroupBy] : [];
   const shouldBucketByTime = config.chartType === 'line' || (config.chartType === 'bar' && !hasGroupBy);
   const analyticsTimeBucket = shouldBucketByTime ? config.timeBucket : null;
+  const tableHeightMode = layoutContext?.tableHeightMode ?? 'middle';
+  const tableHeightClass = tableHeightClassByMode[tableHeightMode];
 
   const dateFilters =
     isHeatmap && config.heatmapMode === 'calendar'
@@ -224,6 +271,10 @@ export function DashboardWidget({ id, config, onSettingsClick }: DashboardWidget
           from_time: config.startDate,
           to_time: config.endDate,
         };
+  const heatmapFilterChunks =
+    isHeatmap && config.heatmapMode === 'calendar'
+      ? getCalendarYearChunks(config.startDate)
+      : [dateFilters];
   const settingSummary = [
     chartTypeLabels[config.chartType],
     !isSummary && isAnalyticsChart ? metricLabels[config.metric] : null,
@@ -231,7 +282,7 @@ export function DashboardWidget({ id, config, onSettingsClick }: DashboardWidget
     !isSummary && shouldBucketByTime ? `theo ${timeBucketLabels[config.timeBucket]}` : null,
     !isSummary && isHeatmap ? heatmapModeLabels[config.heatmapMode] : null,
     !isSummary && isHeatmap && config.heatmapMode === 'calendar'
-      ? `Năm ${dateFilters.from_time.slice(0, 4)}`
+      ? `Year ${dateFilters.from_time.slice(0, 4)}`
       : `${config.startDate} - ${config.endDate}`,
   ].filter(Boolean).join(' · ');
 
@@ -264,12 +315,39 @@ export function DashboardWidget({ id, config, onSettingsClick }: DashboardWidget
   });
 
   const heatmapQuery = useQuery({
-    queryKey: ['heatmap', id, dateFilters, config.heatmapMode],
-    queryFn: () =>
-      nettraceApi.heatmap({
-        mode: config.heatmapMode,
-        filters: dateFilters,
-      }),
+    queryKey: ['heatmap', id, dateFilters, heatmapFilterChunks, config.heatmapMode],
+    queryFn: async () => {
+      if (config.heatmapMode !== 'calendar') {
+        return nettraceApi.heatmap({
+          mode: 'weekday',
+          filters: dateFilters,
+        });
+      }
+
+      const responses = await Promise.all(
+        heatmapFilterChunks.map((filters) =>
+          nettraceApi.heatmap({
+            mode: 'calendar',
+            filters,
+          }),
+        ),
+      );
+      const byDay = new Map<string, number>();
+
+      responses.forEach((response) => {
+        (response.data as CalendarHeatmapCell[]).forEach((cell) => {
+          byDay.set(cell.day, (byDay.get(cell.day) ?? 0) + cell.value);
+        });
+      });
+
+      return {
+        success: true,
+        data: Array.from(byDay.entries()).map(([day, value]) => ({ day, value })),
+        meta: {
+          chunks: heatmapFilterChunks.length,
+        },
+      } as const;
+    },
     enabled: isHeatmap,
   });
 
@@ -302,8 +380,8 @@ export function DashboardWidget({ id, config, onSettingsClick }: DashboardWidget
   // Render KPI Card Widgets
   if (isSummary) {
     const data = summaryQuery.data?.data;
-    if (isLoading) return <StateBlock state="loading" title="Đang tải..." />;
-    if (isError || !data) return <StateBlock state="error" title="Lỗi tải dữ liệu" />;
+    if (isLoading) return <StateBlock state="loading" title="Loading..." />;
+    if (isError || !data) return <StateBlock state="error" title="Data load failed" />;
 
     if (config.type === 'kpi-count') {
       return (
@@ -317,7 +395,7 @@ export function DashboardWidget({ id, config, onSettingsClick }: DashboardWidget
                 </p>
                 {config.info1 && (
                   <p className="mt-4 text-sm text-[#a69db6]">
-                    {data.activeAlarms.toLocaleString('vi-VN')} đang hoạt động · {data.closedAlarms.toLocaleString('vi-VN')} đã đóng
+                    {data.activeAlarms.toLocaleString('vi-VN')} active · {data.closedAlarms.toLocaleString('vi-VN')} closed
                   </p>
                 )}
               </div>
@@ -346,7 +424,7 @@ export function DashboardWidget({ id, config, onSettingsClick }: DashboardWidget
                 </p>
                 {config.info1 && (
                   <p className="mt-4 text-sm text-[#a69db6]">
-                    {data.affectedDevices.toLocaleString('vi-VN')} thiết bị duy nhất
+                    {data.affectedDevices.toLocaleString('vi-VN')} unique devices
                   </p>
                 )}
               </div>
@@ -376,7 +454,7 @@ export function DashboardWidget({ id, config, onSettingsClick }: DashboardWidget
                 </p>
                 {config.info1 && (
                   <p className="mt-4 text-sm text-[#a69db6]">
-                    {data.criticalAlarms.toLocaleString('vi-VN')} cảnh báo nghiêm trọng
+                    {data.criticalAlarms.toLocaleString('vi-VN')} critical alarms
                   </p>
                 )}
               </div>
@@ -398,13 +476,13 @@ export function DashboardWidget({ id, config, onSettingsClick }: DashboardWidget
   let renderContent = null;
 
   if (isLoading) {
-    renderContent = <StateBlock state="loading" title="Đang tải dữ liệu..." />;
+    renderContent = <StateBlock state="loading" title="Loading data..." />;
   } else if (isError) {
     renderContent = (
       <StateBlock
         state="error"
-        title="Lỗi tải dữ liệu"
-        description="Không thể kết nối đến API để lấy thông tin."
+        title="Data load failed"
+        description="Could not connect to the API."
       />
     );
   } else if (isTrend) {
@@ -419,7 +497,7 @@ export function DashboardWidget({ id, config, onSettingsClick }: DashboardWidget
     }));
 
     if (trendData.length === 0) {
-      renderContent = <StateBlock title="Chưa có dữ liệu" description="Hãy thử thay đổi bộ lọc hoặc thời gian." />;
+      renderContent = <StateBlock title="No data" description="Try another filter or time range." />;
     } else if (config.chartType === 'line') {
       renderContent = (
         <div className="h-72">
@@ -479,7 +557,7 @@ export function DashboardWidget({ id, config, onSettingsClick }: DashboardWidget
     const pieColors = ['#ff2d85', '#00f5d4', '#f8e231', '#7c3aed', '#38bdf8', '#f97316'];
 
     if (severityData.length === 0) {
-      renderContent = <StateBlock title="Chưa có dữ liệu" description="Chưa có nhóm mức độ nào được trả về." />;
+      renderContent = <StateBlock title="No data" description="No severity groups returned." />;
     } else {
       renderContent = (
         <div className="h-72">
@@ -496,14 +574,22 @@ export function DashboardWidget({ id, config, onSettingsClick }: DashboardWidget
                 dataKey="value"
                 nameKey="name"
                 innerRadius={54}
-                outerRadius={92}
+                outerRadius={config.info2 ? 80 : 92}
                 paddingAngle={1}
-                label={config.info2 ? ({ name }) => String(name) : false}
+                label={false}
               >
                 {severityData.map((entry, index) => (
                   <Cell key={entry.name} fill={pieColors[index % pieColors.length]} />
                 ))}
               </Pie>
+              {config.info2 && (
+                <Legend
+                  verticalAlign="bottom"
+                  height={36}
+                  iconType="circle"
+                  formatter={(value) => <span className="text-xs font-mono text-[#a69db6]">{value}</span>}
+                />
+              )}
             </PieChart>
           </ResponsiveContainer>
         </div>
@@ -513,7 +599,7 @@ export function DashboardWidget({ id, config, onSettingsClick }: DashboardWidget
     const cells = heatmapQuery.data?.data ?? [];
 
     if (cells.length === 0) {
-      renderContent = <StateBlock title="Chưa có dữ liệu" description="Chưa có ô mật độ nào được trả về." />;
+      renderContent = <StateBlock title="No data" description="No heatmap cells returned." />;
     } else if (config.heatmapMode === 'calendar') {
       const calendarCells = cells as CalendarHeatmapCell[];
       const max = calendarCells.reduce((current, cell) => Math.max(current, cell.value), 0);
@@ -529,7 +615,7 @@ export function DashboardWidget({ id, config, onSettingsClick }: DashboardWidget
           textStyle: { color: '#f3edff' },
           formatter: (params: unknown) => {
             const [day, val] = readCalendarHeatmapValue(params);
-            return `<strong style="color:#00f5d4">${formatDisplayHeatmapDate(day)}</strong><br/>${val.toLocaleString('vi-VN')} cảnh báo`;
+            return `<strong style="color:#00f5d4">${formatDisplayHeatmapDate(day)}</strong><br/>${val.toLocaleString('vi-VN')} alarms`;
           },
         },
         visualMap: {
@@ -595,7 +681,7 @@ export function DashboardWidget({ id, config, onSettingsClick }: DashboardWidget
             const [x, y, val] = readHeatmapValue(params);
             const day = dayLabels[x] ?? '';
             const hour = timeRows[y] ?? 0;
-            return `<strong style="color:#00f5d4">${day} ${String(hour).padStart(2, '0')}:00</strong><br/>${val.toLocaleString('vi-VN')} cảnh báo`;
+            return `<strong style="color:#00f5d4">${day} ${String(hour).padStart(2, '0')}:00</strong><br/>${val.toLocaleString('vi-VN')} alarms`;
           },
         },
         grid: { left: 48, right: 16, top: 12, bottom: 24, containLabel: false },
@@ -641,16 +727,28 @@ export function DashboardWidget({ id, config, onSettingsClick }: DashboardWidget
   } else if (isTable) {
     const rawAlarms = alarmsQuery.data?.data ?? [];
     if (rawAlarms.length === 0) {
-      renderContent = <StateBlock title="Không có cảnh báo" description="Không tìm thấy cảnh báo nào phù hợp." />;
+      renderContent = <StateBlock title="No alarms" description="No matching alarms found." />;
     } else {
       renderContent = (
-        <div className="overflow-x-auto">
+        <div className={`overflow-auto ${tableHeightClass}`}>
           <table className="w-full min-w-full border-separate border-spacing-0 text-left text-sm">
             <thead>
               <tr>
-                {config.info1 && <th className="border-b border-white/10 px-3 py-3 font-mono text-xs font-semibold uppercase text-[#a69db6]">THỜI GIAN</th>}
-                {config.info2 && <th className="border-b border-white/10 px-3 py-3 font-mono text-xs font-semibold uppercase text-[#a69db6]">LOẠI MÃ LỖI</th>}
-                {config.info3 && <th className="border-b border-white/10 px-3 py-3 font-mono text-xs font-semibold uppercase text-[#a69db6]">TRẠNG THÁI</th>}
+                {config.info1 && (
+                  <th className="sticky top-0 z-10 border-b border-white/10 bg-[#151421] px-3 py-3 font-mono text-xs font-semibold uppercase text-[#a69db6]">
+                    TIME
+                  </th>
+                )}
+                {config.info2 && (
+                  <th className="sticky top-0 z-10 border-b border-white/10 bg-[#151421] px-3 py-3 font-mono text-xs font-semibold uppercase text-[#a69db6]">
+                    ERROR TYPE
+                  </th>
+                )}
+                {config.info3 && (
+                  <th className="sticky top-0 z-10 border-b border-white/10 bg-[#151421] px-3 py-3 font-mono text-xs font-semibold uppercase text-[#a69db6]">
+                    STATUS
+                  </th>
+                )}
               </tr>
             </thead>
             <tbody>
@@ -669,7 +767,7 @@ export function DashboardWidget({ id, config, onSettingsClick }: DashboardWidget
                   {config.info3 && (
                     <td className="border-b border-white/10 px-3 py-3 text-[#cfc7dc]">
                       <Badge tone={alarm.status.toLowerCase() === 'active' ? 'amber' : 'green'}>
-                        {alarm.status.toLowerCase() === 'active' ? 'Hoạt động' : 'Đã đóng'}
+                        {alarm.status.toLowerCase() === 'active' ? 'Active' : 'Closed'}
                       </Badge>
                     </td>
                   )}
@@ -695,7 +793,6 @@ export function DashboardWidget({ id, config, onSettingsClick }: DashboardWidget
             <MoreHorizontal size={20} />
           </button>
         </div>
-        <p className="mt-2 font-mono text-xs text-[#a69db6]">{settingSummary}</p>
       </CardHeader>
       <CardContent>{renderContent}</CardContent>
     </Card>

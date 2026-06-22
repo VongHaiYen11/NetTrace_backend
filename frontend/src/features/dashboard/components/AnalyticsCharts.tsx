@@ -5,6 +5,7 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  Legend,
   Pie,
   PieChart,
   ResponsiveContainer,
@@ -60,7 +61,7 @@ function formatNumberWithSuffix(val: number): string {
 function rowLabel(row: AnalyticsRow) {
   if (row.label) return String(row.label);
   if (row.time_bucket) return formatBucket(String(row.time_bucket));
-  return 'Tổng';
+  return 'Total';
 }
 
 function formatBucket(value: string) {
@@ -99,7 +100,7 @@ export function AnalyticsCharts({
     value: row.value,
   }));
   const severityData = (severity ?? []).map((row) => ({
-    name: String(row.severity ?? 'Không xác định'),
+    name: String(row.severity ?? 'Unknown'),
     value: row.value,
   }));
   const pieColors = ['#ff2d85', '#00f5d4', '#f8e231', '#7c3aed', '#38bdf8', '#f97316'];
@@ -108,13 +109,13 @@ export function AnalyticsCharts({
     <section className="grid gap-6 xl:grid-cols-5">
       <Card className="xl:col-span-3">
         <CardHeader>
-          <h2 className="text-xl font-bold">Cảnh báo theo ngày</h2>
+          <h2 className="text-xl font-bold">Daily alarms</h2>
         </CardHeader>
         <CardContent>
           {isTrendLoading ? (
-            <StateBlock state="loading" title="Đang tải xu hướng cảnh báo" />
+            <StateBlock state="loading" title="Loading alarm trend" />
           ) : isTrendError || trendData.length === 0 ? (
-            <StateBlock title="Chưa có dữ liệu xu hướng" description="Hãy thử khoảng thời gian hoặc bộ lọc khác." />
+            <StateBlock title="No trend data" description="Try another time range or filter." />
           ) : (
             <div className="h-72">
               <ResponsiveContainer width="100%" height="100%">
@@ -128,7 +129,7 @@ export function AnalyticsCharts({
                   <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />
                   <XAxis dataKey="name" tickLine={false} axisLine={false} minTickGap={24} />
                   <YAxis tickLine={false} axisLine={false} width={44} tickFormatter={formatNumberWithSuffix} />
-                  <Tooltip {...darkTooltipProps} formatter={(value: any) => [formatNumberWithSuffix(Number(value)), 'Số lượng']} />
+                  <Tooltip {...darkTooltipProps} formatter={(value: any) => [formatNumberWithSuffix(Number(value)), 'Count']} />
                   <Area
                     type="monotone"
                     dataKey="value"
@@ -145,13 +146,13 @@ export function AnalyticsCharts({
 
       <Card className="xl:col-span-2">
         <CardHeader>
-          <h2 className="text-xl font-bold">Phân bố mức độ</h2>
+          <h2 className="text-xl font-bold">Severity split</h2>
         </CardHeader>
         <CardContent>
           {isSeverityLoading ? (
-            <StateBlock state="loading" title="Đang tải mức độ" />
+            <StateBlock state="loading" title="Loading severity" />
           ) : isSeverityError || severityData.length === 0 ? (
-            <StateBlock title="Chưa có dữ liệu mức độ" description="Chưa có nhóm mức độ nào được trả về." />
+            <StateBlock title="No severity data" description="No severity groups returned." />
           ) : (
             <div className="h-72">
               <ResponsiveContainer width="100%" height="100%">
@@ -162,13 +163,19 @@ export function AnalyticsCharts({
                     dataKey="value"
                     nameKey="name"
                     innerRadius={54}
-                    outerRadius={92}
+                    outerRadius={80}
                     paddingAngle={1}
                   >
                     {severityData.map((entry, index) => (
                       <Cell key={entry.name} fill={pieColors[index % pieColors.length]} />
                     ))}
                   </Pie>
+                  <Legend
+                    verticalAlign="bottom"
+                    height={36}
+                    iconType="circle"
+                    formatter={(value) => <span className="text-xs font-mono text-[#a69db6]">{value}</span>}
+                  />
                 </PieChart>
               </ResponsiveContainer>
             </div>
@@ -195,15 +202,15 @@ export function WeeklyAlarmChart({ trend, isLoading, isError }: WeeklyAlarmChart
     <Card>
       <CardHeader>
         <div className="flex items-center justify-between">
-          <h2 className="text-xl font-bold">Cảnh báo (tuần này)</h2>
+          <h2 className="text-xl font-bold">Weekly alarms</h2>
           <MoreDots />
         </div>
       </CardHeader>
       <CardContent>
         {isLoading ? (
-          <StateBlock state="loading" title="Đang tải cảnh báo tuần" />
+          <StateBlock state="loading" title="Loading weekly alarms" />
         ) : isError || weeklyData.length === 0 ? (
-          <StateBlock title="Chưa có dữ liệu tuần" description="Chưa có nhóm cảnh báo tuần nào được trả về." />
+          <StateBlock title="No weekly data" description="No weekly alarm groups returned." />
         ) : (
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">

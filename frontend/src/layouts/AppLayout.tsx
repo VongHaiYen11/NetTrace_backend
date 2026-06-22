@@ -14,10 +14,10 @@ import { Button } from '../components/ui/Button';
 import { cn } from '../utils/cn';
 
 const navItems = [
-  { to: '/dashboard', label: 'Bảng điều khiển', icon: LayoutDashboard },
-  { to: '/alarms', label: 'Tra cứu cảnh báo', icon: Search },
-  { to: '/templates', label: 'Mẫu & thiết lập sẵn', icon: BarChart3 },
-  { to: '/export', label: 'Xuất dữ liệu', icon: Download },
+  { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { to: '/alarms', label: 'Alarm search', icon: Search },
+  { to: '/templates', label: 'Templates & presets', icon: BarChart3 },
+  { to: '/export', label: 'Export data', icon: Download },
 ];
 
 export function AppLayout() {
@@ -70,12 +70,12 @@ export function AppLayout() {
             >
               {sidebarOpen ? <PanelLeftClose size={18} /> : <PanelLeftOpen size={18} />}
               <span className="sr-only">
-                {sidebarOpen ? 'Thu gọn thanh bên' : 'Mở rộng thanh bên'}
+                {sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
               </span>
             </Button>
           </div>
 
-          <nav className={cn('space-y-1', !sidebarOpen && 'mt-16')} aria-label="Điều hướng chính">
+          <nav className={cn('space-y-1', !sidebarOpen && 'mt-16')} aria-label="Main navigation">
             {navItems.map((item) => {
               const Icon = item.icon;
               return (
@@ -106,19 +106,19 @@ export function AppLayout() {
                 'flex items-start rounded border border-white/10 bg-white/[0.03] p-3',
                 sidebarOpen ? 'gap-3' : 'justify-center',
               )}
-              title={!sidebarOpen ? 'Nguồn API' : undefined}
+              title={!sidebarOpen ? 'API source' : undefined}
             >
               <Settings2 className="mt-0.5 text-[#a69db6]" size={17} />
               <div className={cn(!sidebarOpen && 'hidden')}>
-                <p className="text-sm font-medium">Nguồn API</p>
-                <p className="mt-1 text-xs leading-5 text-[#a69db6]">Các tuyến OpenAPI backend tại /api/v1.</p>
+                <p className="text-sm font-medium">API source</p>
+                <p className="mt-1 text-xs leading-5 text-[#a69db6]">Backend OpenAPI routes at /api/v1.</p>
               </div>
             </div>
           </div>
         </aside>
 
-        <main className="min-w-0 flex-1">
-          <Outlet />
+        <main className="min-w-0 flex-1 transition-[width] duration-200">
+          <Outlet context={{ sidebarOpen }} />
         </main>
       </div>
     </div>

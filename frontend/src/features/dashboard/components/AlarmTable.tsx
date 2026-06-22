@@ -26,7 +26,7 @@ function severityTone(severity: string) {
 
 const columns: ColumnDef<Alarm>[] = [
   {
-    header: 'THỜI GIAN',
+    header: 'TIME',
     accessorKey: 'time_created',
     cell: ({ row }) => {
       try {
@@ -41,17 +41,17 @@ const columns: ColumnDef<Alarm>[] = [
     },
   },
   {
-    header: 'LOẠI',
+    header: 'TYPE',
     accessorKey: 'error_code',
     cell: ({ row }) =>
       row.original.error_details?.name ?? row.original.description ?? row.original.error_code,
   },
   {
-    header: 'TRẠNG THÁI',
+    header: 'STATUS',
     accessorKey: 'status',
     cell: ({ row }) => (
       <Badge tone={row.original.status.toLowerCase() === 'active' ? 'amber' : 'green'}>
-        {row.original.status.toLowerCase() === 'active' ? 'Hoạt động' : 'Đã đóng'}
+        {row.original.status.toLowerCase() === 'active' ? 'Active' : 'Closed'}
       </Badge>
     ),
   },
@@ -68,21 +68,21 @@ export function AlarmTable({ data, isLoading, isError }: AlarmTableProps) {
     <Card>
       <CardHeader>
           <div className="flex items-center justify-between">
-            <h2 className="text-xl font-bold">Danh sách cảnh báo</h2>
+            <h2 className="text-xl font-bold">Alarm list</h2>
             <span className="font-mono text-lg leading-none text-[#a69db6]">•••</span>
           </div>
       </CardHeader>
       <CardContent>
         {isLoading ? (
-          <StateBlock state="loading" title="Đang tải cảnh báo" />
+          <StateBlock state="loading" title="Loading alarms" />
         ) : isError || !data ? (
           <StateBlock
             state="error"
-            title="Không có dữ liệu cảnh báo"
-            description="Endpoint chi tiết cảnh báo chưa trả về phản hồi hợp lệ."
+            title="No alarm data"
+            description="The alarm detail endpoint did not return a valid response."
           />
         ) : data.length === 0 ? (
-          <StateBlock title="Không có cảnh báo" description="Không có cảnh báo nào khớp với bộ lọc hiện tại." />
+          <StateBlock title="No alarms" description="No alarms match the current filter." />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[760px] border-separate border-spacing-0 text-left text-sm">

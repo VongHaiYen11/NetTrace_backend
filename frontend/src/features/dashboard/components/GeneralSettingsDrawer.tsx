@@ -11,11 +11,14 @@ import {
   Grid2X2,
   Grid3X3,
   LayoutGrid,
+  Maximize2,
+  Minimize2,
   PieChart,
   RadioTower,
   Search,
   Table,
   TrendingUp,
+  Type as TypeIcon,
   X,
 } from 'lucide-react';
 import { Button } from '../../../components/ui/Button';
@@ -50,90 +53,92 @@ const summaryOptions = [
   {
     key: 'kpi-count',
     icon: RadioTower,
-    title: 'Tổng cảnh báo',
+    title: 'Alarm count',
     fields: ['totalAlarms', 'activeAlarms', 'closedAlarms'],
-    description: 'Hiển thị tổng số cảnh báo, cảnh báo đang hoạt động và đã đóng.',
+    description: 'Shows total, active, and closed alarms.',
   },
   {
     key: 'kpi-devices',
     icon: TrendingUp,
-    title: 'Thiết bị ảnh hưởng',
+    title: 'Affected devices',
     fields: ['affectedDevices'],
-    description: 'Hiển thị số thiết bị duy nhất đang bị ảnh hưởng.',
+    description: 'Shows the unique affected device count.',
   },
   {
     key: 'kpi-status',
     icon: AlertTriangle,
-    title: 'Cảnh báo nghiêm trọng',
+    title: 'Critical alarms',
     fields: ['criticalAlarms'],
-    description: 'Hiển thị trạng thái và tổng cảnh báo nghiêm trọng.',
+    description: 'Shows status and critical alarm count.',
   },
 ] as const;
 
+type KpiWidgetKind = (typeof summaryOptions)[number]['key'];
+
 const informationScenarios = [
-  { value: 'count', label: 'Số lượng cảnh báo' },
-  { value: 'avg_duration', label: 'Thời gian xử lý trung bình' },
-  { value: 'max_duration', label: 'Thời gian xử lý lâu nhất' },
-  { value: 'affected_devices', label: 'Thiết bị bị ảnh hưởng' },
+  { value: 'count', label: 'Alarm count' },
+  { value: 'avg_duration', label: 'Avg handling time' },
+  { value: 'max_duration', label: 'Max handling time' },
+  { value: 'affected_devices', label: 'Affected devices' },
 ] as const;
 
 const groupScenarios = [
-  { value: 'none', label: 'Không phân nhóm' },
-  { value: 'severity', label: 'Theo mức độ' },
-  { value: 'status', label: 'Theo trạng thái' },
-  { value: 'error_code', label: 'Theo mã lỗi' },
-  { value: 'device', label: 'Theo thiết bị' },
-  { value: 'device_type', label: 'Theo loại thiết bị' },
-  { value: 'vendor', label: 'Theo nhà cung cấp' },
-  { value: 'station', label: 'Theo trạm' },
-  { value: 'province', label: 'Theo tỉnh thành' },
+  { value: 'none', label: 'No group' },
+  { value: 'severity', label: 'Severity' },
+  { value: 'status', label: 'Status' },
+  { value: 'error_code', label: 'Error code' },
+  { value: 'device', label: 'Device' },
+  { value: 'device_type', label: 'Device type' },
+  { value: 'vendor', label: 'Vendor' },
+  { value: 'station', label: 'Station' },
+  { value: 'province', label: 'Province' },
 ] as const;
 
 const timeBucketOptions = [
-  { value: 'hour', label: 'Theo giờ' },
-  { value: 'day', label: 'Theo ngày' },
-  { value: 'week', label: 'Theo tuần' },
-  { value: 'month', label: 'Theo tháng' },
-  { value: 'year', label: 'Theo năm' },
+  { value: 'hour', label: 'Hourly' },
+  { value: 'day', label: 'Daily' },
+  { value: 'week', label: 'Weekly' },
+  { value: 'month', label: 'Monthly' },
+  { value: 'year', label: 'Yearly' },
 ] as const;
 
 const heatmapModeOptions = [
-  { value: 'weekday', label: 'Bản đồ theo tuần' },
-  { value: 'calendar', label: 'Bản đồ theo năm' },
+  { value: 'weekday', label: 'Weekday heatmap' },
+  { value: 'calendar', label: 'Year heatmap' },
 ] as const;
 
 const chartTypeOptions = [
-  { value: 'line', label: 'Biểu đồ đường', icon: TrendingUp },
-  { value: 'bar', label: 'Biểu đồ cột', icon: BarChart3 },
-  { value: 'pie', label: 'Biểu đồ tròn', icon: PieChart },
-  { value: 'heatmap', label: 'Bản đồ nhiệt', icon: Grid3X3 },
-  { value: 'table', label: 'Bảng dữ liệu', icon: Table },
+  { value: 'line', label: 'Line chart', icon: TrendingUp },
+  { value: 'bar', label: 'Bar chart', icon: BarChart3 },
+  { value: 'pie', label: 'Pie chart', icon: PieChart },
+  { value: 'heatmap', label: 'Heatmap', icon: Grid3X3 },
+  { value: 'table', label: 'Data table', icon: Table },
 ] as const;
 
 function getDisplayOptions(widget: DashboardWidgetConfig) {
   if (widget.chartType === 'table') {
     return [
-      { key: 'info1', label: 'Cột thời gian', checked: widget.info1 },
-      { key: 'info2', label: 'Cột mã lỗi', checked: widget.info2 },
-      { key: 'info3', label: 'Cột trạng thái', checked: widget.info3 },
+      { key: 'info1', label: 'Time column', checked: widget.info1 },
+      { key: 'info2', label: 'Error code column', checked: widget.info2 },
+      { key: 'info3', label: 'Status column', checked: widget.info3 },
     ] as const;
   }
   if (widget.chartType === 'heatmap') {
     return [
-      { key: 'info1', label: 'Tooltip khi hover', checked: widget.info1 },
-      { key: 'info2', label: 'Nhãn thời gian / ngày', checked: widget.info2 },
+      { key: 'info1', label: 'Hover tooltip', checked: widget.info1 },
+      { key: 'info2', label: 'Time / date labels', checked: widget.info2 },
     ] as const;
   }
   if (widget.chartType === 'pie') {
     return [
-      { key: 'info1', label: 'Tooltip khi hover', checked: widget.info1 },
-      { key: 'info2', label: 'Nhãn nhóm', checked: widget.info2 },
+      { key: 'info1', label: 'Hover tooltip', checked: widget.info1 },
+      { key: 'info2', label: 'Group labels', checked: widget.info2 },
     ] as const;
   }
   return [
-    { key: 'info1', label: 'Lưới nền', checked: widget.info1 },
-    { key: 'info2', label: 'Trục giá trị', checked: widget.info2 },
-    { key: 'info3', label: 'Tooltip khi hover', checked: widget.info3 },
+    { key: 'info1', label: 'Grid', checked: widget.info1 },
+    { key: 'info2', label: 'Value axis', checked: widget.info2 },
+    { key: 'info3', label: 'Hover tooltip', checked: widget.info3 },
   ] as const;
 }
 
@@ -167,6 +172,18 @@ function updateWidget(
   patch: Partial<DashboardWidgetConfig>,
 ) {
   return widgets.map((widget) => (widget.id === widgetId ? { ...widget, ...patch } : widget));
+}
+
+function updateKpiContent(
+  widgets: DashboardWidgetConfig[],
+  widgetId: string,
+  nextType: KpiWidgetKind,
+) {
+  const option = summaryOptions.find((item) => item.key === nextType);
+  return updateWidget(widgets, widgetId, {
+    type: nextType,
+    title: option?.title ?? 'KPI Card',
+  });
 }
 
 function getCurrentIsoDate() {
@@ -242,7 +259,7 @@ function restoreChartWidget(widgets: DashboardWidgetConfig[], widgetId: string, 
 const templates: DashboardTemplate[] = [
   {
     id: 'operations',
-    name: 'Vận hành mạng',
+    name: 'Network ops',
     description: 'SYS_MON / TELEMETRY',
     layoutCount: 4,
     apply: (widgets) =>
@@ -256,7 +273,7 @@ const templates: DashboardTemplate[] = [
   },
   {
     id: 'critical',
-    name: 'Kiểm toán bảo mật',
+    name: 'Security audit',
     description: 'LOG_VIEW / ALERTS',
     layoutCount: 2,
     apply: (widgets) =>
@@ -268,7 +285,7 @@ const templates: DashboardTemplate[] = [
   },
   {
     id: 'full',
-    name: 'Telemetry người dùng',
+    name: 'User telemetry',
     description: 'DATA_VIZ / METRICS',
     layoutCount: 6,
     apply: (widgets) =>
@@ -282,7 +299,7 @@ const templates: DashboardTemplate[] = [
 
 const extraTemplate = {
   id: 'terminal',
-  name: 'Tập trung terminal',
+  name: 'Terminal focus',
   description: 'CLI / RAW_DATA',
 };
 
@@ -294,7 +311,30 @@ function getVisibleChartCount(widgets: DashboardWidgetConfig[]) {
 }
 
 function getLayoutCountLabel(count: number) {
-  return `Giao diện ${count} widget`;
+  return `${count}-widget layout`;
+}
+
+function formatDisplayDate(value: string) {
+  if (!value) return 'Not set';
+  return value;
+}
+
+function getDefaultWidgetTitle(widget: DashboardWidgetConfig) {
+  const dataLabel =
+    widget.chartType === 'table'
+      ? 'Alarm table'
+      : widget.chartType === 'heatmap'
+        ? 'Alarm heatmap'
+        : informationScenarios.find((option) => option.value === widget.metric)?.label ?? 'Widget';
+
+  return `${dataLabel} · ${formatDisplayDate(widget.startDate)} - ${formatDisplayDate(widget.endDate)}`;
+}
+
+function normalizeWidgetTitle(widget: DashboardWidgetConfig) {
+  return {
+    ...widget,
+    title: widget.title.trim() || getDefaultWidgetTitle(widget),
+  };
 }
 
 export function GeneralSettingsDrawer({
@@ -307,7 +347,7 @@ export function GeneralSettingsDrawer({
   const [detailDraftWidgets, setDetailDraftWidgets] = useState(widgets);
   const [selectedTemplateId, setSelectedTemplateId] = useState('none');
   const [templateSearch, setTemplateSearch] = useState('');
-  const [dashboardStatusOpen, setDashboardStatusOpen] = useState(true);
+  const [dashboardStatusOpen, setDashboardStatusOpen] = useState(false);
   const [templateDropdownOpen, setTemplateDropdownOpen] = useState(false);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [detailStep, setDetailStep] = useState<'template' | 'widget'>('template');
@@ -320,7 +360,7 @@ export function GeneralSettingsDrawer({
       setDetailDraftWidgets(widgets);
       setSelectedTemplateId('none');
       setTemplateSearch('');
-      setDashboardStatusOpen(true);
+      setDashboardStatusOpen(false);
       setTemplateDropdownOpen(false);
       setDetailModalOpen(false);
       setDetailStep('template');
@@ -331,6 +371,7 @@ export function GeneralSettingsDrawer({
 
   const layoutCount = useMemo(() => getLayoutCapacity(detailDraftWidgets), [detailDraftWidgets]);
   const kpiWidgets = detailDraftWidgets.filter((widget) => widget.type.startsWith('kpi'));
+  const sidebarKpiWidgets = draftWidgets.filter((widget) => widget.type.startsWith('kpi'));
   const chartWidgets = getChartWidgets(detailDraftWidgets);
   const visibleChartWidgets = getVisibleChartWidgets(detailDraftWidgets);
   const hiddenChartWidgets = getHiddenChartWidgets(detailDraftWidgets);
@@ -382,6 +423,13 @@ export function GeneralSettingsDrawer({
     setRestoreWidgetId(null);
   }
 
+  function toggleSidebarKpi(widgetId: string) {
+    setSelectedTemplateId('none');
+    setDraftWidgets((current) =>
+      current.map((widget) => (widget.id === widgetId ? { ...widget, visible: !widget.visible } : widget)),
+    );
+  }
+
   function toggleKpi(widgetId: string) {
     setSelectedTemplateId('none');
     setDetailDraftWidgets((current) =>
@@ -390,7 +438,7 @@ export function GeneralSettingsDrawer({
   }
 
   function saveAndClose() {
-    onSave(draftWidgets);
+    onSave(draftWidgets.map(normalizeWidgetTitle));
     onClose();
   }
 
@@ -402,7 +450,7 @@ export function GeneralSettingsDrawer({
   }
 
   function saveDetailDraft() {
-    setDraftWidgets(detailDraftWidgets);
+    setDraftWidgets(detailDraftWidgets.map(normalizeWidgetTitle));
     setSelectedTemplateId('none');
     setDetailModalOpen(false);
   }
@@ -432,10 +480,10 @@ export function GeneralSettingsDrawer({
   return (
     <>
       <div className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-      <aside className="fixed bottom-0 right-0 top-0 z-50 flex w-[360px] max-w-[calc(100vw-1rem)] flex-col border-l border-white/10 bg-[#151421] text-[#f3edff] shadow-2xl">
+      <aside className="fixed bottom-0 right-0 top-0 z-50 flex w-[480px] max-w-[calc(100vw-1rem)] flex-col border-l border-white/10 bg-[#151421] text-[#f3edff] shadow-2xl">
         <div className="flex items-center justify-between border-b border-[#ff2d85]/30 px-6 py-5">
           <h2 className="text-2xl font-black text-[#f3edff] drop-shadow-[0_0_14px_rgba(255,45,133,0.7)]">
-            Tùy chỉnh dashboard
+            Customize dashboard
           </h2>
           <button className="rounded p-1.5 text-[#ff2d85] hover:bg-[#ff2d85]/10" onClick={onClose}>
             <X size={20} />
@@ -443,21 +491,18 @@ export function GeneralSettingsDrawer({
         </div>
 
         <div className="flex-1 space-y-5 overflow-y-auto px-6 py-6">
-          <section className="border border-[#00f5d4]/35 bg-[#101923] p-4 shadow-[0_0_18px_rgba(0,245,212,0.08)]">
+          <div className="flex flex-col gap-4">
             <button
               type="button"
-              className={cn(
-                'flex w-full items-start justify-between gap-3 text-left',
-                dashboardStatusOpen && 'border-b border-[#00f5d4]/20 pb-3',
-              )}
+              className="flex w-full items-start justify-between gap-3 text-left border border-[#00f5d4]/35 bg-[#101923] p-4 shadow-[0_0_18px_rgba(0,245,212,0.08)]"
               onClick={() => setDashboardStatusOpen((value) => !value)}
             >
               <span>
                 <span className="block font-mono text-lg font-black text-[#00f5d4] drop-shadow-[0_0_8px_rgba(0,245,212,0.45)]">
-                  Trạng thái dashboard
+                  Dashboard status
                 </span>
                 <span className="mt-1 block font-mono text-xs leading-relaxed text-[#a69db6]">
-                  Kiểm tra layout hiện tại và bật/tắt từng widget đang có.
+                  Review the current layout and toggle widgets.
                 </span>
               </span>
               {dashboardStatusOpen ? (
@@ -468,146 +513,217 @@ export function GeneralSettingsDrawer({
             </button>
 
             {dashboardStatusOpen ? (
-              <>
-                <div className="mt-4 border border-[#2b2740] bg-[#191727] p-4">
-              <p className="font-mono text-base font-black text-[#f3edff]">
-                Thông tin hiện tại
-              </p>
-              <div className="mt-3 grid grid-cols-2 gap-2">
-                <div className="border border-[#2b2740] bg-[#151421] p-3">
-                  <p className="font-mono text-[11px] text-[#a69db6]">Giao diện</p>
-                  <p className="mt-1 font-mono text-sm font-black text-[#f3edff]">
-                    {getLayoutCountLabel(sidebarLayoutCount)}
+              <div className="space-y-5 px-1 pb-2">
+                <div>
+                  <p className="font-mono text-base font-black text-[#f3edff]">
+                    Current state
                   </p>
-                </div>
-                <div className="border border-[#2b2740] bg-[#151421] p-3">
-                  <p className="font-mono text-[11px] text-[#a69db6]">Đang hiển thị</p>
-                  <p className="mt-1 font-mono text-sm font-black text-[#f3edff]">
-                    {sidebarVisibleCharts.length}/{getChartWidgets(draftWidgets).length} widget
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <p className="font-mono text-base font-black text-[#f3edff]">Widget đang hiển thị</p>
-              <span className="font-mono text-xs text-[#a69db6]">{sidebarVisibleCharts.length}/{getChartWidgets(draftWidgets).length}</span>
-            </div>
-            <div className="space-y-2">
-              {sidebarVisibleCharts.map((widget) => (
-                <div
-                  key={widget.id}
-                  className="flex items-center justify-between gap-3 border border-[#2b2740] bg-[#191727] px-3 py-2"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate font-mono text-sm font-bold text-[#f3edff]">{widget.title}</p>
-                    <p className="font-mono text-[11px] text-[#a69db6]">
-                      Slot {widget.layoutOrder} · {widget.layoutSpan === 2 ? '2 ô desktop' : '1 ô'}
-                    </p>
+                  <div className="mt-3 grid grid-cols-2 gap-3">
+                    <div className="bg-[#191727] p-3 rounded">
+                      <p className="font-mono text-[11px] text-[#a69db6]">Layout</p>
+                      <p className="mt-1 font-mono text-sm font-black text-[#f3edff]">
+                        {getLayoutCountLabel(sidebarLayoutCount)}
+                      </p>
+                    </div>
+                    <div className="bg-[#191727] p-3 rounded">
+                      <p className="font-mono text-[11px] text-[#a69db6]">Visible</p>
+                      <p className="mt-1 font-mono text-sm font-black text-[#f3edff]">
+                        {sidebarVisibleCharts.length}/{getChartWidgets(draftWidgets).length} widget
+                      </p>
+                    </div>
                   </div>
-                  <button
-                    type="button"
-                    title="Ẩn widget"
-                    onClick={() => hideSidebarWidget(widget.id)}
-                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded border border-[#00f5d4]/50 bg-[#00f5d4]/10 text-[#00f5d4] transition hover:bg-[#00f5d4]/15"
-                  >
-                    <Eye size={17} />
-                  </button>
                 </div>
-              ))}
-            </div>
-            </div>
 
-            <div className="mt-5 space-y-3">
-            <p className="font-mono text-base font-black text-[#f3edff]">Widget đang ẩn</p>
-            {sidebarHiddenCharts.length > 0 ? (
-              <div className="space-y-2">
-                {sidebarHiddenCharts.map((widget) => {
-                  const isRestoring = restoreWidgetId === widget.id;
-                  return (
-                    <div
-                      key={widget.id}
-                      className={cn(
-                        'border bg-[#191727] p-3',
-                        isRestoring ? 'border-[#ff2d85]' : 'border-[#2b2740]',
-                      )}
-                    >
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="truncate font-mono text-sm font-bold text-[#f3edff]">{widget.title}</p>
-                          <p className="font-mono text-[11px] text-[#a69db6]">
-                            {widget.layoutSpan === 2 ? 'Ưu tiên 2 ô desktop' : 'Ưu tiên 1 ô'}
-                          </p>
-                        </div>
-                        <button
-                          type="button"
-                          title="Mở lại widget"
-                          onClick={() => startRestoreSidebarWidget(widget.id)}
-                          className="flex h-9 w-9 shrink-0 items-center justify-center rounded border border-[#ff2d85]/50 bg-[#ff2d85]/10 text-[#ff2d85] transition hover:bg-[#ff2d85]/15"
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="font-mono text-base font-black text-[#f3edff]">Card KPI</p>
+                    <span className="font-mono text-xs text-[#a69db6]">
+                      {sidebarKpiWidgets.filter((widget) => widget.visible).length}/{sidebarKpiWidgets.length}
+                    </span>
+                  </div>
+                  <div className="space-y-2">
+                    {sidebarKpiWidgets.map((widget) => {
+                      const option = summaryOptions.find((item) => item.key === widget.type);
+                      const Icon = option?.icon ?? Activity;
+                      return (
+                        <div
+                          key={widget.id}
+                          className="flex items-center justify-between gap-3 border-b border-white/5 py-2"
                         >
-                          <EyeOff size={17} />
-                        </button>
-                      </div>
-
-                      {isRestoring ? (
-                        <div className="mt-3 border-t border-white/10 pt-3">
-                          <p className="font-mono text-xs font-bold text-[#00f5d4]">Chọn vị trí còn trống</p>
-                          <p className="mt-1 font-mono text-[11px] leading-relaxed text-[#a69db6]">
-                            Vị trí còn trống là ô chưa có widget trong {getLayoutCountLabel(sidebarLayoutCount).toLowerCase()} hiện tại.
-                          </p>
-                          <div className="mt-2 grid grid-cols-3 gap-2">
-                            {sidebarEmptySlots.map((slot) => (
-                              <button
-                                key={slot}
-                                type="button"
-                                onClick={() => restoreSidebarWidget(widget.id, slot)}
-                                className="h-9 border border-[#00f5d4]/40 bg-[#00f5d4]/5 font-mono text-xs font-bold text-[#00f5d4] transition hover:bg-[#00f5d4]/10"
-                              >
-                                Slot {slot}
-                              </button>
-                            ))}
+                          <div className="flex min-w-0 items-center gap-2">
+                            <Icon size={16} className={widget.visible ? 'text-[#00f5d4]' : 'text-[#777086]'} />
+                            <div className="min-w-0">
+                              <p className="truncate font-mono text-sm font-bold text-[#f3edff]">{option?.title ?? widget.title}</p>
+                              <p className="font-mono text-[11px] text-[#a69db6]">
+                                {widget.visible ? 'Visible' : 'Hidden'}
+                              </p>
+                            </div>
                           </div>
                           <button
                             type="button"
-                            onClick={() => restoreSidebarWidget(widget.id)}
-                            className="mt-2 h-9 w-full border border-[#ff2d85]/50 bg-[#ff2d85]/5 font-mono text-xs font-bold text-[#ff2d85] transition hover:bg-[#ff2d85]/10"
+                            title={widget.visible ? 'Hide KPI card' : 'Show KPI card'}
+                            onClick={() => toggleSidebarKpi(widget.id)}
+                            className={cn(
+                              'flex h-9 w-9 shrink-0 items-center justify-center rounded border transition',
+                              widget.visible
+                                ? 'border-[#00f5d4]/50 bg-[#00f5d4]/10 text-[#00f5d4] hover:bg-[#00f5d4]/15'
+                                : 'border-[#ff2d85]/50 bg-[#ff2d85]/10 text-[#ff2d85] hover:bg-[#ff2d85]/15',
+                            )}
                           >
-                            Thêm sau widget cuối
+                            {widget.visible ? <Eye size={17} /> : <EyeOff size={17} />}
                           </button>
                         </div>
-                      ) : null}
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <p className="border border-[#2b2740] bg-[#191727] px-3 py-3 font-mono text-xs text-[#a69db6]">
-                Không có widget nào đang ẩn.
-              </p>
-            )}
-            </div>
-              </>
-            ) : null}
-          </section>
+                      );
+                    })}
+                  </div>
+                </div>
 
-          <section className="border border-[#ff2d85]/35 bg-[#1d1524] p-4 shadow-[0_0_18px_rgba(255,45,133,0.08)]">
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="font-mono text-base font-black text-[#f3edff]">Visible widgets</p>
+                    <span className="font-mono text-xs text-[#a69db6]">{sidebarVisibleCharts.length}/{getChartWidgets(draftWidgets).length}</span>
+                  </div>
+                  <div className="space-y-2">
+                    {sidebarVisibleCharts.map((widget) => (
+                      <div
+                        key={widget.id}
+                        className="flex items-center justify-between gap-3 border-b border-white/5 py-2"
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate font-mono text-sm font-bold text-[#f3edff]">{widget.title}</p>
+                          <p className="font-mono text-[11px] text-[#a69db6]">
+                            Slot {widget.layoutOrder} · {widget.layoutSpan === 2 ? '2 desktop cells' : '1 cell'}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button
+                            type="button"
+                            title={widget.layoutSpan === 2 ? 'Full width. Click for half width.' : 'Half width. Click for full width.'}
+                            onClick={() => {
+                              setSelectedTemplateId('none');
+                              setDraftWidgets((current) =>
+                                updateWidget(current, widget.id, {
+                                  layoutSpan: widget.layoutSpan === 2 ? 1 : 2,
+                                })
+                              );
+                            }}
+                            className={cn(
+                              'flex h-9 w-9 items-center justify-center rounded border transition',
+                              widget.layoutSpan === 2
+                                ? 'border-[#00f5d4]/50 bg-[#00f5d4]/10 text-[#00f5d4] shadow-[0_0_16px_rgba(0,245,212,0.25)]'
+                                : 'border-[#2b2740] bg-[#151421] text-[#a69db6] hover:border-[#ff2d85]/60 hover:text-[#f3edff]'
+                            )}
+                          >
+                            {widget.layoutSpan === 2 ? (
+                              <Minimize2 size={15} />
+                            ) : (
+                              <Maximize2 size={15} />
+                            )}
+                          </button>
+                          <button
+                            type="button"
+                            title="Hide widget"
+                            onClick={() => hideSidebarWidget(widget.id)}
+                            className="flex h-9 w-9 items-center justify-center rounded border border-[#00f5d4]/50 bg-[#00f5d4]/10 text-[#00f5d4] transition hover:bg-[#00f5d4]/15"
+                          >
+                            <Eye size={17} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <p className="font-mono text-base font-black text-[#f3edff]">Hidden widgets</p>
+                  {sidebarHiddenCharts.length > 0 ? (
+                    <div className="space-y-2">
+                      {sidebarHiddenCharts.map((widget) => {
+                        const isRestoring = restoreWidgetId === widget.id;
+                        return (
+                          <div
+                            key={widget.id}
+                            className="border-b border-white/5 py-2.5"
+                          >
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="min-w-0">
+                                <p className="truncate font-mono text-sm font-bold text-[#f3edff]">{widget.title}</p>
+                                <p className="font-mono text-[11px] text-[#a69db6]">
+                                  {widget.layoutSpan === 2 ? 'Prefers 2 desktop cells' : 'Prefers 1 cell'}
+                                </p>
+                              </div>
+                              <button
+                                type="button"
+                                title="Restore widget"
+                                onClick={() => startRestoreSidebarWidget(widget.id)}
+                                className={cn(
+                                  "flex h-9 w-9 shrink-0 items-center justify-center rounded border transition",
+                                  isRestoring
+                                    ? "border-[#ff2d85] bg-[#ff2d85]/20 text-[#ff2d85]"
+                                    : "border-[#ff2d85]/50 bg-[#ff2d85]/10 text-[#ff2d85] hover:bg-[#ff2d85]/15"
+                                )}
+                              >
+                                <EyeOff size={17} />
+                              </button>
+                            </div>
+
+                            {isRestoring ? (
+                              <div className="mt-3 border-t border-white/5 pt-3">
+                                <div className="grid grid-cols-2 gap-2">
+                                  {sidebarEmptySlots.map((slot) => (
+                                    <button
+                                      key={slot}
+                                      type="button"
+                                      onClick={() => restoreSidebarWidget(widget.id, slot)}
+                                      className="h-9 border border-[#00f5d4]/40 bg-[#00f5d4]/5 font-mono text-xs font-bold text-[#00f5d4] transition hover:bg-[#00f5d4]/10"
+                                    >
+                                      Slot {slot}
+                                    </button>
+                                  ))}
+                                  <button
+                                    type="button"
+                                    onClick={() => restoreSidebarWidget(widget.id)}
+                                    className={cn(
+                                      "h-9 border border-[#ff2d85]/50 bg-[#ff2d85]/5 font-mono text-xs font-bold text-[#ff2d85] transition hover:bg-[#ff2d85]/10",
+                                      sidebarEmptySlots.length === 0 && "col-span-2"
+                                    )}
+                                  >
+                                    After last
+                                  </button>
+                                </div>
+                                <p className="mt-2 font-mono text-[10px] text-[#a69db6] italic">
+                                  Empty cells are unused positions in the current layout.
+                                </p>
+                              </div>
+                            ) : null}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="border-b border-white/5 py-3 font-mono text-xs text-[#a69db6]">
+                      No hidden widgets.
+                    </p>
+                  )}
+                </div>
+              </div>
+            ) : null}
+          </div>
+
+          <div className="flex flex-col gap-4">
             <button
               type="button"
-              className={cn(
-                'flex w-full items-start justify-between gap-3 text-left',
-                templateDropdownOpen && 'border-b border-[#ff2d85]/20 pb-3',
-              )}
+              className="flex w-full items-start justify-between gap-3 text-left border border-[#ff2d85]/35 bg-[#1d1524] p-4 shadow-[0_0_18px_rgba(255,45,133,0.08)]"
               onClick={() => setTemplateDropdownOpen((value) => !value)}
             >
               <span>
                 <span className="block font-mono text-lg font-black text-[#ff2d85] drop-shadow-[0_0_8px_rgba(255,45,133,0.45)]">
-                  Template mẫu
+                  Templates
                 </span>
                 <span className="mt-1 block font-mono text-xs leading-relaxed text-[#a69db6]">
                   {selectedTemplate
                     ? `${selectedTemplate.name} · ${getLayoutCountLabel(selectedTemplate.layoutCount)}`
-                    : 'Áp dụng nhanh bố cục 2/4/6 widget theo mẫu có sẵn.'}
+                    : 'Quickly apply a 2/4/6-widget layout.'}
                 </span>
               </span>
               {templateDropdownOpen ? (
@@ -618,13 +734,13 @@ export function GeneralSettingsDrawer({
             </button>
 
             {templateDropdownOpen ? (
-              <div className="mt-3 space-y-4">
+              <div className="space-y-4 px-1 pb-2">
                 <label className="flex h-11 items-center gap-2 rounded border border-[#ff2d85]/40 bg-[#211b2d] px-3 shadow-[0_0_20px_rgba(255,45,133,0.12)]">
                   <Search size={20} className="text-[#ff2d85]" />
                   <input
                     value={templateSearch}
                     onChange={(event) => setTemplateSearch(event.target.value)}
-                    placeholder="Tìm template"
+                    placeholder="Search templates"
                     className="h-full min-w-0 flex-1 bg-transparent font-mono text-xs text-[#f3edff] outline-none placeholder:text-[#777086]"
                   />
                 </label>
@@ -641,16 +757,12 @@ export function GeneralSettingsDrawer({
                           setTemplateDropdownOpen(false);
                         }}
                         className={cn(
-                          'relative w-full border bg-[#191727] p-3 text-left transition',
+                          'relative w-full p-3 text-left transition rounded border bg-[#191727]',
                           selected
                             ? 'border-[#ff2d85] shadow-[0_0_24px_rgba(255,45,133,0.32)]'
-                            : 'border-[#2b2740] hover:border-[#ff2d85]/60',
+                            : 'border-[#2b2740] hover:border-[#ff2d85]/40',
                         )}
                       >
-                        <span className="absolute -left-px -top-px h-3 w-3 border-l-2 border-t-2 border-[#00f5d4]" />
-                        <span className="absolute -right-px -top-px h-3 w-3 border-r-2 border-t-2 border-[#ff2d85]" />
-                        <span className="absolute -bottom-px -left-px h-3 w-3 border-b-2 border-l-2 border-[#00f5d4]" />
-                        <span className="absolute -bottom-px -right-px h-3 w-3 border-b-2 border-r-2 border-[#ff2d85]" />
                         {selected ? (
                           <span className="absolute right-1 top-1 flex h-4 w-4 items-center justify-center rounded-full border border-[#ff2d85] text-[#ff2d85]">
                             <Check size={11} />
@@ -670,33 +782,31 @@ export function GeneralSettingsDrawer({
                     );
                   })}
 
-                  <div className="relative border border-[#2b2740] bg-[#191727] p-3">
-                    <span className="absolute -left-px -bottom-px h-3 w-3 border-b-2 border-l-2 border-[#00f5d4]" />
-                    <span className="absolute -right-px -top-px h-3 w-3 border-r-2 border-t-2 border-[#ff2d85]" />
+                  <div className="p-3 rounded border border-[#2b2740] bg-[#191727]">
                     <div className="h-20 border border-[#2b2740] bg-[#151421]" />
-                    <p className="mt-4 font-mono text-base font-black">Tập trung terminal</p>
+                    <p className="mt-4 font-mono text-base font-black">Terminal focus</p>
                     <p className="mt-1 font-mono text-xs tracking-normal text-[#a69db6]">
                       {extraTemplate.description}
                     </p>
                   </div>
                 </div>
+
+                <button
+                  type="button"
+                  className="h-12 w-full rounded border border-dashed border-[#ff2d85]/50 bg-transparent font-mono text-sm font-bold text-[#ff2d85] transition hover:bg-[#ff2d85]/10"
+                >
+                  + Add template
+                </button>
               </div>
             ) : null}
-          </section>
-
-          <button
-            type="button"
-            className="h-12 w-full border border-[#ff2d85] bg-transparent font-mono text-sm font-bold text-[#ff2d85] transition hover:bg-[#ff2d85]/10"
-          >
-            + Thêm
-          </button>
+          </div>
 
           <Button
             variant="secondary"
             className="h-12 w-full border-[#00f5d4] text-[#00f5d4] hover:bg-[#00f5d4]/10"
             onClick={openDetailModal}
           >
-            Tùy chỉnh chi tiết
+            Advanced settings
           </Button>
         </div>
 
@@ -705,7 +815,7 @@ export function GeneralSettingsDrawer({
             className="h-14 w-full rounded-full border-none bg-gradient-to-r from-[#ff2d85] to-[#9f0645] text-white shadow-[0_0_28px_rgba(255,45,133,0.46)]"
             onClick={saveAndClose}
           >
-            Lưu
+            Save
           </Button>
         </div>
       </aside>
@@ -717,12 +827,12 @@ export function GeneralSettingsDrawer({
             <div className="flex items-center justify-between border-b border-white/10 px-6 py-4">
               <div>
                 <h2 className="font-mono text-3xl font-black text-[#f3edff] drop-shadow-[0_0_12px_rgba(255,45,133,0.55)]">
-                  Chỉnh sửa template
+                  Edit template
                 </h2>
                 <p className="mt-1 font-mono text-xs text-[#a69db6]">
                   {detailStep === 'template'
-                    ? 'Chọn layout và KPI card trước khi chỉnh từng widget.'
-                    : 'Chọn vị trí widget trên layout map rồi cấu hình tham số gọi API.'}
+                    ? 'Choose layout and KPI cards first.'
+                    : 'Pick a slot, then configure API parameters.'}
                 </p>
               </div>
               <button className="rounded p-1.5 text-[#a69db6] hover:bg-white/10 hover:text-white" onClick={closeDetailModal}>
@@ -732,12 +842,12 @@ export function GeneralSettingsDrawer({
 
             {detailStep === 'template' ? (
               <div className="space-y-7 px-6 py-6">
-                <Field label="Tên template">
-                  <Input value="Template hiện tại" readOnly />
+                <Field label="Template name">
+                  <Input value="Current template" readOnly />
                 </Field>
 
                 <div>
-                  <p className="font-mono text-lg font-black text-[#f3edff]">Dạng layout</p>
+                  <p className="font-mono text-lg font-black text-[#f3edff]">Layout</p>
                   <div className="mt-3 grid gap-3 md:grid-cols-3">
                     {[
                       { count: 2, icon: Grid2X2 },
@@ -769,10 +879,10 @@ export function GeneralSettingsDrawer({
                 <div>
                   <div className="flex items-center justify-between">
                     <p className="font-mono text-lg font-black text-[#f3edff]">
-                      Chọn KPI Card
+                      KPI cards
                     </p>
                     <span className="font-mono text-[11px] text-[#777086]">
-                      Field từ API Summary
+                      Summary API fields
                     </span>
                   </div>
                   <div className="mt-3 space-y-3">
@@ -781,40 +891,78 @@ export function GeneralSettingsDrawer({
                       const Icon = option?.icon ?? Activity;
                       return (
                         <div key={widget.id} className="rounded border border-white/10 bg-[#151421] p-4">
-                          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                            <button
-                              type="button"
-                              onClick={() => toggleKpi(widget.id)}
-                              className="flex items-start gap-3 text-left"
-                            >
-                              <span
+                          <div className="grid gap-4">
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="flex min-w-0 items-center gap-3">
+                                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded bg-[#ff2d85]/15 text-[#ff2d85]">
+                                  <Icon size={18} />
+                                </span>
+                                <div className="min-w-0">
+                                  <p className="truncate font-bold text-[#f3edff]">{option?.title ?? widget.title}</p>
+                                  <p className="mt-1 text-sm text-[#a69db6]">{option?.description}</p>
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                title={widget.visible ? 'Hide KPI card' : 'Show KPI card'}
+                                onClick={() => toggleKpi(widget.id)}
                                 className={cn(
-                                  'mt-1 flex h-5 w-5 items-center justify-center rounded border',
+                                  'flex h-9 w-9 shrink-0 items-center justify-center rounded border transition',
                                   widget.visible
-                                    ? 'border-[#00f5d4] bg-[#00f5d4] text-[#0c0b14]'
-                                    : 'border-white/20',
+                                    ? 'border-[#00f5d4]/50 bg-[#00f5d4]/10 text-[#00f5d4]'
+                                    : 'border-[#ff2d85]/50 bg-[#ff2d85]/10 text-[#ff2d85]',
                                 )}
                               >
-                                {widget.visible ? <Check size={13} strokeWidth={3} /> : null}
-                              </span>
-                              <span>
-                                <span className="flex items-center gap-2 font-bold">
-                                  <Icon size={16} className="text-[#ff2d85]" />
-                                  {option?.title ?? widget.title}
-                                </span>
-                                <span className="mt-1 block text-sm text-[#a69db6]">{option?.description}</span>
-                                <span className="mt-2 block font-mono text-[11px] text-[#777086]">
-                                  Field: {option?.fields.join(', ')}
-                                </span>
-                              </span>
-                            </button>
-                            <div className="flex gap-2">
-                              <Button size="sm" variant={widget.info1 ? 'primary' : 'ghost'} onClick={() => setDetailDraftWidgets((current) => updateWidget(current, widget.id, { info1: !widget.info1 }))}>
-                                Chi tiết
-                              </Button>
-                              <Button size="sm" variant={widget.info2 ? 'primary' : 'ghost'} onClick={() => setDetailDraftWidgets((current) => updateWidget(current, widget.id, { info2: !widget.info2 }))}>
-                                Icon
-                              </Button>
+                                {widget.visible ? <Eye size={17} /> : <EyeOff size={17} />}
+                              </button>
+                            </div>
+
+                            <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
+                              <Field label="Card content">
+                                <Select
+                                  value={widget.type}
+                                  onChange={(event) =>
+                                    setDetailDraftWidgets((current) =>
+                                      updateKpiContent(current, widget.id, event.target.value as KpiWidgetKind),
+                                    )
+                                  }
+                                >
+                                  {summaryOptions.map((item) => (
+                                    <option key={item.key} value={item.key}>
+                                      {item.title}
+                                    </option>
+                                  ))}
+                                </Select>
+                              </Field>
+
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  title={widget.info1 ? 'Description visible' : 'Description hidden'}
+                                  onClick={() => setDetailDraftWidgets((current) => updateWidget(current, widget.id, { info1: !widget.info1 }))}
+                                  className={cn(
+                                    'flex h-11 w-11 items-center justify-center rounded border transition',
+                                    widget.info1
+                                      ? 'border-[#00f5d4]/50 bg-[#00f5d4]/10 text-[#00f5d4]'
+                                      : 'border-[#2b2740] bg-[#191727] text-[#a69db6] hover:border-[#ff2d85]/60',
+                                  )}
+                                >
+                                  <TypeIcon size={17} />
+                                </button>
+                                <button
+                                  type="button"
+                                  title={widget.info2 ? 'Icon visible' : 'Icon hidden'}
+                                  onClick={() => setDetailDraftWidgets((current) => updateWidget(current, widget.id, { info2: !widget.info2 }))}
+                                  className={cn(
+                                    'flex h-11 w-11 items-center justify-center rounded border transition',
+                                    widget.info2
+                                      ? 'border-[#00f5d4]/50 bg-[#00f5d4]/10 text-[#00f5d4]'
+                                      : 'border-[#2b2740] bg-[#191727] text-[#a69db6] hover:border-[#ff2d85]/60',
+                                  )}
+                                >
+                                  <Icon size={17} />
+                                </button>
+                              </div>
                             </div>
                           </div>
                         </div>
@@ -824,20 +972,20 @@ export function GeneralSettingsDrawer({
                 </div>
 
                 <div className="flex items-center justify-end gap-3 border-t border-white/10 pt-5">
-                  <Button variant="ghost" className="h-11 px-5" onClick={closeDetailModal}>Hủy</Button>
+                  <Button variant="ghost" className="h-11 px-5" onClick={closeDetailModal}>Cancel</Button>
                   <Button variant="secondary" className="h-11 px-6 border-[#00f5d4] text-[#00f5d4]" onClick={goToWidgetStep}>
-                    Chỉnh widget
+                    Edit widgets
                   </Button>
-                  <Button className="h-11 px-6" onClick={saveDetailDraft}>Lưu thay đổi</Button>
+                  <Button className="h-11 px-6" onClick={saveDetailDraft}>Save changes</Button>
                 </div>
               </div>
             ) : (
               <div className="px-6 py-6">
-                <h3 className="text-5xl font-black text-[#f3edff] drop-shadow-[0_0_14px_rgba(255,45,133,0.45)]">Chỉnh widget</h3>
+                <h3 className="text-5xl font-black text-[#f3edff] drop-shadow-[0_0_14px_rgba(255,45,133,0.45)]">Edit widget</h3>
                 <div className="mt-8 grid gap-7 lg:grid-cols-[260px_1fr]">
                   <div>
                     <p className="font-mono text-lg font-black text-[#00f5d4] drop-shadow-[0_0_8px_rgba(0,245,212,0.5)]">
-                      Bản đồ layout
+                      Layout map
                     </p>
                     <div className="mt-4 rounded border border-white/10 bg-[#0c0b14] p-4">
                       <div className="grid grid-cols-2 gap-3">
@@ -871,20 +1019,20 @@ export function GeneralSettingsDrawer({
                             >
                               <span className="text-2xl font-black">{widget.layoutOrder}</span>
                               <span className="mt-2 max-w-full truncate text-xs">{widget.title}</span>
-                              {widget.layoutSpan === 2 ? <span className="mt-1 font-mono text-[10px] text-[#00f5d4]">2 ô desktop</span> : null}
+                              {widget.layoutSpan === 2 ? <span className="mt-1 font-mono text-[10px] text-[#00f5d4]">2 desktop cells</span> : null}
                             </button>
                           );
                         })}
                       </div>
                     </div>
                     <p className="mt-4 text-sm italic text-[#a69db6]">
-                      Ô có dấu + là vị trí còn trống trong {getLayoutCountLabel(layoutCount).toLowerCase()}.
+                      + cells are open slots in the current {getLayoutCountLabel(layoutCount).toLowerCase()}.
                     </p>
                   </div>
 
                   <div>
                     <p className="font-mono text-2xl font-black text-[#f3edff]">
-                      Cấu hình slot {selectedSlot?.layoutOrder ?? 1}
+                      Slot {selectedSlot?.layoutOrder ?? 1} settings
                     </p>
                     {selectedSlot ? (
                       <div className="mt-4 rounded border border-[#ff2d85]/70 bg-[#0c0b14] p-6">
@@ -893,7 +1041,7 @@ export function GeneralSettingsDrawer({
                             <button
                               type="button"
                               aria-checked={selectedSlot.visible}
-                              title={selectedSlot.visible ? 'Đang hiển thị trên dashboard' : 'Đang ẩn khỏi dashboard'}
+                              title={selectedSlot.visible ? 'Visible on dashboard' : 'Hidden from dashboard'}
                               onClick={() =>
                                 setDetailDraftWidgets((current) => {
                                   const nextWidgets = selectedSlot.visible
@@ -915,7 +1063,19 @@ export function GeneralSettingsDrawer({
                             </button>
                           </div>
 
-                          <Field label="Loại widget">
+                          <Field label="Widget name" hint="Leave blank to use data + time range.">
+                            <Input
+                              value={selectedSlot.title}
+                              placeholder={getDefaultWidgetTitle(selectedSlot)}
+                              onChange={(event) =>
+                                setDetailDraftWidgets((current) =>
+                                  updateWidget(current, selectedSlot.id, { title: event.target.value }),
+                                )
+                              }
+                            />
+                          </Field>
+
+                          <Field label="Widget type">
                             <Select
                               value={selectedSlot.chartType}
                               onChange={(event) =>
@@ -936,12 +1096,12 @@ export function GeneralSettingsDrawer({
 
                           <div>
                             <p className="mb-3 font-mono text-sm font-bold tracking-normal text-[#a69db6]">
-                              Kích thước desktop
+                              Desktop size
                             </p>
                             <div className="grid grid-cols-2 gap-3">
                               {[
-                                { value: 1, label: '1 ô' },
-                                { value: 2, label: '2 ô' },
+                                { value: 1, label: '1 cell' },
+                                { value: 2, label: '2 cells' },
                               ].map((option) => {
                                 const selected = selectedSlot.layoutSpan === option.value;
                                 return (
@@ -966,14 +1126,14 @@ export function GeneralSettingsDrawer({
                               })}
                             </div>
                             <p className="mt-2 font-mono text-xs text-[#777086]">
-                              1 ô dùng cho chart nhỏ như cột/tròn. 2 ô dùng cho table, heatmap hoặc chart cần đọc rộng.
-                              Từ màn hình medium trở xuống, widget luôn tự chuyển thành 1 ô.
+                              Use 1 cell for compact charts. Use 2 cells for tables, heatmaps, or wide charts.
+                              On medium screens and below, widgets become 1 cell.
                             </p>
                           </div>
 
                           {selectedSlot.chartType === 'line' || selectedSlot.chartType === 'bar' || selectedSlot.chartType === 'pie' ? (
                             <>
-                              <Field label="Dữ liệu muốn xem">
+                              <Field label="Data">
                                 <Select
                                   value={selectedSlot.metric}
                                   onChange={(event) =>
@@ -988,7 +1148,7 @@ export function GeneralSettingsDrawer({
                                 </Select>
                               </Field>
                               {selectedSlot.chartType === 'bar' || selectedSlot.chartType === 'pie' ? (
-                                <Field label={selectedSlot.chartType === 'pie' ? 'Chia lát theo' : 'Nhóm dữ liệu theo'}>
+                                <Field label={selectedSlot.chartType === 'pie' ? 'Slice by' : 'Group by'}>
                                   <Select
                                     value={selectedSlot.groupBy}
                                     onChange={(event) =>
@@ -1006,7 +1166,7 @@ export function GeneralSettingsDrawer({
                                 </Field>
                               ) : null}
                               {selectedSlot.chartType === 'line' || (selectedSlot.chartType === 'bar' && selectedSlot.groupBy === 'none') ? (
-                                <Field label="Mốc thời gian">
+                                <Field label="Time bucket">
                                   <Select
                                     value={selectedSlot.timeBucket}
                                     onChange={(event) =>
@@ -1025,7 +1185,7 @@ export function GeneralSettingsDrawer({
                           ) : null}
 
                           {selectedSlot.chartType === 'heatmap' ? (
-                            <Field label="Kiểu bản đồ">
+                            <Field label="Heatmap mode">
                               <Select
                                 value={selectedSlot.heatmapMode}
                                 onChange={(event) => {
@@ -1047,7 +1207,7 @@ export function GeneralSettingsDrawer({
 
                           <div>
                             <p className="mb-3 font-mono text-sm font-bold tracking-normal text-[#a69db6]">
-                              Thông tin hiển thị
+                              Display options
                             </p>
                             <div className="grid gap-2 sm:grid-cols-2">
                               {getDisplayOptions(selectedSlot).map((option) => (
@@ -1084,14 +1244,14 @@ export function GeneralSettingsDrawer({
                             {selectedSlot.chartType === 'heatmap' && selectedSlot.heatmapMode === 'calendar' ? (
                               <>
                                 <p className="mb-3 font-mono text-sm font-bold tracking-normal text-[#a69db6]">
-                                  Năm hiển thị
+                                  Year
                                 </p>
                                 <p className="mb-4 border border-[#2b2740] bg-[#191727] px-3 py-2 font-mono text-xs text-[#f3edff]">
                                   {getYearFromDate(selectedSlot.startDate) === String(new Date().getFullYear())
-                                    ? `${getYearFromDate(selectedSlot.startDate)} · từ 01/01 đến hôm nay`
-                                    : `${getYearFromDate(selectedSlot.startDate)} · từ 01/01 đến 31/12`}
+                                    ? `${getYearFromDate(selectedSlot.startDate)} · Jan 1 to today`
+                                    : `${getYearFromDate(selectedSlot.startDate)} · Jan 1 to Dec 31`}
                                 </p>
-                                <Field label="Chọn năm">
+                                <Field label="Year">
                                   <Input
                                     type="number"
                                     min="2020"
@@ -1108,10 +1268,10 @@ export function GeneralSettingsDrawer({
                             ) : (
                               <>
                                 <p className="mb-3 font-mono text-sm font-bold tracking-normal text-[#a69db6]">
-                                  Khoảng thời gian
+                                  Time range
                                 </p>
                                 <div className="grid gap-4 sm:grid-cols-2">
-                                  <Field label="Ngày bắt đầu">
+                                  <Field label="Start date">
                                     <Input
                                       type="date"
                                       value={selectedSlot.startDate}
@@ -1122,7 +1282,7 @@ export function GeneralSettingsDrawer({
                                       }
                                     />
                                   </Field>
-                                  <Field label="Ngày kết thúc">
+                                  <Field label="End date">
                                     <Input
                                       type="date"
                                       value={selectedSlot.endDate}
@@ -1146,8 +1306,8 @@ export function GeneralSettingsDrawer({
                 <div className="mt-8 flex items-center justify-between border-t border-white/10 pt-5">
                   <Button variant="ghost" className="h-11 px-5" onClick={() => setDetailStep('template')}>Back</Button>
                   <div className="flex items-center gap-3">
-                    <Button variant="ghost" className="h-11 px-5" onClick={closeDetailModal}>Hủy</Button>
-                    <Button className="h-11 px-6" onClick={saveDetailDraft}>Lưu thay đổi</Button>
+                    <Button variant="ghost" className="h-11 px-5" onClick={closeDetailModal}>Cancel</Button>
+                    <Button className="h-11 px-6" onClick={saveDetailDraft}>Save changes</Button>
                   </div>
                 </div>
               </div>

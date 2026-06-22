@@ -55,7 +55,7 @@ export function WeekdayHeatmap({ data, isLoading, isError }: WeekdayHeatmapProps
         return `<strong style="color:#00f5d4">${day} ${String(hour).padStart(
           2,
           '0',
-        )}:00</strong><br/>${value.toLocaleString('vi-VN')} cảnh báo`;
+        )}:00</strong><br/>${value.toLocaleString('vi-VN')} alarms`;
       },
     },
     grid: {
@@ -130,13 +130,13 @@ export function WeekdayHeatmap({ data, isLoading, isError }: WeekdayHeatmapProps
   return (
     <Card>
       <CardHeader>
-        <h2 className="text-xl font-bold">Bản đồ nhiệt</h2>
+        <h2 className="text-xl font-bold">Heatmap</h2>
       </CardHeader>
       <CardContent>
         {isLoading ? (
-          <StateBlock state="loading" title="Đang tải bản đồ nhiệt" />
+          <StateBlock state="loading" title="Loading heatmap" />
         ) : isError || cells.length === 0 ? (
-          <StateBlock title="Chưa có dữ liệu bản đồ nhiệt" description="Chưa có ô mật độ theo ngày nào được trả về." />
+          <StateBlock title="No heatmap data" description="No daily density cells returned." />
         ) : (
           <ReactECharts
             option={option}

@@ -42,15 +42,36 @@ select {
 }
 
 input[type="date"] {
+  appearance: none;
   color-scheme: dark;
 }
 
 input[type="date"]::-webkit-calendar-picker-indicator {
   cursor: pointer;
+  width: 18px;
+  height: 18px;
   filter:
-    invert(1)
-    drop-shadow(0 0 4px rgba(255, 45, 133, 0.8))
-    drop-shadow(0 0 6px rgba(0, 245, 212, 0.35));
+    invert(92%)
+    sepia(27%)
+    saturate(660%)
+    hue-rotate(122deg)
+    brightness(108%)
+    contrast(98%)
+    drop-shadow(0 0 5px rgba(0, 245, 212, 0.46));
+  opacity: 0.92;
+  transition: opacity 150ms ease, filter 150ms ease;
+}
+
+input[type="date"]:hover::-webkit-calendar-picker-indicator,
+input[type="date"]:focus::-webkit-calendar-picker-indicator {
+  filter:
+    invert(96%)
+    sepia(9%)
+    saturate(580%)
+    hue-rotate(190deg)
+    brightness(112%)
+    contrast(100%)
+    drop-shadow(0 0 7px rgba(158, 247, 238, 0.62));
   opacity: 1;
 }
 

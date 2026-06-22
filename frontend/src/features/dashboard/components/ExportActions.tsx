@@ -26,9 +26,9 @@ export function ExportActions({ filters }: ExportActionsProps) {
       link.download = 'nettrace-alarms.csv';
       link.click();
       URL.revokeObjectURL(url);
-      toast.success('Đã bắt đầu xuất dữ liệu');
+      toast.success('Export started');
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Không thể xuất cảnh báo.';
+      const message = error instanceof Error ? error.message : 'Could not export alarms.';
       toast.error(message);
     }
   }
@@ -36,7 +36,7 @@ export function ExportActions({ filters }: ExportActionsProps) {
   return (
     <Button variant="secondary" onClick={downloadCsv}>
       <Download size={16} />
-      Xuất CSV
+      Export CSV
     </Button>
   );
 }

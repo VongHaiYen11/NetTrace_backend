@@ -39,9 +39,9 @@ export const mockWeeklyTrend: AnalyticsRow[] = [
 ];
 
 export const mockSeverityDistribution: AnalyticsRow[] = [
-  { severity: 'Nghiêm trọng', value: 72 },
-  { severity: 'Lớn', value: 24 },
-  { severity: 'Nhỏ', value: 4 },
+  { severity: 'Critical', value: 72 },
+  { severity: 'Major', value: 24 },
+  { severity: 'Minor', value: 4 },
 ];
 
 const heatmapMatrix: Record<string, number[]> = {
@@ -69,9 +69,9 @@ export const mockAlarms: Alarm[] = [
     error_code: 'ERR_FIREWALL_BREACH',
     error_details: {
       error_code: 'ERR_FIREWALL_BREACH',
-      name: 'Phát hiện tấn công tường lửa',
-      description: 'Đã phát hiện nỗ lực vượt tường lửa.',
-      domain: 'Bảo mật',
+      name: 'Firewall attack detected',
+      description: 'Firewall bypass attempt detected.',
+      domain: 'Security',
       default_severity: 'critical',
     },
     device_id: 'FW-HN-01',
@@ -79,16 +79,16 @@ export const mockAlarms: Alarm[] = [
     time_solved: null,
     status: 'active',
     severity: 'critical',
-    description: 'Phát hiện tấn công tường lửa',
+    description: 'Firewall attack detected',
   },
   {
     alarm_id: 'mock-002',
     error_code: 'INFO_DATA_SYNC',
     error_details: {
       error_code: 'INFO_DATA_SYNC',
-      name: 'Đồng bộ dữ liệu hoàn tất',
-      description: 'Quá trình đồng bộ dữ liệu đã hoàn tất.',
-      domain: 'Hệ thống',
+      name: 'Data sync complete',
+      description: 'Data sync completed.',
+      domain: 'System',
       default_severity: 'info',
     },
     device_id: 'SYNC-HN-02',
@@ -96,16 +96,16 @@ export const mockAlarms: Alarm[] = [
     time_solved: '2026-06-22T10:38:20.000Z',
     status: 'closed',
     severity: 'info',
-    description: 'Đồng bộ dữ liệu hoàn tất',
+    description: 'Data sync complete',
   },
   {
     alarm_id: 'mock-003',
     error_code: 'INFO_SYSTEM_UPDATE',
     error_details: {
       error_code: 'INFO_SYSTEM_UPDATE',
-      name: 'Đã triển khai cập nhật hệ thống',
-      description: 'Cập nhật hệ thống đã được triển khai thành công.',
-      domain: 'Hệ thống',
+      name: 'System update deployed',
+      description: 'System update deployed successfully.',
+      domain: 'System',
       default_severity: 'info',
     },
     device_id: 'CORE-HN-01',
@@ -113,6 +113,6 @@ export const mockAlarms: Alarm[] = [
     time_solved: '2026-06-22T10:16:00.000Z',
     status: 'closed',
     severity: 'info',
-    description: 'Đã triển khai cập nhật hệ thống',
+    description: 'System update deployed',
   },
 ];

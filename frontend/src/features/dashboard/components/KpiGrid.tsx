@@ -12,60 +12,60 @@ interface KpiGridProps {
 const cards = [
   {
     key: 'totalAlarms',
-    label: 'Số lượng cảnh báo',
+    label: 'Alarm count',
     icon: RadioTower,
     border: 'border-[#ff2d85]/70',
     iconBg: 'bg-[#ff2d85]/20',
     tone: 'text-[#ff2d85]',
     subtitle: (data: SummaryResult) =>
-      `${data.activeAlarms.toLocaleString('vi-VN')} đang hoạt động · ${data.closedAlarms.toLocaleString(
+      `${data.activeAlarms.toLocaleString('vi-VN')} active · ${data.closedAlarms.toLocaleString(
         'vi-VN',
-      )} đã đóng`,
+      )} closed`,
   },
   {
     key: 'affectedDevices',
-    label: 'Thiết bị bị ảnh hưởng',
+    label: 'Affected devices',
     icon: TrendingUp,
     border: 'border-[#00f5d4]/70',
     iconBg: 'bg-[#00f5d4]/15',
     tone: 'text-[#00f5d4]',
     subtitle: (data: SummaryResult) =>
-      `${data.affectedDevices.toLocaleString('vi-VN')} thiết bị duy nhất`,
+      `${data.affectedDevices.toLocaleString('vi-VN')} unique devices`,
   },
   {
     key: 'criticalAlarms',
-    label: 'Trạng thái hiện tại',
+    label: 'Current status',
     icon: AlertTriangle,
     border: 'border-[#f8e231]/70',
     iconBg: 'bg-[#f8e231]/15',
     tone: 'text-[#f8e231]',
     subtitle: (data: SummaryResult) =>
-      `${data.criticalAlarms.toLocaleString('vi-VN')} cảnh báo nghiêm trọng`,
+      `${data.criticalAlarms.toLocaleString('vi-VN')} critical alarms`,
   },
 ] as const;
 
 export function KpiGrid({ data, isLoading, isError }: KpiGridProps) {
   if (isLoading) {
-    return <StateBlock state="loading" title="Đang tải tổng quan" />;
+    return <StateBlock state="loading" title="Loading overview" />;
   }
 
   if (isError || !data) {
     return (
       <StateBlock
         state="error"
-        title="Không có dữ liệu tổng quan"
-        description="Backend chưa trả về dữ liệu KPI cho bộ lọc hiện tại."
+        title="No overview data"
+        description="Backend returned no KPI data for the current filter."
       />
     );
   }
 
   return (
-    <section className="grid gap-6 lg:grid-cols-3" aria-label="Tổng quan KPI">
+    <section className="grid gap-6 lg:grid-cols-3" aria-label="KPI overview">
       {cards.map((card) => {
         const Icon = card.icon;
         const value =
           card.key === 'criticalAlarms' && data.criticalAlarms > 0
-            ? 'Cảnh báo'
+            ? 'Warning'
             : data[card.key].toLocaleString('vi-VN');
         return (
           <Card key={card.key} className={card.border}>

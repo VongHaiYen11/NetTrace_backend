@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { useOutletContext } from 'react-router-dom';
 import { PenLine } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { DashboardWidget } from '../features/dashboard/components/DashboardWidget';
@@ -27,12 +28,19 @@ interface WidgetConfig extends WidgetSettingsValues {
   layoutSpan: 1 | 2;
 }
 
+type TableHeightMode = 'paired' | 'middle' | 'roomy';
+
+interface DashboardLayoutContext {
+  sidebarOpen: boolean;
+}
+
 export function DashboardPage() {
+  const { sidebarOpen } = useOutletContext<DashboardLayoutContext>();
   const [widgets, setWidgets] = useState<WidgetConfig[]>([
     {
       id: 'kpi-1',
       type: 'kpi-count',
-      title: 'Số lượng cảnh báo',
+      title: 'Alarm count',
       layoutOrder: 0,
       layoutSpan: 1,
       visible: true,
@@ -51,7 +59,7 @@ export function DashboardPage() {
     {
       id: 'kpi-2',
       type: 'kpi-devices',
-      title: 'Thiết bị bị ảnh hưởng',
+      title: 'Affected devices',
       layoutOrder: 0,
       layoutSpan: 1,
       visible: true,
@@ -70,7 +78,7 @@ export function DashboardPage() {
     {
       id: 'kpi-3',
       type: 'kpi-status',
-      title: 'Trạng thái hiện tại',
+      title: 'Current status',
       layoutOrder: 0,
       layoutSpan: 1,
       visible: true,
@@ -89,7 +97,7 @@ export function DashboardPage() {
     {
       id: 'chart-1',
       type: 'chart-trend',
-      title: 'Cảnh báo theo ngày',
+      title: 'Daily alarms',
       layoutOrder: 1,
       layoutSpan: 2,
       visible: true,
@@ -108,7 +116,7 @@ export function DashboardPage() {
     {
       id: 'chart-2',
       type: 'chart-severity',
-      title: 'Phân bố mức độ',
+      title: 'Severity split',
       layoutOrder: 2,
       layoutSpan: 1,
       visible: true,
@@ -127,7 +135,7 @@ export function DashboardPage() {
     {
       id: 'chart-3',
       type: 'chart-weekly',
-      title: 'Cảnh báo (tuần này)',
+      title: 'Weekly alarms',
       layoutOrder: 3,
       layoutSpan: 1,
       visible: true,
@@ -146,7 +154,7 @@ export function DashboardPage() {
     {
       id: 'chart-4',
       type: 'chart-heatmap',
-      title: 'Bản đồ nhiệt',
+      title: 'Alarm heatmap',
       layoutOrder: 4,
       layoutSpan: 2,
       visible: true,
@@ -165,7 +173,7 @@ export function DashboardPage() {
     {
       id: 'table-1',
       type: 'table-alarms',
-      title: 'Danh sách cảnh báo',
+      title: 'Alarm list',
       layoutOrder: 5,
       layoutSpan: 2,
       visible: true,
@@ -184,7 +192,7 @@ export function DashboardPage() {
     {
       id: 'chart-5',
       type: 'chart-extra',
-      title: 'Thiết bị theo khu vực',
+      title: 'Devices by region',
       layoutOrder: 6,
       layoutSpan: 1,
       visible: false,
@@ -229,12 +237,42 @@ export function DashboardPage() {
     );
   }
 
+  function getLayoutContext(widget: WidgetConfig, index: number) {
+    const previousWidget = visibleLayoutWidgets[index - 1];
+    const nextWidget = visibleLayoutWidgets[index + 1];
+    const isLastVisibleWidget = index === visibleLayoutWidgets.length - 1;
+    const hasRowMate =
+      widget.layoutSpan === 1 &&
+      (previousWidget?.layoutSpan === 1 || nextWidget?.layoutSpan === 1);
+
+    const tableHeightMode: TableHeightMode =
+      widget.chartType !== 'table'
+        ? 'middle'
+        : widget.layoutSpan === 2 || (isLastVisibleWidget && !hasRowMate)
+          ? 'roomy'
+          : hasRowMate
+            ? 'paired'
+            : 'middle';
+
+    return {
+      isLastVisibleWidget,
+      hasRowMate,
+      tableHeightMode,
+    };
+  }
+
   return (
-    <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-8 px-4 py-6 sm:px-6 lg:px-6">
+    <div
+      className={
+        sidebarOpen
+          ? 'mx-auto flex w-full max-w-[1280px] flex-col gap-8 px-4 py-6 sm:px-6 lg:px-6'
+          : 'flex w-full max-w-none flex-col gap-8 px-4 py-6 sm:px-5 lg:px-6'
+      }
+    >
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <h1 className="mt-3 text-5xl font-black leading-tight sm:text-6xl">
-            Bảng điều khiển <span className="text-[#00f5d4]">cảnh báo</span>
+            Alarm <span className="text-[#00f5d4]">dashboard</span>
           </h1>
         </div>
         <Button
@@ -243,7 +281,7 @@ export function DashboardPage() {
           onClick={() => setGeneralSettingsOpen(true)}
         >
           <PenLine size={18} />
-          Tùy chỉnh
+          Customize
         </Button>
       </div>
 
@@ -259,12 +297,13 @@ export function DashboardPage() {
         ))}
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        {visibleLayoutWidgets.map((w) => (
+      <div className="grid grid-cols-1 gap-6 lg:grid-flow-dense lg:grid-cols-2">
+        {visibleLayoutWidgets.map((w, index) => (
           <div key={w.id} className={w.layoutSpan === 2 ? 'lg:col-span-2' : undefined}>
           <DashboardWidget
             id={w.id}
             config={w}
+            layoutContext={getLayoutContext(w, index)}
             onSettingsClick={() => setActiveWidgetId(w.id)}
           />
           </div>
