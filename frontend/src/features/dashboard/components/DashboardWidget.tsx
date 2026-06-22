@@ -21,6 +21,7 @@ import { Card, CardContent, CardHeader } from '../../../components/ui/Card';
 import { Badge } from '../../../components/ui/Badge';
 import { StateBlock } from '../../../components/shared/StateBlock';
 import { nettraceApi } from '../../../services/generated/nettrace-api';
+import type { AnalyticsRow, GroupBy, Metric, WeekdayHeatmapCell } from '../../../services/generated/nettrace-api';
 import type { WidgetSettingsValues } from './WidgetSettingsDrawer';
 
 interface DashboardWidgetProps {
@@ -35,6 +36,7 @@ interface DashboardWidgetProps {
       | 'chart-severity'
       | 'chart-weekly'
       | 'chart-heatmap'
+      | 'chart-extra'
       | 'table-alarms';
   };
   onSettingsClick: () => void;
@@ -79,13 +81,13 @@ function formatBucket(value: string) {
   }
 }
 
-function getTimeBucketMs(row: { time_bucket?: string | number | null; label?: string | number | null }) {
+function getTimeBucketMs(row: AnalyticsRow) {
   if (!row.time_bucket) return Number.POSITIVE_INFINITY;
   const parsed = Date.parse(String(row.time_bucket).replace(' ', 'T'));
   return Number.isNaN(parsed) ? Number.POSITIVE_INFINITY : parsed;
 }
 
-function getSortedTrendRows(rows: Array<{ time_bucket?: string | number | null; label?: string | number | null; value: number }>) {
+function getSortedTrendRows(rows: AnalyticsRow[]) {
   return [...rows].sort((a, b) => {
     const aTime = getTimeBucketMs(a);
     const bTime = getTimeBucketMs(b);
@@ -94,17 +96,95 @@ function getSortedTrendRows(rows: Array<{ time_bucket?: string | number | null; 
   });
 }
 
+const metricLabels: Record<Metric, string> = {
+  count: 'Số lượng',
+  avg_duration: 'Thời gian TB',
+  max_duration: 'Thời gian tối đa',
+  affected_devices: 'Thiết bị ảnh hưởng',
+};
+
+const groupLabels: Record<GroupBy, string> = {
+  severity: 'Mức độ',
+  status: 'Trạng thái',
+  error_code: 'Mã lỗi',
+  device: 'Thiết bị',
+  device_type: 'Loại thiết bị',
+  vendor: 'Nhà cung cấp',
+  station: 'Trạm',
+  province: 'Tỉnh thành',
+};
+
+const chartTypeLabels: Record<WidgetSettingsValues['chartType'], string> = {
+  line: 'Đường',
+  bar: 'Cột',
+  pie: 'Tròn',
+  table: 'Bảng',
+  heatmap: 'Bản đồ nhiệt',
+};
+
+const timeBucketLabels: Record<WidgetSettingsValues['timeBucket'], string> = {
+  hour: 'giờ',
+  day: 'ngày',
+  week: 'tuần',
+  month: 'tháng',
+  year: 'năm',
+};
+
+function getRowGroupLabel(row: AnalyticsRow, groupBy: WidgetSettingsValues['groupBy']) {
+  if (groupBy === 'none') return row.label ? String(row.label) : 'Tổng';
+  const value = row[groupBy];
+  return value === null || value === undefined || value === '' ? 'Không xác định' : String(value);
+}
+
+function formatMetricValue(value: number, metric: Metric) {
+  if (metric === 'avg_duration' || metric === 'max_duration') {
+    if (value >= 3600) return `${(value / 3600).toFixed(1).replace(/\.0$/, '')} giờ`;
+    if (value >= 60) return `${(value / 60).toFixed(1).replace(/\.0$/, '')} phút`;
+    return `${Math.round(value).toLocaleString('vi-VN')} giây`;
+  }
+  return formatNumberWithSuffix(value);
+}
+
+function readHeatmapValue(params: unknown) {
+  if (!params || typeof params !== 'object' || !('value' in params)) {
+    return [0, 0, 0] as const;
+  }
+  const rawValue = (params as { value?: unknown }).value;
+  if (!Array.isArray(rawValue)) {
+    return [0, 0, 0] as const;
+  }
+  const [x, y, value] = rawValue.map((item) => Number(item));
+  return [x || 0, y || 0, value || 0] as const;
+}
+
 export function DashboardWidget({ id, config, onSettingsClick }: DashboardWidgetProps) {
+  if (!config.visible) return null;
+
   const isSummary = config.type.startsWith('kpi');
-  const isTrend = !isSummary && (config.chartType === 'line' || config.chartType === 'bar');
-  const isPie = !isSummary && config.chartType === 'pie';
+  const isAnalyticsChart =
+    !isSummary && (config.chartType === 'line' || config.chartType === 'bar' || config.chartType === 'pie');
+  const isTrend = isAnalyticsChart && (config.chartType === 'line' || config.chartType === 'bar');
+  const isPie = isAnalyticsChart && config.chartType === 'pie';
   const isHeatmap = !isSummary && config.chartType === 'heatmap';
   const isTable = !isSummary && config.chartType === 'table';
+  const selectedGroupBy = config.groupBy === 'none' ? null : config.groupBy;
+  const hasGroupBy = selectedGroupBy !== null;
+  const chartUsesGroup = config.chartType === 'pie' || (config.chartType === 'bar' && hasGroupBy);
+  const analyticsGroupBy: GroupBy[] = chartUsesGroup && selectedGroupBy ? [selectedGroupBy] : [];
+  const shouldBucketByTime = config.chartType === 'line' || (config.chartType === 'bar' && !hasGroupBy);
+  const analyticsTimeBucket = shouldBucketByTime ? config.timeBucket : null;
 
   const dateFilters = {
     from_time: config.startDate,
     to_time: config.endDate,
   };
+  const settingSummary = [
+    chartTypeLabels[config.chartType],
+    !isSummary && isAnalyticsChart ? metricLabels[config.metric] : null,
+    !isSummary && hasGroupBy && config.groupBy !== 'none' ? groupLabels[config.groupBy] : null,
+    !isSummary && shouldBucketByTime ? `theo ${timeBucketLabels[config.timeBucket]}` : null,
+    `${config.startDate} - ${config.endDate}`,
+  ].filter(Boolean).join(' · ');
 
   // Queries
   const summaryQuery = useQuery({
@@ -113,30 +193,25 @@ export function DashboardWidget({ id, config, onSettingsClick }: DashboardWidget
     enabled: isSummary,
   });
 
-  const trendQuery = useQuery({
-    queryKey: ['trend', id, dateFilters],
+  const analyticsQuery = useQuery({
+    queryKey: [
+      'analytics-widget',
+      id,
+      dateFilters,
+      config.chartType,
+      config.metric,
+      config.groupBy,
+      config.timeBucket,
+    ],
     queryFn: () =>
       nettraceApi.analyticsQuery({
-        metric: 'count',
-        group_by: [],
-        time_bucket: 'day',
+        metric: config.metric,
+        group_by: analyticsGroupBy,
+        time_bucket: analyticsTimeBucket,
         filters: dateFilters,
         limit: 90,
       }),
-    enabled: isTrend,
-  });
-
-  const severityQuery = useQuery({
-    queryKey: ['severity', id, dateFilters],
-    queryFn: () =>
-      nettraceApi.analyticsQuery({
-        metric: 'count',
-        group_by: ['severity'],
-        time_bucket: null,
-        filters: dateFilters,
-        limit: 10,
-      }),
-    enabled: isPie,
+    enabled: isAnalyticsChart,
   });
 
   const heatmapQuery = useQuery({
@@ -165,15 +240,13 @@ export function DashboardWidget({ id, config, onSettingsClick }: DashboardWidget
 
   const isLoading =
     summaryQuery.isLoading ||
-    trendQuery.isLoading ||
-    severityQuery.isLoading ||
+    analyticsQuery.isLoading ||
     heatmapQuery.isLoading ||
     alarmsQuery.isLoading;
 
   const isError =
     summaryQuery.isError ||
-    trendQuery.isError ||
-    severityQuery.isError ||
+    analyticsQuery.isError ||
     heatmapQuery.isError ||
     alarmsQuery.isError;
 
@@ -199,14 +272,7 @@ export function DashboardWidget({ id, config, onSettingsClick }: DashboardWidget
                   </p>
                 )}
               </div>
-              <div className="flex flex-col items-end gap-2">
-                <button
-                  type="button"
-                  onClick={onSettingsClick}
-                  className="p-1 rounded hover:bg-white/10 text-[#a69db6]"
-                >
-                  <MoreHorizontal size={20} />
-                </button>
+              <div className="flex flex-col items-end">
                 {config.info2 && (
                   <span className="flex h-10 w-10 items-center justify-center rounded bg-[#ff2d85]/20">
                     <RadioTower className="text-[#ff2d85]" size={20} />
@@ -235,14 +301,7 @@ export function DashboardWidget({ id, config, onSettingsClick }: DashboardWidget
                   </p>
                 )}
               </div>
-              <div className="flex flex-col items-end gap-2">
-                <button
-                  type="button"
-                  onClick={onSettingsClick}
-                  className="p-1 rounded hover:bg-white/10 text-[#a69db6]"
-                >
-                  <MoreHorizontal size={20} />
-                </button>
+              <div className="flex flex-col items-end">
                 {config.info2 && (
                   <span className="flex h-10 w-10 items-center justify-center rounded bg-[#00f5d4]/15">
                     <TrendingUp className="text-[#00f5d4]" size={20} />
@@ -272,14 +331,7 @@ export function DashboardWidget({ id, config, onSettingsClick }: DashboardWidget
                   </p>
                 )}
               </div>
-              <div className="flex flex-col items-end gap-2">
-                <button
-                  type="button"
-                  onClick={onSettingsClick}
-                  className="p-1 rounded hover:bg-white/10 text-[#a69db6]"
-                >
-                  <MoreHorizontal size={20} />
-                </button>
+              <div className="flex flex-col items-end">
                 {config.info2 && (
                   <span className="flex h-10 w-10 items-center justify-center rounded bg-[#f8e231]/15">
                     <AlertTriangle className="text-[#f8e231]" size={20} />
@@ -307,9 +359,11 @@ export function DashboardWidget({ id, config, onSettingsClick }: DashboardWidget
       />
     );
   } else if (isTrend) {
-    const rawTrend = getSortedTrendRows(trendQuery.data?.data ?? []);
+    const rawTrend = shouldBucketByTime
+      ? getSortedTrendRows(analyticsQuery.data?.data ?? [])
+      : analyticsQuery.data?.data ?? [];
     const trendData = rawTrend.map((row) => ({
-      name: row.label ? String(row.label) : row.time_bucket ? formatBucket(String(row.time_bucket)) : 'Tổng',
+      name: row.time_bucket ? formatBucket(String(row.time_bucket)) : getRowGroupLabel(row, config.groupBy),
       value: row.value,
     }));
 
@@ -329,7 +383,12 @@ export function DashboardWidget({ id, config, onSettingsClick }: DashboardWidget
               {config.info1 && <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />}
               <XAxis dataKey="name" tickLine={false} axisLine={false} minTickGap={24} />
               {config.info2 && <YAxis tickLine={false} axisLine={false} width={44} tickFormatter={formatNumberWithSuffix} />}
-              {config.info3 && <Tooltip {...darkTooltipProps} formatter={(value: any) => [formatNumberWithSuffix(Number(value)), 'Số lượng']} />}
+              {config.info3 && (
+                <Tooltip
+                  {...darkTooltipProps}
+                  formatter={(value) => [formatMetricValue(Number(value), config.metric), metricLabels[config.metric]]}
+                />
+              )}
               <Area type="monotone" dataKey="value" stroke="#ff2d85" strokeWidth={2} fill={`url(#volume-${id})`} />
             </AreaChart>
           </ResponsiveContainer>
@@ -344,7 +403,12 @@ export function DashboardWidget({ id, config, onSettingsClick }: DashboardWidget
               {config.info1 && <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />}
               <XAxis dataKey="name" tickLine={false} axisLine={false} />
               {config.info2 && <YAxis tickLine={false} axisLine={false} width={44} tickFormatter={formatNumberWithSuffix} />}
-              {config.info3 && <Tooltip {...darkTooltipProps} formatter={(value: any) => [formatNumberWithSuffix(Number(value)), 'Số lượng']} />}
+              {config.info3 && (
+                <Tooltip
+                  {...darkTooltipProps}
+                  formatter={(value) => [formatMetricValue(Number(value), config.metric), metricLabels[config.metric]]}
+                />
+              )}
               <Bar dataKey="value" fill="#0f766e" radius={[3, 3, 0, 0]}>
                 {trendData.map((entry, index) => (
                   <Cell key={entry.name} fill={index === trendData.length - 2 ? '#ff2d85' : '#0f766e'} />
@@ -356,9 +420,9 @@ export function DashboardWidget({ id, config, onSettingsClick }: DashboardWidget
       );
     }
   } else if (isPie) {
-    const rawSeverity = severityQuery.data?.data ?? [];
+    const rawSeverity = analyticsQuery.data?.data ?? [];
     const severityData = rawSeverity.map((row) => ({
-      name: String(row.severity ?? 'Không xác định'),
+      name: getRowGroupLabel(row, config.groupBy),
       value: row.value,
     }));
     const pieColors = ['#ff2d85', '#00f5d4', '#f8e231', '#7c3aed', '#38bdf8', '#f97316'];
@@ -370,8 +434,21 @@ export function DashboardWidget({ id, config, onSettingsClick }: DashboardWidget
         <div className="h-72">
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
-              {config.info1 && <Tooltip {...darkTooltipProps} formatter={(value: any) => [formatNumberWithSuffix(Number(value)), 'Số lượng']} />}
-              <Pie data={severityData} dataKey="value" nameKey="name" innerRadius={54} outerRadius={92} paddingAngle={1}>
+              {config.info1 && (
+                <Tooltip
+                  {...darkTooltipProps}
+                  formatter={(value) => [formatMetricValue(Number(value), config.metric), metricLabels[config.metric]]}
+                />
+              )}
+              <Pie
+                data={severityData}
+                dataKey="value"
+                nameKey="name"
+                innerRadius={54}
+                outerRadius={92}
+                paddingAngle={1}
+                label={config.info2 ? ({ name }) => String(name) : false}
+              >
                 {severityData.map((entry, index) => (
                   <Cell key={entry.name} fill={pieColors[index % pieColors.length]} />
                 ))}
@@ -382,7 +459,7 @@ export function DashboardWidget({ id, config, onSettingsClick }: DashboardWidget
       );
     }
   } else if (isHeatmap) {
-    const cells = (heatmapQuery.data?.data ?? []) as any[];
+    const cells = (heatmapQuery.data?.data ?? []) as WeekdayHeatmapCell[];
     const max = cells.reduce((current, cell) => Math.max(current, cell.value), 0);
     const dayKeys = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
     const dayLabels = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
@@ -403,11 +480,8 @@ export function DashboardWidget({ id, config, onSettingsClick }: DashboardWidget
         borderColor: 'rgba(255, 45, 133, 0.45)',
         borderWidth: 1,
         textStyle: { color: '#f3edff' },
-        formatter: (params: any) => {
-          const rawValue = params.value;
-          const x = rawValue[0];
-          const y = rawValue[1];
-          const val = rawValue[2];
+        formatter: (params: unknown) => {
+          const [x, y, val] = readHeatmapValue(params);
           const day = dayLabels[x] ?? '';
           const hour = timeRows[y] ?? 0;
           return `<strong style="color:#00f5d4">${day} ${String(hour).padStart(2, '0')}:00</strong><br/>${val.toLocaleString('vi-VN')} cảnh báo`;
@@ -477,7 +551,7 @@ export function DashboardWidget({ id, config, onSettingsClick }: DashboardWidget
                 <tr key={alarm.alarm_id} className="hover:bg-white/[0.03]">
                   {config.info1 && (
                     <td className="border-b border-white/10 px-3 py-3 font-mono text-xs text-[#a69db6]">
-                      {format(parseISO(alarm.time_created), 'HH:mm:ss')}
+                      {format(parseISO(alarm.time_created), 'dd/MM/yyyy HH:mm:ss')}
                     </td>
                   )}
                   {config.info2 && (
@@ -514,6 +588,7 @@ export function DashboardWidget({ id, config, onSettingsClick }: DashboardWidget
             <MoreHorizontal size={20} />
           </button>
         </div>
+        <p className="mt-2 font-mono text-xs text-[#a69db6]">{settingSummary}</p>
       </CardHeader>
       <CardContent>{renderContent}</CardContent>
     </Card>
