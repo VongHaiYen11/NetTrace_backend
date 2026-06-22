@@ -47,7 +47,6 @@ export function WeekdayHeatmap({ data, isLoading, isError }: WeekdayHeatmapProps
       borderWidth: 1,
       textStyle: {
         color: '#f3edff',
-        fontFamily: 'Inter, ui-sans-serif, system-ui',
       },
       formatter: (params: unknown) => {
         const [x, y, value] = readHeatmapValue(params);
@@ -79,7 +78,6 @@ export function WeekdayHeatmap({ data, isLoading, isError }: WeekdayHeatmapProps
       axisTick: { show: false },
       axisLabel: {
         color: '#a69db6',
-        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
         fontSize: 11,
       },
     },
@@ -96,7 +94,6 @@ export function WeekdayHeatmap({ data, isLoading, isError }: WeekdayHeatmapProps
       axisTick: { show: false },
       axisLabel: {
         color: '#a69db6',
-        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
         fontSize: 11,
       },
     },

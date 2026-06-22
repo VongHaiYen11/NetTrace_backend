@@ -4,6 +4,7 @@ declare const _default: {
         extend: {
             fontFamily: {
                 sans: string;
+                heading: string;
                 mono: string;
             };
             colors: {

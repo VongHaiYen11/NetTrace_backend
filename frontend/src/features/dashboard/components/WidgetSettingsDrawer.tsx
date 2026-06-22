@@ -6,6 +6,8 @@ import { Button } from '../../../components/ui/Button';
 import { Field, Input, Select } from '../../../components/ui/Field';
 import type { GroupBy, Metric, TimeBucket } from '../../../services/generated/nettrace-api';
 
+type HeatmapMode = 'weekday' | 'calendar';
+
 export type WidgetKind =
   | 'kpi-count'
   | 'kpi-devices'
@@ -23,6 +25,7 @@ export interface WidgetSettingsValues {
   metric: Metric;
   groupBy: 'none' | GroupBy;
   timeBucket: TimeBucket;
+  heatmapMode: HeatmapMode;
   info1: boolean;
   info2: boolean;
   info3: boolean;
@@ -52,6 +55,23 @@ function formatDisplayDate(value: string) {
   }
 }
 
+function getCurrentIsoDate() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function getYearFromDate(value: string) {
+  return value?.slice(0, 4) || String(new Date().getFullYear());
+}
+
+function getYearDateRange(yearValue: string) {
+  const year = Number(yearValue) || new Date().getFullYear();
+  const currentYear = new Date().getFullYear();
+  return {
+    startDate: `${year}-01-01`,
+    endDate: year === currentYear ? getCurrentIsoDate() : `${year}-12-31`,
+  };
+}
+
 export function WidgetSettingsDrawer({
   isOpen,
   onClose,
@@ -71,6 +91,7 @@ export function WidgetSettingsDrawer({
   const visible = watch('visible');
   const selectedChartType = watch('chartType');
   const selectedGroupBy = watch('groupBy');
+  const selectedHeatmapMode = watch('heatmapMode');
   const startDate = watch('startDate');
   const endDate = watch('endDate');
   const info1 = watch('info1');
@@ -86,12 +107,16 @@ export function WidgetSettingsDrawer({
 
   function onSubmit(values: WidgetSettingsValues) {
     const selectedGroup = values.groupBy ?? initialValues.groupBy;
+    const calendarRange = values.chartType === 'heatmap' && values.heatmapMode === 'calendar'
+      ? getYearDateRange(getYearFromDate(values.startDate || initialValues.startDate))
+      : null;
     const normalizedValues = {
       ...values,
-      startDate: values.startDate || initialValues.startDate || '2026-06-01',
-      endDate: values.endDate || initialValues.endDate || '2026-06-30',
+      startDate: calendarRange?.startDate ?? (values.startDate || initialValues.startDate || '2026-06-01'),
+      endDate: calendarRange?.endDate ?? (values.endDate || initialValues.endDate || '2026-06-30'),
       metric: values.metric ?? initialValues.metric,
       timeBucket: values.timeBucket ?? initialValues.timeBucket,
+      heatmapMode: values.heatmapMode ?? initialValues.heatmapMode ?? 'weekday',
       groupBy: values.chartType === 'line' || values.chartType === 'table' || values.chartType === 'heatmap'
         ? 'none'
         : values.chartType === 'pie' && selectedGroup === 'none'
@@ -105,28 +130,16 @@ export function WidgetSettingsDrawer({
   const isKpiWidget = widgetKind.startsWith('kpi');
 
   const chartTypes = [
-    { id: 'line', label: 'ĐƯỜNG', icon: TrendingUp },
-    { id: 'bar', label: 'CỘT', icon: BarChart3 },
-    { id: 'pie', label: 'TRÒN', icon: PieChart },
-    { id: 'table', label: 'BẢNG', icon: Table },
-    { id: 'heatmap', label: 'BẢN ĐỒ NHIỆT', icon: Grid },
+    { id: 'line', label: 'Đường', icon: TrendingUp },
+    { id: 'bar', label: 'Cột', icon: BarChart3 },
+    { id: 'pie', label: 'Tròn', icon: PieChart },
+    { id: 'table', label: 'Bảng', icon: Table },
+    { id: 'heatmap', label: 'Bản đồ nhiệt', icon: Grid },
   ] as const;
 
-  const chartTypesByWidget: Record<WidgetKind, Array<WidgetSettingsValues['chartType']>> = {
-    'kpi-count': [],
-    'kpi-devices': [],
-    'kpi-status': [],
-    'chart-trend': ['line', 'bar'],
-    'chart-severity': ['pie', 'bar'],
-    'chart-weekly': ['bar', 'line'],
-    'chart-heatmap': ['heatmap'],
-    'chart-extra': ['bar', 'line', 'pie', 'heatmap', 'table'],
-    'table-alarms': ['table'],
-  };
+  const allowedChartTypes = isKpiWidget ? [] : chartTypes.map((type) => type.id);
 
-  const allowedChartTypes = chartTypesByWidget[widgetKind];
-
-  const infoOptionsByWidget: Record<WidgetKind, Array<{ name: 'info1' | 'info2' | 'info3'; label: string; checked: boolean }>> = {
+  const kpiInfoOptionsByWidget: Record<WidgetKind, Array<{ name: 'info1' | 'info2' | 'info3'; label: string; checked: boolean }>> = {
     'kpi-count': [
       { name: 'info1', label: 'Hiển thị trạng thái mở / đóng', checked: info1 },
       { name: 'info2', label: 'Hiển thị biểu tượng', checked: info2 },
@@ -139,40 +152,75 @@ export function WidgetSettingsDrawer({
       { name: 'info1', label: 'Hiển thị số cảnh báo nghiêm trọng', checked: info1 },
       { name: 'info2', label: 'Hiển thị biểu tượng', checked: info2 },
     ],
-    'chart-trend': [
+    'chart-trend': [],
+    'chart-severity': [],
+    'chart-weekly': [],
+    'chart-heatmap': [],
+    'chart-extra': [],
+    'table-alarms': [],
+  };
+
+  const displayOptionsByChart: Record<WidgetSettingsValues['chartType'], Array<{ name: 'info1' | 'info2' | 'info3'; label: string; checked: boolean }>> = {
+    line: [
       { name: 'info1', label: 'Hiển thị lưới nền', checked: info1 },
       { name: 'info2', label: 'Hiển thị trục giá trị', checked: info2 },
       { name: 'info3', label: 'Hiển thị tooltip khi hover', checked: info3 },
     ],
-    'chart-severity': [
+    bar: [
+      { name: 'info1', label: 'Hiển thị lưới nền', checked: info1 },
+      { name: 'info2', label: 'Hiển thị trục giá trị', checked: info2 },
+      { name: 'info3', label: 'Hiển thị tooltip khi hover', checked: info3 },
+    ],
+    pie: [
       { name: 'info1', label: 'Hiển thị tooltip khi hover', checked: info1 },
       { name: 'info2', label: 'Hiển thị nhãn nhóm', checked: info2 },
     ],
-    'chart-weekly': [
-      { name: 'info1', label: 'Hiển thị lưới nền', checked: info1 },
-      { name: 'info2', label: 'Hiển thị trục giá trị', checked: info2 },
-      { name: 'info3', label: 'Hiển thị tooltip khi hover', checked: info3 },
-    ],
-    'chart-heatmap': [
+    heatmap: [
       { name: 'info1', label: 'Hiển thị tooltip khi hover', checked: info1 },
       { name: 'info2', label: 'Hiển thị nhãn thời gian / ngày', checked: info2 },
     ],
-    'chart-extra': [
-      { name: 'info1', label: 'Hiển thị lưới hoặc tooltip', checked: info1 },
-      { name: 'info2', label: 'Hiển thị trục hoặc nhãn nhóm', checked: info2 },
-      { name: 'info3', label: 'Hiển thị tooltip khi hover', checked: info3 },
-    ],
-    'table-alarms': [
+    table: [
       { name: 'info1', label: 'Cột thời gian', checked: info1 },
       { name: 'info2', label: 'Cột mã lỗi', checked: info2 },
       { name: 'info3', label: 'Cột trạng thái', checked: info3 },
     ],
   };
 
-  const infoOptions = infoOptionsByWidget[widgetKind];
+  const infoOptions = isKpiWidget ? kpiInfoOptionsByWidget[widgetKind] : displayOptionsByChart[selectedChartType];
   const canGroup = selectedChartType === 'pie' || selectedChartType === 'bar';
   const canUseTimeBucket = selectedChartType === 'line' || (selectedChartType === 'bar' && selectedGroupBy === 'none');
+  const canUseMetric = selectedChartType === 'line' || selectedChartType === 'bar' || selectedChartType === 'pie';
   const dateRangeLabel = `${formatDisplayDate(startDate)} - ${formatDisplayDate(endDate)}`;
+  const heatmapModeLabel = selectedHeatmapMode === 'calendar' ? 'Bản đồ theo năm' : 'Bản đồ theo tuần';
+  const selectedYear = getYearFromDate(startDate);
+
+  function selectChartType(type: WidgetSettingsValues['chartType']) {
+    setValue('chartType', type);
+    if (type === 'line' || type === 'table' || type === 'heatmap') {
+      setValue('groupBy', 'none');
+    }
+    if (type === 'pie' && selectedGroupBy === 'none') {
+      setValue('groupBy', 'severity');
+    }
+    if (type === 'heatmap' && !selectedHeatmapMode) {
+      setValue('heatmapMode', 'weekday');
+    }
+  }
+
+  function selectHeatmapMode(mode: HeatmapMode) {
+    setValue('heatmapMode', mode);
+    if (mode === 'calendar') {
+      const range = getYearDateRange(getYearFromDate(startDate));
+      setValue('startDate', range.startDate);
+      setValue('endDate', range.endDate);
+    }
+  }
+
+  function selectCalendarYear(year: string) {
+    const range = getYearDateRange(year);
+    setValue('startDate', range.startDate);
+    setValue('endDate', range.endDate);
+  }
 
   return (
     <>
@@ -184,17 +232,36 @@ export function WidgetSettingsDrawer({
       <aside className="fixed bottom-0 right-0 top-0 z-50 flex w-[360px] max-w-[calc(100vw-1rem)] flex-col border-l border-white/10 bg-[#151421] text-[#f3edff] shadow-2xl">
         <div className="flex items-center justify-between border-b border-[#ff2d85]/30 px-6 py-5">
           <div>
-            <h2 className="text-lg font-black text-[#f3edff] drop-shadow-[0_0_10px_rgba(255,45,133,0.55)]">
-              Chi tiết widget
+            <h2 className="text-2xl font-black text-[#f3edff] drop-shadow-[0_0_14px_rgba(255,45,133,0.7)]">
+              Cấu hình widget
             </h2>
-            <p className="mt-1 font-mono text-xs text-[#a69db6]">{widgetTitle}</p>
+            <p className="mt-1 font-mono text-sm font-bold text-[#a69db6]">{widgetTitle}</p>
           </div>
-          <button
-            onClick={onClose}
-            className="rounded p-1.5 text-[#ff2d85] transition hover:bg-[#ff2d85]/10"
-          >
-            <X size={20} />
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              aria-checked={visible}
+              title={visible ? 'Đang hiển thị trên dashboard' : 'Đang ẩn khỏi dashboard'}
+              onClick={() => setValue('visible', !visible)}
+              className={`flex h-10 w-10 items-center justify-center rounded border transition ${
+                visible
+                  ? 'border-[#00f5d4]/50 bg-[#00f5d4]/10 text-[#00f5d4] shadow-[0_0_16px_rgba(0,245,212,0.25)]'
+                  : 'border-[#ff2d85]/50 bg-[#ff2d85]/10 text-[#ff2d85] shadow-[0_0_16px_rgba(255,45,133,0.25)]'
+              }`}
+            >
+              {visible ? (
+                <Eye size={18} />
+              ) : (
+                <EyeOff size={18} />
+              )}
+            </button>
+            <button
+              onClick={onClose}
+              className="rounded p-1.5 text-[#ff2d85] transition hover:bg-[#ff2d85]/10"
+            >
+              <X size={20} />
+            </button>
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto px-6 py-6">
@@ -204,7 +271,7 @@ export function WidgetSettingsDrawer({
               <span className="absolute -right-px -top-px h-3 w-3 border-r-2 border-t-2 border-[#ff2d85]" />
               <span className="absolute -bottom-px -left-px h-3 w-3 border-b-2 border-l-2 border-[#00f5d4]" />
               <span className="absolute -bottom-px -right-px h-3 w-3 border-b-2 border-r-2 border-[#ff2d85]" />
-              <Field label="Tiện ích đang chỉnh">
+              <Field label="Widget đang chỉnh">
                 <Select
                   value={activeWidgetId}
                   onChange={(event) => onWidgetChange(event.target.value)}
@@ -218,36 +285,12 @@ export function WidgetSettingsDrawer({
               </Field>
             </div>
 
-            <button
-              type="button"
-              onClick={() => setValue('visible', !visible)}
-              className={`relative flex items-center justify-between border p-4 text-left transition ${
-                visible
-                  ? 'border-[#00f5d4]/50 bg-[#00f5d4]/5 text-[#f3edff]'
-                  : 'border-[#ff2d85]/60 bg-[#ff2d85]/10 text-[#f3edff]'
-              }`}
-            >
-              <span className="absolute -left-px -bottom-px h-3 w-3 border-b-2 border-l-2 border-[#00f5d4]" />
-              <span className="absolute -right-px -top-px h-3 w-3 border-r-2 border-t-2 border-[#ff2d85]" />
-              <span className="flex items-center gap-2 font-mono text-sm">
-                {visible ? <Eye size={16} /> : <EyeOff size={16} />}
-                {visible ? 'Đang hiển thị trên dashboard' : 'Đang ẩn khỏi dashboard'}
-              </span>
-              <div
-                className={`flex h-5 w-5 items-center justify-center rounded transition ${
-                  visible ? 'bg-[#00f5d4] text-[#0c0b14]' : 'border border-white/20 bg-transparent'
-                }`}
-              >
-                {visible && <Check size={14} strokeWidth={3} />}
-              </div>
-            </button>
-
             {!isKpiWidget ? (
               <div className="relative border border-[#2b2740] bg-[#191727] p-4">
                 <span className="absolute -left-px -top-px h-3 w-3 border-l-2 border-t-2 border-[#00f5d4]" />
                 <span className="absolute -right-px -bottom-px h-3 w-3 border-b-2 border-r-2 border-[#ff2d85]" />
-                <span className="text-xs font-semibold uppercase tracking-wide text-[#00f5d4]">
-                  Loại biểu đồ
+                <span className="text-sm font-semibold tracking-normal text-[#00f5d4]">
+                  Dạng hiển thị
                 </span>
                 <div className="mt-3 grid grid-cols-2 gap-3">
                   {chartTypes
@@ -259,7 +302,7 @@ export function WidgetSettingsDrawer({
                       <button
                         key={type.id}
                         type="button"
-                        onClick={() => setValue('chartType', type.id)}
+                        onClick={() => selectChartType(type.id)}
                         className={`flex min-h-[86px] flex-col items-center justify-center border p-3 transition ${
                           isSelected
                             ? 'border-[#ff2d85] bg-[#ff2d85]/10 text-[#ff2d85] shadow-[0_0_18px_rgba(255,45,133,0.24)]'
@@ -267,7 +310,7 @@ export function WidgetSettingsDrawer({
                         }`}
                       >
                         <Icon size={20} />
-                        <span className="mt-2 font-mono text-[10px] font-bold tracking-normal">
+                        <span className="mt-2 font-mono text-sm font-bold tracking-normal">
                           {type.label}
                         </span>
                       </button>
@@ -277,50 +320,72 @@ export function WidgetSettingsDrawer({
               </div>
             ) : null}
 
-            {!isKpiWidget && ['line', 'bar', 'pie'].includes(selectedChartType) ? (
+            {!isKpiWidget && canUseMetric ? (
+              <div className="relative space-y-4 border border-[#2b2740] bg-[#191727] p-4">
+                <span className="absolute -left-px -top-px h-3 w-3 border-l-2 border-t-2 border-[#00f5d4]" />
+                <span className="absolute -right-px -top-px h-3 w-3 border-r-2 border-t-2 border-[#ff2d85]" />
+                <span className="absolute -left-px -bottom-px h-3 w-3 border-b-2 border-l-2 border-[#00f5d4]" />
+                <span className="absolute -right-px -bottom-px h-3 w-3 border-b-2 border-r-2 border-[#ff2d85]" />
+                <Field label="Dữ liệu muốn xem">
+                  <Select {...register('metric')}>
+                    <option value="count">Số lượng cảnh báo</option>
+                    <option value="avg_duration">Thời gian xử lý trung bình</option>
+                    <option value="max_duration">Thời gian xử lý lâu nhất</option>
+                    <option value="affected_devices">Thiết bị bị ảnh hưởng</option>
+                  </Select>
+                </Field>
+
+                {canGroup ? (
+                  <Field label={selectedChartType === 'pie' ? 'Chia lát theo' : 'Nhóm dữ liệu theo'}>
+                    <Select {...register('groupBy')}>
+                      {selectedChartType === 'bar' ? <option value="none">Không phân nhóm (theo thời gian)</option> : null}
+                      <option value="severity">Theo mức độ nghiêm trọng</option>
+                      <option value="status">Theo trạng thái</option>
+                      <option value="error_code">Theo mã lỗi</option>
+                      <option value="device">Theo thiết bị</option>
+                      <option value="device_type">Theo loại thiết bị</option>
+                      <option value="vendor">Theo nhà cung cấp</option>
+                      <option value="station">Theo trạm</option>
+                      <option value="province">Theo tỉnh thành</option>
+                    </Select>
+                  </Field>
+                ) : null}
+
+                {canUseTimeBucket ? (
+                  <Field label="Mốc thời gian">
+                    <Select {...register('timeBucket')}>
+                      <option value="hour">Theo giờ</option>
+                      <option value="day">Theo ngày</option>
+                      <option value="week">Theo tuần</option>
+                      <option value="month">Theo tháng</option>
+                      <option value="year">Theo năm</option>
+                    </Select>
+                  </Field>
+                ) : null}
+              </div>
+            ) : null}
+
+            {!isKpiWidget && selectedChartType === 'heatmap' ? (
               <div className="relative space-y-4 border border-[#2b2740] bg-[#191727] p-4">
                 <span className="absolute -left-px -bottom-px h-3 w-3 border-b-2 border-l-2 border-[#00f5d4]" />
                 <span className="absolute -right-px -top-px h-3 w-3 border-r-2 border-t-2 border-[#ff2d85]" />
-                <Field label="Kịch bản thông tin từ API">
-                  <Select {...register('metric')}>
-                    <option value="count">Số lượng cảnh báo (Count)</option>
-                    <option value="avg_duration">Thời gian xử lý trung bình (Avg Duration)</option>
-                    <option value="max_duration">Thời gian xử lý tối đa (Max Duration)</option>
-                    <option value="affected_devices">Số thiết bị ảnh hưởng (Affected Devices)</option>
+                <Field label="Kiểu bản đồ">
+                  <Select value={selectedHeatmapMode} onChange={(event) => selectHeatmapMode(event.target.value as HeatmapMode)}>
+                    <option value="weekday">Bản đồ theo tuần</option>
+                    <option value="calendar">Bản đồ theo năm</option>
                   </Select>
                 </Field>
-
-                <Field label="Phân nhóm dữ liệu">
-                  <Select {...register('groupBy')} disabled={!canGroup}>
-                    <option value="none">Không phân nhóm (Over Time)</option>
-                    <option value="severity">Theo mức độ nghiêm trọng (Severity)</option>
-                    <option value="status">Theo trạng thái (Status)</option>
-                    <option value="error_code">Theo mã lỗi (Error Code)</option>
-                    <option value="device">Theo thiết bị (Device)</option>
-                    <option value="device_type">Theo loại thiết bị (Device Type)</option>
-                    <option value="vendor">Theo nhà cung cấp (Vendor)</option>
-                    <option value="station">Theo trạm (Station)</option>
-                    <option value="province">Theo tỉnh thành (Province)</option>
-                  </Select>
-                </Field>
-
-                <Field label="Độ chia thời gian">
-                  <Select {...register('timeBucket')} disabled={!canUseTimeBucket}>
-                    <option value="hour">Theo giờ</option>
-                    <option value="day">Theo ngày</option>
-                    <option value="week">Theo tuần</option>
-                    <option value="month">Theo tháng</option>
-                    <option value="year">Theo năm</option>
-                  </Select>
-                </Field>
+                <p className="font-mono text-xs text-[#a69db6]">
+                  {heatmapModeLabel} sẽ tổng hợp dữ liệu theo cách tương ứng.
+                </p>
               </div>
             ) : null}
 
             <div className="relative border border-[#2b2740] bg-[#191727] p-4">
               <span className="absolute -left-px -top-px h-3 w-3 border-l-2 border-t-2 border-[#00f5d4]" />
               <span className="absolute -right-px -bottom-px h-3 w-3 border-b-2 border-r-2 border-[#ff2d85]" />
-              <span className="text-xs font-semibold uppercase tracking-wide text-[#00f5d4]">
-                {isKpiWidget ? 'Thông tin hiển thị' : 'Thông tin phù hợp'}
+              <span className="text-sm font-semibold tracking-normal text-[#00f5d4]">
+                {isKpiWidget ? 'Chi tiết hiển thị' : 'Tùy chọn hiển thị'}
               </span>
               <div className="mt-3 flex flex-col gap-2.5">
                 {infoOptions.map((item) => (
@@ -352,20 +417,46 @@ export function WidgetSettingsDrawer({
             <div className="relative border border-[#2b2740] bg-[#191727] p-4">
               <span className="absolute -left-px -bottom-px h-3 w-3 border-b-2 border-l-2 border-[#00f5d4]" />
               <span className="absolute -right-px -top-px h-3 w-3 border-r-2 border-t-2 border-[#ff2d85]" />
-              <span className="text-xs font-semibold uppercase tracking-wide text-[#00f5d4]">
-                Khoảng thời gian
-              </span>
-              <p className="mt-2 border border-[#2b2740] bg-[#151421] px-3 py-2 font-mono text-xs text-[#f3edff]">
-                {dateRangeLabel}
-              </p>
-              <div className="mt-4 space-y-3">
-                <Field label="Ngày bắt đầu">
-                  <Input type="date" {...register('startDate')} />
-                </Field>
-                <Field label="Ngày kết thúc">
-                  <Input type="date" {...register('endDate')} />
-                </Field>
-              </div>
+              {selectedChartType === 'heatmap' && selectedHeatmapMode === 'calendar' ? (
+                <>
+                  <span className="text-sm font-semibold tracking-normal text-[#00f5d4]">
+                    Năm hiển thị
+                  </span>
+                  <p className="mt-2 border border-[#2b2740] bg-[#151421] px-3 py-2 font-mono text-xs text-[#f3edff]">
+                    {selectedYear === String(new Date().getFullYear())
+                      ? `${selectedYear} · từ 01/01 đến hôm nay`
+                      : `${selectedYear} · từ 01/01 đến 31/12`}
+                  </p>
+                  <div className="mt-4">
+                    <Field label="Chọn năm">
+                      <Input
+                        type="number"
+                        min="2020"
+                        max={String(new Date().getFullYear())}
+                        value={selectedYear}
+                        onChange={(event) => selectCalendarYear(event.target.value)}
+                      />
+                    </Field>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <span className="text-sm font-semibold tracking-normal text-[#00f5d4]">
+                    Khoảng thời gian
+                  </span>
+                  <p className="mt-2 border border-[#2b2740] bg-[#151421] px-3 py-2 font-mono text-xs text-[#f3edff]">
+                    {dateRangeLabel}
+                  </p>
+                  <div className="mt-4 space-y-3">
+                    <Field label="Ngày bắt đầu">
+                      <Input type="date" {...register('startDate')} />
+                    </Field>
+                    <Field label="Ngày kết thúc">
+                      <Input type="date" {...register('endDate')} />
+                    </Field>
+                  </div>
+                </>
+              )}
             </div>
 
             <div>
@@ -373,7 +464,7 @@ export function WidgetSettingsDrawer({
                 type="submit"
                 className="h-14 w-full rounded-full border-none bg-gradient-to-r from-[#ff2d85] to-[#9f0645] text-white shadow-[0_0_28px_rgba(255,45,133,0.46)]"
               >
-                Lưu chi tiết widget
+                Lưu cấu hình
               </Button>
             </div>
           </form>

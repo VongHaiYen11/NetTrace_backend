@@ -21,7 +21,13 @@ import { Card, CardContent, CardHeader } from '../../../components/ui/Card';
 import { Badge } from '../../../components/ui/Badge';
 import { StateBlock } from '../../../components/shared/StateBlock';
 import { nettraceApi } from '../../../services/generated/nettrace-api';
-import type { AnalyticsRow, GroupBy, Metric, WeekdayHeatmapCell } from '../../../services/generated/nettrace-api';
+import type {
+  AnalyticsRow,
+  CalendarHeatmapCell,
+  GroupBy,
+  Metric,
+  WeekdayHeatmapCell,
+} from '../../../services/generated/nettrace-api';
 import type { WidgetSettingsValues } from './WidgetSettingsDrawer';
 
 interface DashboardWidgetProps {
@@ -81,6 +87,27 @@ function formatBucket(value: string) {
   }
 }
 
+function formatDisplayHeatmapDate(value: string) {
+  try {
+    return format(parseISO(value), 'dd/MM/yyyy');
+  } catch {
+    return value;
+  }
+}
+
+function getCurrentIsoDate() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function getCalendarYearRange(startDate: string) {
+  const year = Number(startDate.slice(0, 4)) || new Date().getFullYear();
+  const currentYear = new Date().getFullYear();
+  return {
+    from_time: `${year}-01-01`,
+    to_time: year === currentYear ? getCurrentIsoDate() : `${year}-12-31`,
+  };
+}
+
 function getTimeBucketMs(row: AnalyticsRow) {
   if (!row.time_bucket) return Number.POSITIVE_INFINITY;
   const parsed = Date.parse(String(row.time_bucket).replace(' ', 'T'));
@@ -130,6 +157,11 @@ const timeBucketLabels: Record<WidgetSettingsValues['timeBucket'], string> = {
   year: 'năm',
 };
 
+const heatmapModeLabels: Record<WidgetSettingsValues['heatmapMode'], string> = {
+  weekday: 'theo tuần',
+  calendar: 'theo năm',
+};
+
 function getRowGroupLabel(row: AnalyticsRow, groupBy: WidgetSettingsValues['groupBy']) {
   if (groupBy === 'none') return row.label ? String(row.label) : 'Tổng';
   const value = row[groupBy];
@@ -157,6 +189,17 @@ function readHeatmapValue(params: unknown) {
   return [x || 0, y || 0, value || 0] as const;
 }
 
+function readCalendarHeatmapValue(params: unknown) {
+  if (!params || typeof params !== 'object' || !('value' in params)) {
+    return ['', 0] as const;
+  }
+  const rawValue = (params as { value?: unknown }).value;
+  if (!Array.isArray(rawValue)) {
+    return ['', 0] as const;
+  }
+  return [String(rawValue[0] ?? ''), Number(rawValue[1] ?? 0)] as const;
+}
+
 export function DashboardWidget({ id, config, onSettingsClick }: DashboardWidgetProps) {
   if (!config.visible) return null;
 
@@ -174,16 +217,22 @@ export function DashboardWidget({ id, config, onSettingsClick }: DashboardWidget
   const shouldBucketByTime = config.chartType === 'line' || (config.chartType === 'bar' && !hasGroupBy);
   const analyticsTimeBucket = shouldBucketByTime ? config.timeBucket : null;
 
-  const dateFilters = {
-    from_time: config.startDate,
-    to_time: config.endDate,
-  };
+  const dateFilters =
+    isHeatmap && config.heatmapMode === 'calendar'
+      ? getCalendarYearRange(config.startDate)
+      : {
+          from_time: config.startDate,
+          to_time: config.endDate,
+        };
   const settingSummary = [
     chartTypeLabels[config.chartType],
     !isSummary && isAnalyticsChart ? metricLabels[config.metric] : null,
     !isSummary && hasGroupBy && config.groupBy !== 'none' ? groupLabels[config.groupBy] : null,
     !isSummary && shouldBucketByTime ? `theo ${timeBucketLabels[config.timeBucket]}` : null,
-    `${config.startDate} - ${config.endDate}`,
+    !isSummary && isHeatmap ? heatmapModeLabels[config.heatmapMode] : null,
+    !isSummary && isHeatmap && config.heatmapMode === 'calendar'
+      ? `Năm ${dateFilters.from_time.slice(0, 4)}`
+      : `${config.startDate} - ${config.endDate}`,
   ].filter(Boolean).join(' · ');
 
   // Queries
@@ -215,10 +264,10 @@ export function DashboardWidget({ id, config, onSettingsClick }: DashboardWidget
   });
 
   const heatmapQuery = useQuery({
-    queryKey: ['heatmap', id, dateFilters],
+    queryKey: ['heatmap', id, dateFilters, config.heatmapMode],
     queryFn: () =>
       nettraceApi.heatmap({
-        mode: 'weekday',
+        mode: config.heatmapMode,
         filters: dateFilters,
       }),
     enabled: isHeatmap,
@@ -363,7 +412,9 @@ export function DashboardWidget({ id, config, onSettingsClick }: DashboardWidget
       ? getSortedTrendRows(analyticsQuery.data?.data ?? [])
       : analyticsQuery.data?.data ?? [];
     const trendData = rawTrend.map((row) => ({
-      name: row.time_bucket ? formatBucket(String(row.time_bucket)) : getRowGroupLabel(row, config.groupBy),
+      name: shouldBucketByTime && row.time_bucket
+        ? formatBucket(String(row.time_bucket))
+        : getRowGroupLabel(row, config.groupBy),
       value: row.value,
     }));
 
@@ -459,68 +510,124 @@ export function DashboardWidget({ id, config, onSettingsClick }: DashboardWidget
       );
     }
   } else if (isHeatmap) {
-    const cells = (heatmapQuery.data?.data ?? []) as WeekdayHeatmapCell[];
-    const max = cells.reduce((current, cell) => Math.max(current, cell.value), 0);
-    const dayKeys = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-    const dayLabels = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
-    const timeRows = [0, 6, 12, 18];
-
-    const byKey = new Map(cells.map((cell) => [`${cell.y}-${cell.x}`, cell.value]));
-    const heatmapData = timeRows.flatMap((hour, yIndex) =>
-      dayKeys.map((day, xIndex) => [xIndex, yIndex, byKey.get(`${day}-${hour}`) ?? 0]),
-    );
-
-    const option: EChartsOption = {
-      backgroundColor: 'transparent',
-      animation: true,
-      tooltip: {
-        show: config.info1,
-        position: 'top',
-        backgroundColor: '#0c0b14',
-        borderColor: 'rgba(255, 45, 133, 0.45)',
-        borderWidth: 1,
-        textStyle: { color: '#f3edff' },
-        formatter: (params: unknown) => {
-          const [x, y, val] = readHeatmapValue(params);
-          const day = dayLabels[x] ?? '';
-          const hour = timeRows[y] ?? 0;
-          return `<strong style="color:#00f5d4">${day} ${String(hour).padStart(2, '0')}:00</strong><br/>${val.toLocaleString('vi-VN')} cảnh báo`;
-        },
-      },
-      grid: { left: 48, right: 16, top: 12, bottom: 24, containLabel: false },
-      xAxis: {
-        type: 'category',
-        data: dayLabels,
-        axisLine: { show: false },
-        axisTick: { show: false },
-        axisLabel: { show: config.info2, color: '#a69db6', fontSize: 11 },
-      },
-      yAxis: {
-        type: 'category',
-        data: timeRows.map((hour) => `${String(hour).padStart(2, '0')}:00`),
-        axisLine: { show: false },
-        axisTick: { show: false },
-        axisLabel: { show: config.info2, color: '#a69db6', fontSize: 11 },
-      },
-      visualMap: {
-        show: false,
-        min: 0,
-        max,
-        inRange: { color: ['#211326', '#3b1835', '#7f1d52', '#c72570', '#ff2d85'] },
-      },
-      series: [
-        {
-          type: 'heatmap',
-          data: heatmapData,
-          label: { show: false },
-          itemStyle: { borderColor: '#151421', borderWidth: 3, borderRadius: 2 },
-        },
-      ],
-    };
+    const cells = heatmapQuery.data?.data ?? [];
 
     if (cells.length === 0) {
       renderContent = <StateBlock title="Chưa có dữ liệu" description="Chưa có ô mật độ nào được trả về." />;
+    } else if (config.heatmapMode === 'calendar') {
+      const calendarCells = cells as CalendarHeatmapCell[];
+      const max = calendarCells.reduce((current, cell) => Math.max(current, cell.value), 0);
+      const option: EChartsOption = {
+        backgroundColor: 'transparent',
+        animation: true,
+        tooltip: {
+          show: config.info1,
+          position: 'top',
+          backgroundColor: '#0c0b14',
+          borderColor: 'rgba(255, 45, 133, 0.45)',
+          borderWidth: 1,
+          textStyle: { color: '#f3edff' },
+          formatter: (params: unknown) => {
+            const [day, val] = readCalendarHeatmapValue(params);
+            return `<strong style="color:#00f5d4">${formatDisplayHeatmapDate(day)}</strong><br/>${val.toLocaleString('vi-VN')} cảnh báo`;
+          },
+        },
+        visualMap: {
+          show: false,
+          min: 0,
+          max,
+          inRange: { color: ['#211326', '#3b1835', '#7f1d52', '#c72570', '#ff2d85'] },
+        },
+        calendar: {
+          top: 28,
+          left: 36,
+          right: 24,
+          bottom: 22,
+          range: [dateFilters.from_time, dateFilters.to_time],
+          cellSize: ['auto', 18],
+          splitLine: { lineStyle: { color: '#2b2740', width: 1 } },
+          itemStyle: { color: '#151421', borderColor: '#0c0b14', borderWidth: 2 },
+          dayLabel: { show: config.info2, color: '#a69db6', nameMap: ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'] },
+          monthLabel: { show: config.info2, color: '#a69db6', nameMap: 'vi' },
+          yearLabel: { show: false },
+        },
+        series: [
+          {
+            type: 'heatmap',
+            coordinateSystem: 'calendar',
+            data: calendarCells.map((cell) => [cell.day, cell.value]),
+            itemStyle: { borderRadius: 2 },
+          },
+        ],
+      };
+      renderContent = (
+        <ReactECharts
+          option={option}
+          notMerge
+          lazyUpdate
+          style={{ height: 260, width: '100%' }}
+          opts={{ renderer: 'canvas' }}
+        />
+      );
     } else {
+      const weekdayCells = cells as WeekdayHeatmapCell[];
+      const max = weekdayCells.reduce((current, cell) => Math.max(current, cell.value), 0);
+      const dayKeys = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+      const dayLabels = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
+      const timeRows = [0, 6, 12, 18];
+
+      const byKey = new Map(weekdayCells.map((cell) => [`${cell.y}-${cell.x}`, cell.value]));
+      const heatmapData = timeRows.flatMap((hour, yIndex) =>
+        dayKeys.map((day, xIndex) => [xIndex, yIndex, byKey.get(`${day}-${hour}`) ?? 0]),
+      );
+
+      const option: EChartsOption = {
+        backgroundColor: 'transparent',
+        animation: true,
+        tooltip: {
+          show: config.info1,
+          position: 'top',
+          backgroundColor: '#0c0b14',
+          borderColor: 'rgba(255, 45, 133, 0.45)',
+          borderWidth: 1,
+          textStyle: { color: '#f3edff' },
+          formatter: (params: unknown) => {
+            const [x, y, val] = readHeatmapValue(params);
+            const day = dayLabels[x] ?? '';
+            const hour = timeRows[y] ?? 0;
+            return `<strong style="color:#00f5d4">${day} ${String(hour).padStart(2, '0')}:00</strong><br/>${val.toLocaleString('vi-VN')} cảnh báo`;
+          },
+        },
+        grid: { left: 48, right: 16, top: 12, bottom: 24, containLabel: false },
+        xAxis: {
+          type: 'category',
+          data: dayLabels,
+          axisLine: { show: false },
+          axisTick: { show: false },
+          axisLabel: { show: config.info2, color: '#a69db6', fontSize: 11 },
+        },
+        yAxis: {
+          type: 'category',
+          data: timeRows.map((hour) => `${String(hour).padStart(2, '0')}:00`),
+          axisLine: { show: false },
+          axisTick: { show: false },
+          axisLabel: { show: config.info2, color: '#a69db6', fontSize: 11 },
+        },
+        visualMap: {
+          show: false,
+          min: 0,
+          max,
+          inRange: { color: ['#211326', '#3b1835', '#7f1d52', '#c72570', '#ff2d85'] },
+        },
+        series: [
+          {
+            type: 'heatmap',
+            data: heatmapData,
+            label: { show: false },
+            itemStyle: { borderColor: '#151421', borderWidth: 3, borderRadius: 2 },
+          },
+        ],
+      };
       renderContent = (
         <ReactECharts
           option={option}

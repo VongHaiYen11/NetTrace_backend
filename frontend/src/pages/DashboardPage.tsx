@@ -23,6 +23,8 @@ interface WidgetConfig extends WidgetSettingsValues {
   id: string;
   title: string;
   type: WidgetType;
+  layoutOrder: number;
+  layoutSpan: 1 | 2;
 }
 
 export function DashboardPage() {
@@ -31,11 +33,14 @@ export function DashboardPage() {
       id: 'kpi-1',
       type: 'kpi-count',
       title: 'Số lượng cảnh báo',
+      layoutOrder: 0,
+      layoutSpan: 1,
       visible: true,
       chartType: 'line',
       metric: 'count',
       groupBy: 'none',
       timeBucket: 'day',
+      heatmapMode: 'weekday',
       info1: true,
       info2: true,
       info3: true,
@@ -47,11 +52,14 @@ export function DashboardPage() {
       id: 'kpi-2',
       type: 'kpi-devices',
       title: 'Thiết bị bị ảnh hưởng',
+      layoutOrder: 0,
+      layoutSpan: 1,
       visible: true,
       chartType: 'bar',
       metric: 'affected_devices',
       groupBy: 'none',
       timeBucket: 'day',
+      heatmapMode: 'weekday',
       info1: true,
       info2: true,
       info3: true,
@@ -63,11 +71,14 @@ export function DashboardPage() {
       id: 'kpi-3',
       type: 'kpi-status',
       title: 'Trạng thái hiện tại',
+      layoutOrder: 0,
+      layoutSpan: 1,
       visible: true,
       chartType: 'pie',
       metric: 'count',
       groupBy: 'severity',
       timeBucket: 'day',
+      heatmapMode: 'weekday',
       info1: true,
       info2: true,
       info3: true,
@@ -79,11 +90,14 @@ export function DashboardPage() {
       id: 'chart-1',
       type: 'chart-trend',
       title: 'Cảnh báo theo ngày',
+      layoutOrder: 1,
+      layoutSpan: 2,
       visible: true,
       chartType: 'line',
       metric: 'count',
       groupBy: 'none',
       timeBucket: 'day',
+      heatmapMode: 'weekday',
       info1: true,
       info2: true,
       info3: true,
@@ -95,11 +109,14 @@ export function DashboardPage() {
       id: 'chart-2',
       type: 'chart-severity',
       title: 'Phân bố mức độ',
+      layoutOrder: 2,
+      layoutSpan: 1,
       visible: true,
       chartType: 'pie',
       metric: 'count',
       groupBy: 'severity',
       timeBucket: 'day',
+      heatmapMode: 'weekday',
       info1: true,
       info2: true,
       info3: true,
@@ -111,11 +128,14 @@ export function DashboardPage() {
       id: 'chart-3',
       type: 'chart-weekly',
       title: 'Cảnh báo (tuần này)',
+      layoutOrder: 3,
+      layoutSpan: 1,
       visible: true,
       chartType: 'bar',
       metric: 'count',
       groupBy: 'none',
       timeBucket: 'week',
+      heatmapMode: 'weekday',
       info1: true,
       info2: true,
       info3: true,
@@ -127,11 +147,14 @@ export function DashboardPage() {
       id: 'chart-4',
       type: 'chart-heatmap',
       title: 'Bản đồ nhiệt',
+      layoutOrder: 4,
+      layoutSpan: 2,
       visible: true,
       chartType: 'heatmap',
       metric: 'count',
       groupBy: 'none',
       timeBucket: 'day',
+      heatmapMode: 'weekday',
       info1: true,
       info2: true,
       info3: false,
@@ -143,11 +166,14 @@ export function DashboardPage() {
       id: 'table-1',
       type: 'table-alarms',
       title: 'Danh sách cảnh báo',
+      layoutOrder: 5,
+      layoutSpan: 2,
       visible: true,
       chartType: 'table',
       metric: 'count',
       groupBy: 'none',
       timeBucket: 'day',
+      heatmapMode: 'weekday',
       info1: true,
       info2: true,
       info3: true,
@@ -159,11 +185,14 @@ export function DashboardPage() {
       id: 'chart-5',
       type: 'chart-extra',
       title: 'Thiết bị theo khu vực',
+      layoutOrder: 6,
+      layoutSpan: 1,
       visible: false,
       chartType: 'bar',
       metric: 'affected_devices',
       groupBy: 'province',
       timeBucket: 'day',
+      heatmapMode: 'weekday',
       info1: true,
       info2: true,
       info3: true,
@@ -179,6 +208,19 @@ export function DashboardPage() {
   const activeWidget = useMemo(() => {
     return widgets.find((w) => w.id === activeWidgetId);
   }, [widgets, activeWidgetId]);
+
+  const kpiWidgets = useMemo(
+    () => widgets.filter((widget) => widget.type.startsWith('kpi') && widget.visible),
+    [widgets],
+  );
+
+  const visibleLayoutWidgets = useMemo(
+    () =>
+      widgets
+        .filter((widget) => !widget.type.startsWith('kpi') && widget.visible)
+        .sort((a, b) => a.layoutOrder - b.layoutOrder),
+    [widgets],
+  );
 
   function handleApplySettings(newValues: WidgetSettingsValues) {
     if (!activeWidgetId) return;
@@ -207,77 +249,7 @@ export function DashboardPage() {
 
       {/* KPI Cards Grid */}
       <div className="grid gap-6 lg:grid-cols-3">
-        {widgets
-          .filter((w) => w.type.startsWith('kpi') && w.visible)
-          .map((w) => (
-            <DashboardWidget
-              key={w.id}
-              id={w.id}
-              config={w}
-              onSettingsClick={() => setActiveWidgetId(w.id)}
-            />
-          ))}
-      </div>
-
-      {/* Daily Trend & Severity Charts */}
-      <div className="grid gap-6 xl:grid-cols-5">
-        <div className="xl:col-span-3">
-          {widgets
-            .filter((w) => w.id === 'chart-1' && w.visible)
-            .map((w) => (
-              <DashboardWidget
-                key={w.id}
-                id={w.id}
-                config={w}
-                onSettingsClick={() => setActiveWidgetId(w.id)}
-              />
-            ))}
-        </div>
-        <div className="xl:col-span-2">
-          {widgets
-            .filter((w) => w.id === 'chart-2' && w.visible)
-            .map((w) => (
-              <DashboardWidget
-                key={w.id}
-                id={w.id}
-                config={w}
-                onSettingsClick={() => setActiveWidgetId(w.id)}
-              />
-            ))}
-        </div>
-      </div>
-
-      {/* Weekly Trend & Heatmap Charts */}
-      <div className="grid gap-6 xl:grid-cols-5">
-        <div className="xl:col-span-2">
-          {widgets
-            .filter((w) => w.id === 'chart-3' && w.visible)
-            .map((w) => (
-              <DashboardWidget
-                key={w.id}
-                id={w.id}
-                config={w}
-                onSettingsClick={() => setActiveWidgetId(w.id)}
-              />
-            ))}
-        </div>
-        <div className="xl:col-span-3">
-          {widgets
-            .filter((w) => w.id === 'chart-4' && w.visible)
-            .map((w) => (
-              <DashboardWidget
-                key={w.id}
-                id={w.id}
-                config={w}
-                onSettingsClick={() => setActiveWidgetId(w.id)}
-              />
-            ))}
-        </div>
-      </div>
-
-      {widgets
-        .filter((w) => w.id === 'chart-5' && w.visible)
-        .map((w) => (
+        {kpiWidgets.map((w) => (
           <DashboardWidget
             key={w.id}
             id={w.id}
@@ -285,18 +257,19 @@ export function DashboardPage() {
             onSettingsClick={() => setActiveWidgetId(w.id)}
           />
         ))}
+      </div>
 
-      {/* Alarms List Table */}
-      {widgets
-        .filter((w) => w.id === 'table-1' && w.visible)
-        .map((w) => (
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        {visibleLayoutWidgets.map((w) => (
+          <div key={w.id} className={w.layoutSpan === 2 ? 'lg:col-span-2' : undefined}>
           <DashboardWidget
-            key={w.id}
             id={w.id}
             config={w}
             onSettingsClick={() => setActiveWidgetId(w.id)}
           />
-      ))}
+          </div>
+        ))}
+      </div>
 
       <GeneralSettingsDrawer
         isOpen={generalSettingsOpen}

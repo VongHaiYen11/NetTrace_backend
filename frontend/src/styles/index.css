@@ -7,7 +7,7 @@
 :root {
   color: #f3edff;
   background: #07070f;
-  font-family: var(--font-sans);
+  font-family: var(--font-body);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
 }
@@ -19,16 +19,39 @@
 body {
   margin: 0;
   min-width: 320px;
+  font-family: var(--font-body);
   background:
     radial-gradient(circle at top right, rgba(0, 245, 212, 0.08), transparent 28rem),
     radial-gradient(circle at 45% 0, rgba(255, 45, 133, 0.08), transparent 22rem),
     #07070f;
 }
 
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--font-heading);
+}
+
 button,
 input,
 select {
   font: inherit;
+}
+
+input[type="date"] {
+  color-scheme: dark;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  filter:
+    invert(1)
+    drop-shadow(0 0 4px rgba(255, 45, 133, 0.8))
+    drop-shadow(0 0 6px rgba(0, 245, 212, 0.35));
+  opacity: 1;
 }
 
 .recharts-cartesian-axis-tick text,

@@ -5,7 +5,7 @@ import {
   Download,
   LayoutDashboard,
   PanelLeftClose,
-  PanelRightOpen,
+  PanelLeftOpen,
   Search,
   Settings2,
 } from 'lucide-react';
@@ -68,7 +68,7 @@ export function AppLayout() {
               size="icon"
               onClick={() => setSidebarOpen((value) => !value)}
             >
-              {sidebarOpen ? <PanelLeftClose size={18} /> : <PanelRightOpen size={18} />}
+              {sidebarOpen ? <PanelLeftClose size={18} /> : <PanelLeftOpen size={18} />}
               <span className="sr-only">
                 {sidebarOpen ? 'Thu gọn thanh bên' : 'Mở rộng thanh bên'}
               </span>

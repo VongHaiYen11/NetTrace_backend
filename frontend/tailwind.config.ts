@@ -5,7 +5,8 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        sans: 'var(--font-sans)',
+        sans: 'var(--font-body)',
+        heading: 'var(--font-heading)',
         mono: 'var(--font-mono)',
       },
       colors: {
