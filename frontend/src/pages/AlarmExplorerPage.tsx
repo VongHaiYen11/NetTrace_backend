@@ -15,6 +15,7 @@ import { toast } from 'sonner';
 import { PageHeader } from '../components/shared/PageHeader';
 import { PageShell } from '../components/shared/PageShell';
 import { Button } from '../components/ui/Button';
+import { Checkbox } from '../components/ui/Checkbox';
 import { Field, Input, Select } from '../components/ui/Field';
 import {
   nettraceApi,
@@ -125,10 +126,10 @@ function getAlarmCellValue(alarm: Alarm, key: AlarmColumnKey) {
 function severityClass(severity: string) {
   const normalized = severity.toLowerCase();
   if (normalized === 'critical') {
-    return 'border-[#ff2d85] bg-[#ff2d85]/12 text-[#ff5a9d] shadow-[0_0_16px_rgba(255,45,133,0.22)]';
+    return 'border-[#ff2222] bg-[#ff2222]/12 text-[#ff4444] shadow-[0_0_16px_rgba(255,34,34,0.28)]';
   }
   if (normalized === 'major') {
-    return 'border-[#ff8a2d] bg-[#ff8a2d]/12 text-[#ff9f4a] shadow-[0_0_16px_rgba(255,138,45,0.22)]';
+    return 'border-[#ff2d85] bg-[#ff2d85]/12 text-[#ff5a9d] shadow-[0_0_16px_rgba(255,45,133,0.22)]';
   }
   if (normalized === 'warning') {
     return 'border-[#f8e231] bg-[#f8e231]/12 text-[#f8e231] shadow-[0_0_16px_rgba(248,226,49,0.2)]';
@@ -351,10 +352,10 @@ export function AlarmExplorerPage() {
                     <div className="absolute right-0 top-full z-30 mt-2 w-[min(42rem,calc(100vw-3rem))] rounded-lg border border-[#2b2740] bg-[#11101b] p-4 shadow-2xl">
                       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                         <Field label="From date" labelVariant="nested">
-                          <Input type="date" value={fromDate} onChange={(event) => { setFromDate(event.target.value); resetPaging(); }} className="h-10 text-sm" />
+                          <Input type="date" value={fromDate} onChange={(event) => { setFromDate(event.target.value); resetPaging(); }} />
                         </Field>
                         <Field label="To date" labelVariant="nested">
-                          <Input type="date" value={toDate} onChange={(event) => { setToDate(event.target.value); resetPaging(); }} className="h-10 text-sm" />
+                          <Input type="date" value={toDate} onChange={(event) => { setToDate(event.target.value); resetPaging(); }} />
                         </Field>
                         <Field label="Severity" labelVariant="nested">
                           <Select value={severity} onChange={(event) => { setSeverity(event.target.value); resetPaging(); }}>
@@ -517,15 +518,11 @@ export function AlarmExplorerPage() {
                   <thead>
                     <tr>
                       <th className="sticky top-0 z-10 w-12 border-b border-white/10 bg-[#151421] px-4 py-3">
-                        <input
-                          type="checkbox"
+                        <Checkbox
                           aria-label="Select all visible alarms"
                           checked={allVisibleSelected}
-                          ref={(node) => {
-                            if (node) node.indeterminate = someVisibleSelected && !allVisibleSelected;
-                          }}
+                          indeterminate={someVisibleSelected && !allVisibleSelected}
                           onChange={toggleVisibleRecords}
-                          className="h-4 w-4 rounded border-[#00f5d4]/60 bg-[#11101b] text-[#00f5d4] accent-[#00f5d4]"
                         />
                       </th>
                       {columns.map((key) => {
@@ -568,13 +565,11 @@ export function AlarmExplorerPage() {
                             )}
                           >
                             <td className="border-b border-white/10 px-4 py-3">
-                              <input
-                                type="checkbox"
+                              <Checkbox
                                 aria-label={`Select alarm ${alarm.alarm_id}`}
                                 checked={selectedForAction}
                                 onClick={(event) => event.stopPropagation()}
                                 onChange={() => toggleRecordSelection(alarm.alarm_id)}
-                                className="h-4 w-4 rounded border-[#00f5d4]/60 bg-[#11101b] text-[#00f5d4] accent-[#00f5d4]"
                               />
                             </td>
                             {columns.map((key) => (

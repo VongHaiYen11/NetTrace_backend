@@ -33,31 +33,31 @@ const FORMAT_OPTIONS: Array<{
   description: string;
   icon: ElementType;
 }> = [
-  {
-    value: 'csv',
-    label: 'CSV',
-    description: 'Simple comma-separated file for imports.',
-    icon: FileText,
-  },
-  {
-    value: 'xlsx',
-    label: 'Excel',
-    description: 'Spreadsheet workbook for analysts who need sortable columns.',
-    icon: FileSpreadsheet,
-  },
-  {
-    value: 'json',
-    label: 'JSON',
-    description: 'Structured alarm records for integrations and API handoff.',
-    icon: FileJson,
-  },
-  {
-    value: 'pdf',
-    label: 'PDF',
-    description: 'Compact review report for bounded alarm snapshots.',
-    icon: FileArchive,
-  },
-];
+    {
+      value: 'csv',
+      label: 'CSV',
+      description: 'Simple comma-separated file for imports.',
+      icon: FileText,
+    },
+    {
+      value: 'xlsx',
+      label: 'Excel',
+      description: 'Spreadsheet workbook for analysts who need sortable columns.',
+      icon: FileSpreadsheet,
+    },
+    {
+      value: 'json',
+      label: 'JSON',
+      description: 'Structured alarm records for integrations and API handoff.',
+      icon: FileJson,
+    },
+    {
+      value: 'pdf',
+      label: 'PDF',
+      description: 'Compact review report for bounded alarm snapshots.',
+      icon: FileArchive,
+    },
+  ];
 
 const COLUMN_OPTIONS: Array<{ value: ExportColumn; label: string }> = [
   { value: 'alarm_id', label: 'Alarm ID' },
@@ -360,265 +360,263 @@ export function ExportPage() {
 
   return (
     <PageShell>
-        <PageHeader
-          title="Export"
-          accent="Data"
-          description="Download alarm records with the format, columns, filters, and sorting you need."
-        />
+      <PageHeader
+        title="Export"
+        accent="Data"
+        description="Download alarm records with the format, columns, filters, and sorting you need."
+      />
 
-        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          {FORMAT_OPTIONS.map((option) => {
-            const Icon = option.icon;
-            const active = format === option.value;
-            return (
-              <button
-                key={option.value}
-                type="button"
-                onClick={() => setFormat(option.value)}
-                className={cn(
-                  'rounded-lg border p-5 text-left transition',
-                  active
-                    ? 'border-[#00f5d4] bg-[#00f5d4]/10 shadow-[0_0_28px_rgba(0,245,212,0.12)]'
-                    : 'border-white/10 bg-[#151421]/80 hover:border-[#ff2d85]/60 hover:bg-[#191727]',
-                )}
-              >
-                <span className="flex items-center justify-between">
-                  <span className="flex h-11 w-11 items-center justify-center rounded border border-white/10 bg-[#090911] text-[#00f5d4]">
-                    <Icon size={20} />
-                  </span>
-                  {active ? <Check size={18} className="text-[#00f5d4]" /> : null}
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {FORMAT_OPTIONS.map((option) => {
+          const Icon = option.icon;
+          const active = format === option.value;
+          return (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => setFormat(option.value)}
+              className={cn(
+                'rounded-lg border p-5 text-left transition',
+                active
+                  ? 'border-[#00f5d4] bg-[#00f5d4]/10 shadow-[0_0_28px_rgba(0,245,212,0.12)]'
+                  : 'border-white/10 bg-[#151421]/80 hover:border-[#ff2d85]/60 hover:bg-[#191727]',
+              )}
+            >
+              <span className="flex items-center justify-between">
+                <span className="flex h-11 w-11 items-center justify-center rounded border border-white/10 bg-[#090911] text-[#00f5d4]">
+                  <Icon size={20} />
                 </span>
-                <span className="mt-5 block text-xl font-semibold text-[#f7f3ff]">
-                  {option.label}
-                </span>
-                <span className="mt-2 block text-sm leading-6 text-[#a69db6]">
-                  {option.description}
-                </span>
-              </button>
-            );
-          })}
-        </section>
+                {active ? <Check size={18} className="text-[#00f5d4]" /> : null}
+              </span>
+              <span className="mt-5 block text-xl font-semibold text-[#f7f3ff]">
+                {option.label}
+              </span>
+              <span className="mt-2 block text-sm leading-6 text-[#a69db6]">
+                {option.description}
+              </span>
+            </button>
+          );
+        })}
+      </section>
 
-        <section className="grid gap-6 xl:grid-cols-[1fr_22rem]">
-          <div className="space-y-6">
-            <div className="rounded-lg border border-white/10 bg-[#151421]/80 p-6">
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-                <div>
-                  <h2 className="text-xl font-bold text-[#f7f3ff]">Columns</h2>
-                </div>
-                <div className="flex gap-2">
-                  <Button size="sm" variant="ghost" onClick={() => setColumns(DEFAULT_COLUMNS)}>
-                    Default
-                  </Button>
-                  <Button size="sm" variant="ghost" onClick={() => setColumns([])}>
-                    Deselect all
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    onClick={() => setColumns(COLUMN_OPTIONS.map((item) => item.value))}
-                  >
-                    Select all
-                  </Button>
-                </div>
+      <section className="grid gap-6 xl:grid-cols-[1fr_22rem]">
+        <div className="space-y-6">
+          <div className="rounded-lg border border-white/10 bg-[#151421]/80 p-6">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <h2 className="text-xl font-bold text-[#f7f3ff]">Columns</h2>
               </div>
-
-              <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                {COLUMN_OPTIONS.map((column) => {
-                  const checked = columns.includes(column.value);
-                  return (
-                    <button
-                      key={column.value}
-                      type="button"
-                      onClick={() => toggleColumn(column.value)}
-                      className={cn(
-                        'flex cursor-pointer items-center justify-between gap-3 rounded border px-3 py-3 text-left text-sm transition',
-                        checked
-                          ? 'border-[#00f5d4]/40 bg-[#00f5d4]/5 text-[#f3edff]'
-                          : 'border-[#2b2740] bg-[#191727] text-[#a69db6] hover:border-[#ff2d85]/60 hover:text-[#f7f3ff]',
-                      )}
-                    >
-                      <span>{column.label}</span>
-                      <span
-                        className={cn(
-                          'flex h-5 w-5 shrink-0 items-center justify-center rounded transition',
-                          checked ? 'bg-[#00f5d4] text-[#0c0b14]' : 'border border-white/20',
-                        )}
-                      >
-                        {checked ? <Check size={13} strokeWidth={3} /> : null}
-                      </span>
-                    </button>
-                  );
-                })}
+              <div className="flex gap-2">
+                <Button size="sm" variant="ghost" onClick={() => setColumns(DEFAULT_COLUMNS)}>
+                  Default
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => setColumns([])}>
+                  Deselect all
+                </Button>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => setColumns(COLUMN_OPTIONS.map((item) => item.value))}
+                >
+                  Select all
+                </Button>
               </div>
             </div>
 
-            <div className="rounded-lg border border-white/10 bg-[#151421]/80 p-6">
-              <h2 className="text-xl font-bold text-[#f7f3ff]">Filters</h2>
-              <div className="mt-5 grid gap-4 md:grid-cols-3">
-                <Field label="From date">
-                  <Input
-                    type="date"
-                    value={fromDate}
-                    onChange={(e) => setFromDate(e.target.value)}
-                    className="h-10 text-sm"
-                  />
-                </Field>
-                <Field label="To date">
-                  <Input
-                    type="date"
-                    value={toDate}
-                    onChange={(e) => setToDate(e.target.value)}
-                    className="h-10 text-sm"
-                  />
-                </Field>
-                <Field label="Limit">
-                  <Input
-                    type="number"
-                    min={1}
-                    value={limit}
-                    onChange={(e) => setLimit(Number(e.target.value) || 1)}
-                  />
-                </Field>
-              </div>
-              <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                <MultiChoiceSelect
-                  label="Severity"
-                  values={severities}
-                  onChange={setSeverities}
-                  placeholder="Any severity"
-                  options={SEVERITY_OPTIONS}
-                />
-                <MultiChoiceSelect
-                  label="Status"
-                  values={statuses}
-                  onChange={setStatuses}
-                  placeholder="Any status"
-                  options={STATUS_OPTIONS}
-                />
-                <Field label="Sort by">
-                  <Select value={sortBy} onChange={(e) => setSortBy(e.target.value as SortBy)}>
-                    <option value="timestamp">Timestamp</option>
-                    <option value="severity">Severity</option>
-                    <option value="status">Status</option>
-                  </Select>
-                </Field>
-                <Field label="Direction">
-                  <Select
-                    value={sortOrder}
-                    onChange={(e) => setSortOrder(e.target.value as SortOrder)}
+            <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              {COLUMN_OPTIONS.map((column) => {
+                const checked = columns.includes(column.value);
+                return (
+                  <button
+                    key={column.value}
+                    type="button"
+                    onClick={() => toggleColumn(column.value)}
+                    className={cn(
+                      'flex cursor-pointer items-center justify-between gap-3 rounded border px-3 py-3 text-left text-sm transition',
+                      checked
+                        ? 'border-[#00f5d4]/40 bg-[#00f5d4]/5 text-[#f3edff]'
+                        : 'border-[#2b2740] bg-[#191727] text-[#a69db6] hover:border-[#ff2d85]/60 hover:text-[#f7f3ff]',
+                    )}
                   >
-                    <option value="desc">Newest first</option>
-                    <option value="asc">Oldest first</option>
-                  </Select>
-                </Field>
-                <Field label="Device ID" hint="Separate multiple values with commas.">
-                  <Input
-                    value={deviceId}
-                    onChange={(e) => setDeviceId(e.target.value)}
-                    placeholder="DEV001, DEV002"
-                  />
-                </Field>
-                <Field label="Error code" hint="Separate multiple values with commas.">
-                  <Input
-                    value={errorCode}
-                    onChange={(e) => setErrorCode(e.target.value)}
-                    placeholder="ERR-LINK-DOWN"
-                  />
-                </Field>
-                <MetadataSelect
-                  label="Device type"
-                  values={deviceTypes}
-                  onChange={setDeviceTypes}
-                  optionKey="deviceTypes"
-                  placeholder="Any device type"
-                />
-                <MetadataSelect
-                  label="Vendor"
-                  values={vendors}
-                  onChange={setVendors}
-                  optionKey="vendors"
-                  placeholder="Any vendor"
-                />
-                <MetadataSelect
-                  label="Station"
-                  values={stations}
-                  onChange={setStations}
-                  optionKey="stations"
-                  placeholder="Any station"
-                />
-                <MetadataSelect
-                  label="Province"
-                  values={provinces}
-                  onChange={setProvinces}
-                  optionKey="provinces"
-                  placeholder="Any province"
-                />
-              </div>
+                    <span>{column.label}</span>
+                    <span
+                      className={cn(
+                        'flex h-5 w-5 shrink-0 items-center justify-center rounded transition',
+                        checked ? 'bg-[#00f5d4] text-[#0c0b14]' : 'border border-white/20',
+                      )}
+                    >
+                      {checked ? <Check size={13} strokeWidth={3} /> : null}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           </div>
 
-          <aside className="h-fit overflow-hidden rounded-lg border border-[#00f5d4]/45 bg-[#07070f] shadow-[0_0_0_1px_rgba(255,45,133,0.16),0_24px_70px_rgba(0,0,0,0.42),0_0_44px_rgba(0,245,212,0.1)] xl:sticky xl:top-8">
-            <div className="border-b border-[#00f5d4]/25 bg-[#00f5d4]/10 p-6">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <h2 className="text-xl font-bold text-[#f7f3ff]">
-                    Download
-                  </h2>
-                  {activeFormat.description ? (
-                  <p className="text-sm leading-6 text-[#c9bfd8]">{activeFormat.description}</p>
-                ) : null}
-                </div>
-                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded border border-[#ff2d85]/70 bg-[#ff2d85]/15 text-[#ff2d85] shadow-[0_0_24px_rgba(255,45,133,0.2)]">
-                  <ActiveFormatIcon size={22} />
-                </span>
+          <div className="rounded-lg border border-white/10 bg-[#151421]/80 p-6">
+            <h2 className="text-xl font-bold text-[#f7f3ff]">Filters</h2>
+            <div className="mt-5 grid gap-4 md:grid-cols-3">
+              <Field label="From date">
+                <Input
+                  type="date"
+                  value={fromDate}
+                  onChange={(e) => setFromDate(e.target.value)}
+                  className="h-10 text-sm"
+                />
+              </Field>
+              <Field label="To date">
+                <Input
+                  type="date"
+                  value={toDate}
+                  onChange={(e) => setToDate(e.target.value)}
+                  className="h-10 text-sm"
+                />
+              </Field>
+              <Field label="Limit">
+                <Input
+                  type="number"
+                  min={1}
+                  value={limit}
+                  onChange={(e) => setLimit(Number(e.target.value) || 1)}
+                />
+              </Field>
+            </div>
+            <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              <MultiChoiceSelect
+                label="Severity"
+                values={severities}
+                onChange={setSeverities}
+                placeholder="Any severity"
+                options={SEVERITY_OPTIONS}
+              />
+              <MultiChoiceSelect
+                label="Status"
+                values={statuses}
+                onChange={setStatuses}
+                placeholder="Any status"
+                options={STATUS_OPTIONS}
+              />
+              <Field label="Sort by">
+                <Select value={sortBy} onChange={(e) => setSortBy(e.target.value as SortBy)}>
+                  <option value="timestamp">Timestamp</option>
+                  <option value="severity">Severity</option>
+                  <option value="status">Status</option>
+                </Select>
+              </Field>
+              <Field label="Direction">
+                <Select
+                  value={sortOrder}
+                  onChange={(e) => setSortOrder(e.target.value as SortOrder)}
+                >
+                  <option value="desc">Newest first</option>
+                  <option value="asc">Oldest first</option>
+                </Select>
+              </Field>
+              <Field label="Device ID" hint="Separate multiple values with commas.">
+                <Input
+                  value={deviceId}
+                  onChange={(e) => setDeviceId(e.target.value)}
+                  placeholder="DEV001, DEV002"
+                />
+              </Field>
+              <Field label="Error code" hint="Separate multiple values with commas.">
+                <Input
+                  value={errorCode}
+                  onChange={(e) => setErrorCode(e.target.value)}
+                  placeholder="ERR-LINK-DOWN"
+                />
+              </Field>
+              <MetadataSelect
+                label="Device type"
+                values={deviceTypes}
+                onChange={setDeviceTypes}
+                optionKey="deviceTypes"
+                placeholder="Any device type"
+              />
+              <MetadataSelect
+                label="Vendor"
+                values={vendors}
+                onChange={setVendors}
+                optionKey="vendors"
+                placeholder="Any vendor"
+              />
+              <MetadataSelect
+                label="Station"
+                values={stations}
+                onChange={setStations}
+                optionKey="stations"
+                placeholder="Any station"
+              />
+              <MetadataSelect
+                label="Province"
+                values={provinces}
+                onChange={setProvinces}
+                optionKey="provinces"
+                placeholder="Any province"
+              />
+            </div>
+          </div>
+        </div>
+
+        <aside className="h-fit overflow-hidden rounded-lg border border-[#00f5d4]/45 bg-[#07070f] shadow-[0_0_0_1px_rgba(255,45,133,0.16),0_24px_70px_rgba(0,0,0,0.42),0_0_44px_rgba(0,245,212,0.1)] xl:sticky xl:top-8">
+          <div className="border-b border-[#00f5d4]/25 bg-[#00f5d4]/10 p-6">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-xl font-bold text-[#f7f3ff]">
+                  Download
+                </h2>
+                <p className="mt-2 text-sm leading-6 text-[#c9bfd8]">Check the information again before exporting.</p>
               </div>
-              
+              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded border border-[#ff2d85]/70 bg-[#ff2d85]/15 text-[#ff2d85] shadow-[0_0_24px_rgba(255,45,133,0.2)]">
+                <ActiveFormatIcon size={22} />
+              </span>
             </div>
 
-            <div className="p-6">
-              <div className="rounded-lg border border-white/10 bg-[#11101b]/80 px-4 py-2">
-                {[
-                  { label: 'Format', value: format.toUpperCase(), accent: true },
-                  { label: 'Columns', value: columns.length.toString() },
-                  { label: 'Sort', value: `${sortBy} / ${sortOrder}` },
-                  { label: 'Limit', value: limit.toLocaleString() },
-                ].map((item) => (
-                  <div
-                    key={item.label}
-                    className="flex items-center justify-between gap-4 border-b border-white/10 py-3 last:border-b-0"
+          </div>
+
+          <div className="p-6">
+            <div className="rounded-lg border border-white/10 bg-[#11101b]/80 px-4 py-2">
+              {[
+                { label: 'Format', value: format.toUpperCase(), accent: true },
+                { label: 'Columns', value: columns.length.toString() },
+                { label: 'Sort', value: `${sortBy} / ${sortOrder}` },
+                { label: 'Limit', value: limit.toLocaleString() },
+              ].map((item) => (
+                <div
+                  key={item.label}
+                  className="flex items-center justify-between gap-4 border-b border-white/10 py-3 last:border-b-0"
+                >
+                  <p className="text-sm font-semibold text-[#7f8ca3]">{item.label}</p>
+                  <p
+                    className={cn(
+                      'truncate text-right text-sm font-bold',
+                      item.accent ? 'text-[#00f5d4]' : 'text-[#f7f3ff]',
+                    )}
                   >
-                    <p className="text-sm font-semibold text-[#7f8ca3]">{item.label}</p>
-                    <p
-                      className={cn(
-                        'truncate text-right text-sm font-bold',
-                        item.accent ? 'text-[#00f5d4]' : 'text-[#f7f3ff]',
-                      )}
-                    >
-                      {item.value}
-                    </p>
-                  </div>
-                ))}
-              </div>
-
-              {format === 'pdf' ? (
-                <p className="mt-5 rounded border border-[#00f5d4]/30 bg-[#00f5d4]/10 p-3 text-sm leading-6 text-[#c9bfd8]">
-                  PDF is best for bounded review packets. Use CSV, Excel, or JSON for very large
-                  datasets.
-                </p>
-              ) : null}
-
-              <Button
-                className="mt-6 h-12 w-full border-[#ff2d85] bg-[#ff2d85] text-base font-black text-white shadow-[0_0_28px_rgba(255,45,133,0.28)] hover:bg-[#e11d72]"
-                onClick={handleExport}
-                disabled={exporting}
-              >
-                <Download size={18} />
-                {exporting ? 'Preparing export' : 'Download export'}
-              </Button>
+                    {item.value}
+                  </p>
+                </div>
+              ))}
             </div>
-          </aside>
-        </section>
+
+            {format === 'pdf' ? (
+              <p className="mt-5 rounded border border-[#00f5d4]/30 bg-[#00f5d4]/10 p-3 text-sm leading-6 text-[#c9bfd8]">
+                PDF is best for bounded review packets. Use CSV, Excel, or JSON for very large
+                datasets.
+              </p>
+            ) : null}
+
+            <Button
+              className="mt-6 h-12 w-full border-[#ff2d85] bg-[#ff2d85] text-base font-black text-white shadow-[0_0_28px_rgba(255,45,133,0.28)] hover:bg-[#e11d72]"
+              onClick={handleExport}
+              disabled={exporting}
+            >
+              <Download size={18} />
+              {exporting ? 'Preparing export' : 'Download export'}
+            </Button>
+          </div>
+        </aside>
+      </section>
     </PageShell>
   );
 }
