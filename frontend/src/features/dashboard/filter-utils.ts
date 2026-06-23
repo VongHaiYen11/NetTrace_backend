@@ -9,6 +9,8 @@ export function defaultFilterValues(): DashboardFilterFormValues {
     deviceId: '',
     errorCode: '',
     province: '',
+    sortBy: 'timestamp',
+    sortOrder: 'desc',
   };
 }
 
@@ -33,5 +35,7 @@ export function toDashboardFilters(values: DashboardFilterFormValues): Dashboard
     device_id: splitCsv(values.deviceId),
     error_code: splitCsv(values.errorCode),
     province: splitCsv(values.province),
+    sort_by: values.sortBy,
+    sort_order: values.sortOrder,
   };
 }

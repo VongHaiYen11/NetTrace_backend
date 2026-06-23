@@ -1,6 +1,7 @@
-import { useState, useMemo } from 'react';
-import { useOutletContext } from 'react-router-dom';
+import { useMemo, useState } from 'react';
 import { PenLine } from 'lucide-react';
+import { PageHeader } from '../components/shared/PageHeader';
+import { PageShell } from '../components/shared/PageShell';
 import { Button } from '../components/ui/Button';
 import { DashboardWidget } from '../features/dashboard/components/DashboardWidget';
 import { GeneralSettingsDrawer } from '../features/dashboard/components/GeneralSettingsDrawer';
@@ -11,8 +12,12 @@ import {
 
 type WidgetType =
   | 'kpi-count'
+  | 'kpi-total'
+  | 'kpi-active'
+  | 'kpi-closed'
   | 'kpi-devices'
   | 'kpi-status'
+  | 'kpi-critical'
   | 'chart-trend'
   | 'chart-severity'
   | 'chart-weekly'
@@ -30,12 +35,7 @@ interface WidgetConfig extends WidgetSettingsValues {
 
 type TableHeightMode = 'paired' | 'middle' | 'roomy';
 
-interface DashboardLayoutContext {
-  sidebarOpen: boolean;
-}
-
 export function DashboardPage() {
-  const { sidebarOpen } = useOutletContext<DashboardLayoutContext>();
   const [widgets, setWidgets] = useState<WidgetConfig[]>([
     {
       id: 'kpi-1',
@@ -264,28 +264,22 @@ export function DashboardPage() {
   }
 
   return (
-    <div
-      className={
-        sidebarOpen
-          ? 'mx-auto flex w-full max-w-[1280px] flex-col gap-8 px-4 py-6 sm:px-6 lg:px-6'
-          : 'flex w-full max-w-none flex-col gap-8 px-4 py-6 sm:px-5 lg:px-6'
-      }
-    >
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <h1 className="mt-3 text-5xl font-black leading-tight sm:text-6xl">
-            Alarm <span className="text-[#00f5d4]">dashboard</span>
-          </h1>
-        </div>
-        <Button
-          variant="secondary"
-          className="h-12 px-5 font-mono font-bold"
-          onClick={() => setGeneralSettingsOpen(true)}
-        >
-          <PenLine size={18} />
-          Customize
-        </Button>
-      </div>
+    <PageShell>
+      <PageHeader
+        title="Alarm"
+        accent="dashboard"
+        description="Monitor alarm health, trends, severity, and operational hotspots from a customizable dashboard."
+        action={
+          <Button
+            variant="secondary"
+            className="h-12 px-5 font-mono font-bold"
+            onClick={() => setGeneralSettingsOpen(true)}
+          >
+            <PenLine size={18} />
+            Customize
+          </Button>
+        }
+      />
 
       {/* KPI Cards Grid */}
       <div className="grid gap-6 lg:grid-cols-3">
@@ -330,15 +324,8 @@ export function DashboardPage() {
           initialValues={activeWidget}
           widgetTitle={activeWidget.title}
           widgetKind={activeWidget.type}
-          activeWidgetId={activeWidget.id}
-          availableWidgets={widgets.map((widget) => ({
-            id: widget.id,
-            title: widget.title,
-            visible: widget.visible,
-          }))}
-          onWidgetChange={setActiveWidgetId}
         />
       )}
-    </div>
+    </PageShell>
   );
 }

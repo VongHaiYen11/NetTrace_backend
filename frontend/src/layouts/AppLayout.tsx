@@ -6,7 +6,7 @@ import {
   LayoutDashboard,
   PanelLeftClose,
   PanelLeftOpen,
-  Search,
+  Siren,
   Settings2,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -15,7 +15,7 @@ import { cn } from '../utils/cn';
 
 const navItems = [
   { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { to: '/alarms', label: 'Alarm search', icon: Search },
+  { to: '/alarms', label: 'Alarm explorer', icon: Siren },
   { to: '/templates', label: 'Templates & presets', icon: BarChart3 },
   { to: '/export', label: 'Export data', icon: Download },
 ];

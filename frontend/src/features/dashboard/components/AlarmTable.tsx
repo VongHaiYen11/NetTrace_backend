@@ -19,8 +19,10 @@ interface AlarmTableProps {
 function severityTone(severity: string) {
   const normalized = severity.toLowerCase();
   if (normalized === 'critical') return 'red';
-  if (normalized === 'major' || normalized === 'warning') return 'amber';
-  if (normalized === 'minor' || normalized === 'info') return 'blue';
+  if (normalized === 'major') return 'orange';
+  if (normalized === 'warning') return 'yellow';
+  if (normalized === 'minor') return 'green';
+  if (normalized === 'info') return 'blue';
   return 'neutral';
 }
 

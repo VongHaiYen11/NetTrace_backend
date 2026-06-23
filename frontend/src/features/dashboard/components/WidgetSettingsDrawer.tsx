@@ -1,10 +1,10 @@
+import { format, parseISO } from 'date-fns';
+import { BarChart3, Check, Eye, EyeOff, Grid, Maximize2, Minimize2, PieChart, Table, TrendingUp, X } from 'lucide-react';
 import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
-import { X, TrendingUp, BarChart3, PieChart, Table, Grid, Check, Eye, EyeOff, Maximize2, Minimize2 } from 'lucide-react';
-import { format, parseISO } from 'date-fns';
 import { Button } from '../../../components/ui/Button';
 import { Field, Input, Select } from '../../../components/ui/Field';
-import type { GroupBy, Metric, TimeBucket } from '../../../services/generated/nettrace-api';
+import type { ExportColumn, GroupBy, Metric, TimeBucket } from '../../../services/generated/nettrace-api';
 
 type HeatmapMode = 'weekday' | 'calendar';
 
@@ -19,8 +19,12 @@ const drawerDangerIconButtonClass =
 
 export type WidgetKind =
   | 'kpi-count'
+  | 'kpi-total'
+  | 'kpi-active'
+  | 'kpi-closed'
   | 'kpi-devices'
   | 'kpi-status'
+  | 'kpi-critical'
   | 'chart-trend'
   | 'chart-severity'
   | 'chart-weekly'
@@ -39,11 +43,40 @@ export interface WidgetSettingsValues {
   info1: boolean;
   info2: boolean;
   info3: boolean;
+  tableColumns?: ExportColumn[];
   preset: string;
   startDate: string;
   endDate: string;
   layoutSpan?: 1 | 2;
 }
+
+const tableColumnOptions: Array<{ value: ExportColumn; label: string }> = [
+  { value: 'alarm_id', label: 'Alarm ID' },
+  { value: 'time_created', label: 'Time created' },
+  { value: 'time_solved', label: 'Time solved' },
+  { value: 'status', label: 'Status' },
+  { value: 'severity', label: 'Severity' },
+  { value: 'error_code', label: 'Error code' },
+  { value: 'error_name', label: 'Error name' },
+  { value: 'error_domain', label: 'Error domain' },
+  { value: 'device_id', label: 'Device ID' },
+  { value: 'device_name', label: 'Device name' },
+  { value: 'device_type', label: 'Device type' },
+  { value: 'station_name', label: 'Station name' },
+  { value: 'station_province', label: 'Province' },
+  { value: 'vendor_name', label: 'Vendor name' },
+  { value: 'raw_log', label: 'Raw log' },
+  { value: 'description', label: 'Description' },
+];
+
+const defaultTableColumns: ExportColumn[] = [
+  'time_created',
+  'error_name',
+  'status',
+  'severity',
+  'device_name',
+  'description',
+];
 
 interface WidgetSettingsDrawerProps {
   isOpen: boolean;
@@ -52,9 +85,6 @@ interface WidgetSettingsDrawerProps {
   initialValues: WidgetSettingsValues;
   widgetTitle: string;
   widgetKind: WidgetKind;
-  availableWidgets: Array<{ id: string; title: string; visible: boolean }>;
-  activeWidgetId: string;
-  onWidgetChange: (widgetId: string) => void;
 }
 
 function formatDisplayDate(value: string) {
@@ -110,9 +140,6 @@ export function WidgetSettingsDrawer({
   initialValues,
   widgetKind,
   widgetTitle,
-  availableWidgets,
-  activeWidgetId,
-  onWidgetChange,
 }: WidgetSettingsDrawerProps) {
   const { register, handleSubmit, setValue, watch, reset } = useForm<WidgetSettingsValues>({
     defaultValues: initialValues,
@@ -128,6 +155,7 @@ export function WidgetSettingsDrawer({
   const info1 = watch('info1');
   const info2 = watch('info2');
   const info3 = watch('info3');
+  const tableColumns = watch('tableColumns') ?? defaultTableColumns;
   const layoutSpan = watch('layoutSpan') || 1;
 
   // Reset form when active widget changes or drawer opens
@@ -149,6 +177,12 @@ export function WidgetSettingsDrawer({
       metric: values.metric ?? initialValues.metric,
       timeBucket: values.timeBucket ?? initialValues.timeBucket,
       heatmapMode: values.heatmapMode ?? initialValues.heatmapMode ?? 'weekday',
+      tableColumns:
+        values.chartType === 'table'
+          ? values.tableColumns && values.tableColumns.length > 0
+            ? values.tableColumns
+            : defaultTableColumns
+          : values.tableColumns,
       groupBy: values.chartType === 'line' || values.chartType === 'table' || values.chartType === 'heatmap'
         ? 'none'
         : values.chartType === 'pie' && selectedGroup === 'none'
@@ -174,16 +208,25 @@ export function WidgetSettingsDrawer({
 
   const kpiInfoOptionsByWidget: Record<WidgetKind, Array<{ name: 'info1' | 'info2' | 'info3'; label: string; checked: boolean }>> = {
     'kpi-count': [
-      { name: 'info1', label: 'Show open / closed status', checked: info1 },
-      { name: 'info2', label: 'Show icon', checked: info2 },
+      { name: 'info1', label: 'Show total alarm note', checked: info1 },
+    ],
+    'kpi-total': [
+      { name: 'info1', label: 'Show total alarm note', checked: info1 },
+    ],
+    'kpi-active': [
+      { name: 'info1', label: 'Show active alarm note', checked: info1 },
+    ],
+    'kpi-closed': [
+      { name: 'info1', label: 'Show closed alarm note', checked: info1 },
     ],
     'kpi-devices': [
       { name: 'info1', label: 'Show unique-device note', checked: info1 },
-      { name: 'info2', label: 'Show icon', checked: info2 },
     ],
     'kpi-status': [
       { name: 'info1', label: 'Show critical alarm count', checked: info1 },
-      { name: 'info2', label: 'Show icon', checked: info2 },
+    ],
+    'kpi-critical': [
+      { name: 'info1', label: 'Show critical alarm count', checked: info1 },
     ],
     'chart-trend': [],
     'chart-severity': [],
@@ -196,12 +239,10 @@ export function WidgetSettingsDrawer({
   const displayOptionsByChart: Record<WidgetSettingsValues['chartType'], Array<{ name: 'info1' | 'info2' | 'info3'; label: string; checked: boolean }>> = {
     line: [
       { name: 'info1', label: 'Show grid', checked: info1 },
-      { name: 'info2', label: 'Show value axis', checked: info2 },
       { name: 'info3', label: 'Show hover tooltip', checked: info3 },
     ],
     bar: [
       { name: 'info1', label: 'Show grid', checked: info1 },
-      { name: 'info2', label: 'Show value axis', checked: info2 },
       { name: 'info3', label: 'Show hover tooltip', checked: info3 },
     ],
     pie: [
@@ -255,6 +296,15 @@ export function WidgetSettingsDrawer({
     setValue('endDate', range.endDate);
   }
 
+  function toggleTableColumn(column: ExportColumn) {
+    setValue(
+      'tableColumns',
+      tableColumns.includes(column)
+        ? tableColumns.filter((item) => item !== column)
+        : [...tableColumns, column],
+    );
+  }
+
   return (
     <>
       <div
@@ -263,17 +313,25 @@ export function WidgetSettingsDrawer({
       />
 
       <aside className="fixed bottom-0 right-0 top-0 z-50 flex w-[480px] max-w-[calc(100vw-1rem)] flex-col border-l border-white/10 bg-[#151421] text-[#f3edff] shadow-2xl">
-        <div className="flex items-center justify-between border-b border-[#ff2d85]/30 px-6 py-5">
+        <form onSubmit={handleSubmit(onSubmit)} className="flex min-h-0 flex-1 flex-col">
+        <div className="relative overflow-hidden border-b border-[#ff2d85]/30 px-6 py-5">
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#ff2d85] to-transparent opacity-80" />
           <div>
-            <h2 className="text-2xl font-black text-[#f3edff] drop-shadow-[0_0_14px_rgba(255,45,133,0.7)]">
+            <p className="font-mono text-[10px] font-black uppercase tracking-[0.22em] text-[#00f5d4]">
+              Widget console
+            </p>
+            <h2 className="mt-1 text-2xl font-black text-[#f3edff] drop-shadow-[0_0_14px_rgba(255,45,133,0.7)]">
               Widget settings
             </h2>
-            <p className="mt-1 font-mono text-sm font-bold text-[#a69db6]">{widgetTitle}</p>
+            <p className="mt-2 inline-flex max-w-full border border-[#00f5d4]/25 bg-[#00f5d4]/5 px-2.5 py-1 font-mono text-xs font-black text-[#00f5d4]">
+              <span className="truncate">{widgetTitle}</span>
+            </p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="absolute right-6 top-5 flex items-center gap-3">
             {!isKpiWidget && (
               <button
                 type="button"
+                aria-label={layoutSpan === 2 ? 'Use half width' : 'Use full width'}
                 title={layoutSpan === 2 ? 'Full width. Click for half width.' : 'Half width. Click for full width.'}
                 onClick={() => setValue('layoutSpan', layoutSpan === 2 ? 1 : 2)}
                 className={layoutSpan === 2 ? drawerIconButtonClass : drawerMutedIconButtonClass}
@@ -285,20 +343,26 @@ export function WidgetSettingsDrawer({
                 )}
               </button>
             )}
+            {isKpiWidget ? (
+              <button
+                type="button"
+                aria-checked={visible}
+                aria-label={visible ? 'Hide KPI card' : 'Show KPI card'}
+                title={visible ? 'Hide KPI card' : 'Show KPI card'}
+                onClick={() => setValue('visible', !visible)}
+                className={visible ? drawerIconButtonClass : drawerDangerIconButtonClass}
+              >
+                {visible ? (
+                  <Eye size={18} />
+                ) : (
+                  <EyeOff size={18} />
+                )}
+              </button>
+            ) : null}
             <button
               type="button"
-              aria-checked={visible}
-              title={visible ? 'Visible on dashboard' : 'Hidden from dashboard'}
-              onClick={() => setValue('visible', !visible)}
-              className={visible ? drawerIconButtonClass : drawerDangerIconButtonClass}
-            >
-              {visible ? (
-                <Eye size={18} />
-              ) : (
-                <EyeOff size={18} />
-              )}
-            </button>
-            <button
+              aria-label="Close widget settings"
+              title="Close widget settings"
               onClick={onClose}
               className="rounded p-1.5 text-[#ff2d85] transition hover:bg-[#ff2d85]/10"
             >
@@ -307,21 +371,13 @@ export function WidgetSettingsDrawer({
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-6 py-6">
-          <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-5">
-            <Field label="Widget">
-              <Select
-                value={activeWidgetId}
-                onChange={(event) => onWidgetChange(event.target.value)}
-              >
-                {availableWidgets.map((widget) => (
-                  <option key={widget.id} value={widget.id}>
-                    {widget.title}{widget.visible ? '' : ' - hidden'}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-6">
+          <div className="flex flex-col gap-5">
+            <div className="rounded border border-[#2b2740] bg-[#191727] px-3 py-2">
+              <p className="font-mono text-xs leading-relaxed text-[#a69db6]">
+                Presets define this widget's data, grouping, time range, and display settings inside a saved template.
+              </p>
+            </div>
             <Field label="Widget name" hint="Leave blank to use data + time range.">
               <Input placeholder={getDefaultWidgetTitle(watch())} {...register('title')} />
             </Field>
@@ -415,40 +471,86 @@ export function WidgetSettingsDrawer({
             ) : null}
 
             <div className="flex flex-col gap-3">
-              <span className="text-sm font-semibold tracking-normal text-[#00f5d4]">
-                {isKpiWidget ? 'Display details' : 'Display options'}
+              <span className="font-mono text-base font-black tracking-normal text-[#c9bfd8]">
+                {!isKpiWidget && selectedChartType === 'table' ? 'Table columns' : isKpiWidget ? 'Display details' : 'Display options'}
               </span>
-              <div className="flex flex-col gap-2.5">
-                {infoOptions.map((item) => (
-                  <button
-                    key={item.name}
-                    type="button"
-                    onClick={() => setValue(item.name, !item.checked)}
-                    className={`flex items-center justify-between border p-3 transition ${
-                      item.checked
-                        ? 'border-[#00f5d4]/40 bg-[#00f5d4]/5 text-[#f3edff]'
-                        : 'border-[#2b2740] bg-[#151421] text-[#a69db6]'
-                    }`}
-                  >
-                    <span className="text-sm font-mono">{item.label}</span>
-                    <div
-                      className={`flex h-5 w-5 items-center justify-center rounded transition ${
+              {!isKpiWidget && selectedChartType === 'table' ? (
+                <>
+                  <div className="flex flex-wrap gap-2">
+                    <Button size="sm" variant="ghost" onClick={() => setValue('tableColumns', defaultTableColumns)}>
+                      Default
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => setValue('tableColumns', [])}>
+                      Deselect all
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => setValue('tableColumns', tableColumnOptions.map((item) => item.value))}
+                    >
+                      Select all
+                    </Button>
+                  </div>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {tableColumnOptions.map((item) => {
+                      const checked = tableColumns.includes(item.value);
+                      return (
+                        <button
+                          key={item.value}
+                          type="button"
+                          onClick={() => toggleTableColumn(item.value)}
+                          className={`flex items-center justify-between border p-3 text-left transition ${
+                            checked
+                              ? 'border-[#00f5d4]/40 bg-[#00f5d4]/5 text-[#f3edff]'
+                              : 'border-[#2b2740] bg-[#151421] text-[#a69db6]'
+                          }`}
+                        >
+                          <span className="font-mono text-sm">{item.label}</span>
+                          <div
+                            className={`flex h-5 w-5 items-center justify-center rounded transition ${
+                              checked ? 'bg-[#00f5d4] text-[#0c0b14]' : 'border border-white/20 bg-transparent'
+                            }`}
+                          >
+                            {checked && <Check size={14} strokeWidth={3} />}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+              ) : (
+                <div className="flex flex-col gap-2.5">
+                  {infoOptions.map((item) => (
+                    <button
+                      key={item.name}
+                      type="button"
+                      onClick={() => setValue(item.name, !item.checked)}
+                      className={`flex items-center justify-between border p-3 transition ${
                         item.checked
-                          ? 'bg-[#00f5d4] text-[#0c0b14]'
-                          : 'border border-white/20 bg-transparent'
+                          ? 'border-[#00f5d4]/40 bg-[#00f5d4]/5 text-[#f3edff]'
+                          : 'border-[#2b2740] bg-[#151421] text-[#a69db6]'
                       }`}
                     >
-                      {item.checked && <Check size={14} strokeWidth={3} />}
-                    </div>
-                  </button>
-                ))}
-              </div>
+                      <span className="text-sm font-mono">{item.label}</span>
+                      <div
+                        className={`flex h-5 w-5 items-center justify-center rounded transition ${
+                          item.checked
+                            ? 'bg-[#00f5d4] text-[#0c0b14]'
+                            : 'border border-white/20 bg-transparent'
+                        }`}
+                      >
+                        {item.checked && <Check size={14} strokeWidth={3} />}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="flex flex-col gap-3">
               {selectedChartType === 'heatmap' && selectedHeatmapMode === 'calendar' ? (
                 <>
-                  <span className="text-sm font-semibold tracking-normal text-[#00f5d4]">
+                  <span className="font-mono text-base font-black tracking-normal text-[#c9bfd8]">
                     Year
                   </span>
                   <p className="border border-[#2b2740] bg-[#151421] px-3 py-2 font-mono text-xs text-[#f3edff]">
@@ -457,7 +559,7 @@ export function WidgetSettingsDrawer({
                       : `${selectedYear} · Jan 1 to Dec 31`}
                   </p>
                   <div>
-                    <Field label="Year">
+                    <Field label="Year" labelVariant="nested">
                       <Input
                         type="number"
                         min="2020"
@@ -470,21 +572,18 @@ export function WidgetSettingsDrawer({
                 </>
               ) : (
                 <>
-                  <span className="text-sm font-semibold tracking-normal text-[#00f5d4]">
+                  <span className="font-mono text-base font-black tracking-normal text-[#c9bfd8]">
                     Time range
                   </span>
-                  <p className="border border-[#2b2740] bg-[#151421] px-3 py-2 font-mono text-xs text-[#f3edff]">
-                    {dateRangeLabel}
-                  </p>
                   <div className="space-y-3">
-                    <Field label="Start date">
+                    <Field label="Start date" labelVariant="nested">
                       <Input
                         type="date"
                         value={startDate || initialValues.startDate}
                         onChange={(event) => setValue('startDate', event.target.value)}
                       />
                     </Field>
-                    <Field label="End date">
+                    <Field label="End date" labelVariant="nested">
                       <Input
                         type="date"
                         value={endDate || initialValues.endDate}
@@ -496,16 +595,17 @@ export function WidgetSettingsDrawer({
               )}
             </div>
 
-            <div>
-              <Button
-                type="submit"
-                className="h-14 w-full rounded-full border-none bg-gradient-to-r from-[#ff2d85] to-[#9f0645] text-white shadow-[0_0_28px_rgba(255,45,133,0.46)]"
-              >
-                Save settings
-              </Button>
-            </div>
-          </form>
+          </div>
         </div>
+        <div className="border-t border-white/10 px-6 py-5">
+          <Button
+            type="submit"
+            className="h-14 w-full rounded-full border-none bg-gradient-to-r from-[#ff2d85] to-[#9f0645] text-white shadow-[0_0_28px_rgba(255,45,133,0.46)]"
+          >
+            Save settings
+          </Button>
+        </div>
+        </form>
       </aside>
     </>
   );

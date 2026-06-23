@@ -16,6 +16,13 @@ export interface DeviceMetadata {
   additional_info: string | null;
 }
 
+export interface DeviceFilterOptions {
+  deviceTypes: string[];
+  vendors: string[];
+  stations: string[];
+  provinces: string[];
+}
+
 export class DeviceRepository {
   /**
    * Fetches metadata for a list of device IDs from PostgreSQL,
@@ -111,6 +118,30 @@ export class DeviceRepository {
     };
   }
 
+  async getDeviceIdsBySearch(params: {
+    field: 'device_name' | 'device_type';
+    search: string;
+  }): Promise<{ deviceIds: string[]; durationMs: number }> {
+    const columnMap = {
+      device_name: 'd.name',
+      device_type: 'd.device_type',
+    } satisfies Record<'device_name' | 'device_type', string>;
+    const column = columnMap[params.field];
+    const query = `
+      SELECT DISTINCT d.device_id
+      FROM device d
+      WHERE ${column} IS NOT NULL AND LOWER(${column}) LIKE $1
+    `;
+
+    const { rows, durationMs } = await executePgQuery<{ device_id: string }>(query, [
+      `%${params.search.toLowerCase()}%`,
+    ]);
+    return {
+      deviceIds: rows.map((r) => r.device_id),
+      durationMs,
+    };
+  }
+
   /**
    * Fetches all devices with their vendor and station details.
    */
@@ -136,5 +167,61 @@ export class DeviceRepository {
     `;
     const { rows, durationMs } = await executePgQuery<DeviceMetadata>(query);
     return { devices: rows, durationMs };
+  }
+
+  async getFilterOptions(params: {
+    search?: string;
+    limit?: number;
+  }): Promise<{ options: DeviceFilterOptions; durationMs: number }> {
+    const limit = params.limit ?? 20;
+    const search = params.search ? `%${params.search.toLowerCase()}%` : null;
+    const query = `
+      WITH options AS (
+        SELECT DISTINCT 'device_type' AS category, d.device_type AS value
+        FROM device d
+        WHERE d.device_type IS NOT NULL AND d.device_type <> ''
+        UNION ALL
+        SELECT DISTINCT 'vendor' AS category, v.name AS value
+        FROM vendor v
+        WHERE v.name IS NOT NULL AND v.name <> ''
+        UNION ALL
+        SELECT DISTINCT 'station' AS category, s.name AS value
+        FROM station s
+        WHERE s.name IS NOT NULL AND s.name <> ''
+        UNION ALL
+        SELECT DISTINCT 'province' AS category, s.province AS value
+        FROM station s
+        WHERE s.province IS NOT NULL AND s.province <> ''
+      ),
+      ranked AS (
+        SELECT
+          category,
+          value,
+          ROW_NUMBER() OVER (PARTITION BY category ORDER BY value) AS rank
+        FROM options
+        WHERE ($1::text IS NULL OR LOWER(value) LIKE $1)
+      )
+      SELECT category, value
+      FROM ranked
+      WHERE rank <= $2
+      ORDER BY category, value
+    `;
+
+    const { rows, durationMs } = await executePgQuery<{ category: string; value: string }>(query, [
+      search,
+      limit,
+    ]);
+
+    return {
+      options: {
+        deviceTypes: rows
+          .filter((row) => row.category === 'device_type')
+          .map((row) => row.value),
+        vendors: rows.filter((row) => row.category === 'vendor').map((row) => row.value),
+        stations: rows.filter((row) => row.category === 'station').map((row) => row.value),
+        provinces: rows.filter((row) => row.category === 'province').map((row) => row.value),
+      },
+      durationMs,
+    };
   }
 }

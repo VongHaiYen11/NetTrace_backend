@@ -15,7 +15,18 @@ const filterSchema = z.object({
   deviceId: z.string(),
   errorCode: z.string(),
   province: z.string(),
+  sortBy: z.enum(['timestamp', 'severity', 'status']),
+  sortOrder: z.enum(['desc', 'asc']),
 });
+
+const sortOptions = [
+  { value: 'timestamp:desc', label: 'Newest first' },
+  { value: 'timestamp:asc', label: 'Oldest first' },
+  { value: 'severity:desc', label: 'Severity high to low' },
+  { value: 'severity:asc', label: 'Severity low to high' },
+  { value: 'status:desc', label: 'Status Z to A' },
+  { value: 'status:asc', label: 'Status A to Z' },
+] as const;
 
 interface DashboardFiltersProps {
   values: DashboardFilterFormValues;
@@ -23,9 +34,10 @@ interface DashboardFiltersProps {
 }
 
 export function DashboardFilters({ values, onApply }: DashboardFiltersProps) {
-  const { register, handleSubmit, reset, setError, formState } = useForm<DashboardFilterFormValues>({
+  const { register, handleSubmit, reset, setError, setValue, watch, formState } = useForm<DashboardFilterFormValues>({
     values,
   });
+  const selectedSort = `${watch('sortBy')}:${watch('sortOrder')}`;
 
   function submit(nextValues: DashboardFilterFormValues) {
     const parsed = filterSchema.safeParse(nextValues);
@@ -49,6 +61,11 @@ export function DashboardFilters({ values, onApply }: DashboardFiltersProps) {
           <div className="flex items-center gap-2 lg:col-span-12">
             <Filter size={18} className="text-muted" />
             <h2 className="text-sm font-semibold text-[#f3edff]">Alarm filters</h2>
+          </div>
+          <div className="rounded border border-[#2b2740] bg-[#191727] px-3 py-2 lg:col-span-12">
+            <p className="font-mono text-xs text-[#a69db6]">
+              Filters narrow the alarm API query. Sort only affects the alarm list/export order.
+            </p>
           </div>
           <Field label="From">
             <Input type="date" {...register('fromDate')} />
@@ -81,6 +98,25 @@ export function DashboardFilters({ values, onApply }: DashboardFiltersProps) {
           </Field>
           <Field label="Province" hint="Comma-separated">
             <Input placeholder="Hanoi" {...register('province')} />
+          </Field>
+          <Field label="Sort">
+            <Select
+              value={selectedSort}
+              onChange={(event) => {
+                const [sortBy, sortOrder] = event.target.value.split(':') as [
+                  DashboardFilterFormValues['sortBy'],
+                  DashboardFilterFormValues['sortOrder'],
+                ];
+                setValue('sortBy', sortBy);
+                setValue('sortOrder', sortOrder);
+              }}
+            >
+              {sortOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </Select>
           </Field>
 
           <div className="flex items-end gap-2 lg:col-span-2">

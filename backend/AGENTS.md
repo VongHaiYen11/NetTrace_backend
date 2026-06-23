@@ -145,48 +145,50 @@ CREATE INDEX idx_station_latitude ON station(latitude);
 Consists of tables to store user customized layout configurations:
 
 ```sql
-CREATE TABLE Template (
+CREATE TABLE template (
     template_id SERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
-    selected_cards TEXT, 
+    selected_cards TEXT,
     time_created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     time_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    number_of_widgets INT
+    number_of_widgets INT DEFAULT 0
 );
 
-CREATE TABLE Preset (
-    device_id VARCHAR(20) PRIMARY KEY,
+CREATE TABLE preset (
+    preset_id SERIAL PRIMARY KEY,
     position INT,
     chart_type VARCHAR(100),
+    start_date TIMESTAMP,
+    end_date TIMESTAMP,
     status VARCHAR(50),
     severity VARCHAR(50),
     error_code VARCHAR(50),
-    vendor_id VARCHAR(20),
-    device_type VARCHAR(50), 
-    CONSTRAINT fk_preset_device FOREIGN KEY (device_id) 
-        REFERENCES device(device_id) ON DELETE CASCADE,
-    CONSTRAINT fk_preset_error FOREIGN KEY (error_code) 
-        REFERENCES error(error_code) ON DELETE SET NULL,
-    CONSTRAINT fk_preset_vendor FOREIGN KEY (vendor_id) 
-        REFERENCES vendor(vendor_id) ON DELETE SET NULL
+    vendor VARCHAR(100),
+    device_type VARCHAR(50)
 );
 
-CREATE TABLE Widget (
+CREATE TABLE widget (
     widget_id SERIAL PRIMARY KEY,
     template_id INT NOT NULL,
-    device_id VARCHAR(20) NOT NULL,
+    preset_id INT NOT NULL,
     time_created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     time_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT fk_widget_template FOREIGN KEY (template_id) 
-        REFERENCES Template(template_id) ON DELETE CASCADE,
-    CONSTRAINT fk_widget_preset FOREIGN KEY (device_id) 
-        REFERENCES Preset(device_id) ON DELETE CASCADE
+    CONSTRAINT fk_widget_template
+        FOREIGN KEY (template_id)
+        REFERENCES template(template_id)
+        ON DELETE CASCADE,
+    CONSTRAINT fk_widget_preset
+        FOREIGN KEY (preset_id)
+        REFERENCES preset(preset_id)
+        ON DELETE CASCADE
 );
 
-CREATE INDEX idx_preset_error ON Preset(error_code);
-CREATE INDEX idx_preset_vendor ON Preset(vendor_id);
-CREATE INDEX idx_widget_template ON Widget(template_id);
-CREATE INDEX idx_widget_device ON Widget(device_id);
+-- Indexes
+CREATE INDEX idx_widget_template ON widget(template_id);
+CREATE INDEX idx_widget_preset ON widget(preset_id);
+CREATE INDEX idx_preset_status ON preset(status);
+CREATE INDEX idx_preset_severity ON preset(severity);
+CREATE INDEX idx_preset_error_code ON preset(error_code);
 ```
 
 > [!NOTE]
@@ -243,6 +245,18 @@ All Analytics APIs must share the common Filter DTO to leverage code reuse. Do n
   status?: string[];   // List of statuses
   device_id?: string[];// List of devices to filter
   error_code?: string[];// List of error codes to filter
+  search?: string;      // Case-insensitive text search for detail alarm queries
+  search_field?:        // Exactly one whitelisted field for Alarm Explorer search
+    | "alarm_id"
+    | "device_id"
+    | "device_name"
+    | "device_type"
+    | "error_code"
+    | "error_name"
+    | "severity"
+    | "status"
+    | "description"
+    | "raw_log";
   // Federated Postgres metadata filters:
   device_type?: string[];
   vendor?: string[];
@@ -253,6 +267,7 @@ All Analytics APIs must share the common Filter DTO to leverage code reuse. Do n
 
 * **Default Time Window:** If omitted by the client: `to_time = now()`, `from_time = now() - 7 days`.
 * **Maximum Time Range:** Maximum queried range cannot exceed **90 days** (to avoid overloading ClickHouse CPU).
+* **Alarm Explorer Search:** `GET /api/v1/alarms` supports backend search through `search` and exactly one `search_field`. ClickHouse-native fields are searched in ClickHouse; `device_name`, `device_type`, and `error_name` must be resolved through PostgreSQL first and then applied as `device_id` / `error_code` filters in ClickHouse. Do not implement page-only search for Alarm Explorer.
 
 ---
 
@@ -473,18 +488,21 @@ GROUP BY day;
 
 #### 1.5. Export API
 * **Endpoint:** `POST /api/v1/export`
-* **Purpose:** Exports filtered alarm records to CSV or Excel.
+* **Purpose:** Exports filtered alarm records to CSV, Excel, JSON, or compact PDF.
 * **Formats:**
   * `csv`
   * `xlsx`
+  * `json`
+  * `pdf`
 * **Requirements:**
-  * Must use streaming.
+  * Must use streaming for CSV, XLSX, and JSON outputs.
+  * PDF output is for bounded review reports; use practical limits and do not treat it as the massive dataset format.
   * Do not load large volume datasets into RAM.
   * Support exporting massive datasets.
 * **Request Body Schema:**
   ```json
   {
-    "format": "csv" | "xlsx",
+    "format": "csv" | "xlsx" | "json" | "pdf",
     "columns": ["alarm_id", "severity", "status", "device_name", "error_name", "..."], // Optional. If omitted, exports all columns.
     "filters": {
       // Common Analytics Filter Contract:
@@ -499,6 +517,22 @@ GROUP BY day;
     }
   }
   ```
+
+#### 1.6. Metadata Options API
+* **Endpoint:** `GET /api/v1/metadata/options`
+* **Purpose:** Provides searchable PostgreSQL metadata values for UI dropdown filters.
+* **Returned categories:**
+  * `deviceTypes`
+  * `vendors`
+  * `stations`
+  * `provinces`
+* **Query Parameters:**
+  * `search` optional, max 100 characters.
+  * `limit` optional, 1-100, defaults to 20 per category.
+* **Requirements:**
+  * Must use Zod validation.
+  * Must keep response inside the standard success envelope.
+  * Must use raw parameterized SQL through the repository layer.
 ---
 
 ### 2. Template & Widget APIs
@@ -514,13 +548,14 @@ Manage custom dashboard layouts (Template, Widget, Preset) for users.
     "selected_cards": "string (optional, JSON string array of KPI cards chosen by the user)",
     "widgets": [
       {
-        "device_id": "string (required, configured device ID)",
         "position": "number (widget grid position index)",
         "chart_type": "string (rendering chart type)",
+        "start_date": "string (optional, ISO-8601 date-time)",
+        "end_date": "string (optional, ISO-8601 date-time)",
         "status": "string (optional, status filter setting)",
         "severity": "string (optional, severity filter setting)",
         "error_code": "string (optional, error code filter setting)",
-        "vendor_id": "string (optional, vendor filter setting)",
+        "vendor": "string (optional, vendor name filter setting)",
         "device_type": "string (optional, device type filter setting)"
       }
     ]
@@ -581,17 +616,19 @@ Manage custom dashboard layouts (Template, Widget, Preset) for users.
       "widgets": [
         {
           "widget_id": 1,
-          "device_id": "DEV001",
+          "preset_id": 42,
           "time_created": "2026-06-21T10:15:00.000Z",
           "time_updated": "2026-06-21T10:15:00.000Z",
           "preset": {
-            "device_id": "DEV001",
+            "preset_id": 42,
             "position": 1,
             "chart_type": "line",
+            "start_date": "2026-06-01T00:00:00.000Z",
+            "end_date": "2026-06-30T23:59:59.000Z",
             "status": "active",
             "severity": "critical",
             "error_code": "ERR001",
-            "vendor_id": "VEND01",
+            "vendor": "Cisco",
             "device_type": "router"
           }
         }
@@ -602,7 +639,7 @@ Manage custom dashboard layouts (Template, Widget, Preset) for users.
 
 #### 2.4. Update Template API
 * **Endpoint:** `PUT /api/v1/templates/:id`
-* **Purpose:** Updates Template details and synchronizes its widgets/presets (removing old entries, inserting/updating new ones) inside a PostgreSQL Transaction. Automatically updates number_of_widgets and time_updated.
+* **Purpose:** Updates Template details and synchronizes its widgets/presets (removing old entries, inserting new ones) inside a PostgreSQL Transaction. Automatically updates number_of_widgets and time_updated.
 * **Request Body (application/json):**
   ```json
   {
@@ -610,13 +647,14 @@ Manage custom dashboard layouts (Template, Widget, Preset) for users.
     "selected_cards": "string",
     "widgets": [
       {
-        "device_id": "string",
         "position": "number",
         "chart_type": "string",
+        "start_date": "string",
+        "end_date": "string",
         "status": "string",
         "severity": "string",
         "error_code": "string",
-        "vendor_id": "string",
+        "vendor": "string",
         "device_type": "string"
       }
     ]
@@ -639,7 +677,7 @@ Manage custom dashboard layouts (Template, Widget, Preset) for users.
 
 #### 2.5. Delete Template API
 * **Endpoint:** `DELETE /api/v1/templates/:id`
-* **Purpose:** Delete Template. Associated widgets and presets are automatically cascades deleted at the database level.
+* **Purpose:** Delete Template. Associated widgets cascade-deleted via FK; orphaned presets are deleted in the service layer before template removal.
 * **Response Shape (HTTP 200):**
   ```json
   {

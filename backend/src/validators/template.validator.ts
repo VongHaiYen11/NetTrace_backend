@@ -1,13 +1,14 @@
 import { z } from 'zod';
 
 export const WidgetSchema = z.object({
-  device_id: z.string().min(1, 'device_id is required').max(20),
   position: z.number().int().min(0),
   chart_type: z.string().min(1, 'chart_type is required').max(100),
+  start_date: z.string().optional().nullable(),
+  end_date: z.string().optional().nullable(),
   status: z.string().max(50).optional().nullable(),
   severity: z.string().max(50).optional().nullable(),
   error_code: z.string().max(50).optional().nullable(),
-  vendor_id: z.string().max(20).optional().nullable(),
+  vendor: z.string().max(100).optional().nullable(),
   device_type: z.string().max(50).optional().nullable(),
 });
 

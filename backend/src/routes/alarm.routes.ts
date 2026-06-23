@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { validateQuery, validateBody } from '../middlewares/validator.middleware.js';
+import { validateQuery, validateQueryGeneric, validateBody } from '../middlewares/validator.middleware.js';
 import { DeviceRepository } from '../repositories/device.repository.js';
 import { ErrorRepository } from '../repositories/error.repository.js';
 
@@ -31,6 +31,9 @@ import { HeatmapController } from '../controllers/heatmap.controller.js';
 import { ExportSchema } from '../validators/export.validator.js';
 import { ExportService } from '../services/export.service.js';
 import { ExportController } from '../controllers/export.controller.js';
+import { MetadataOptionsSchema } from '../validators/metadata-options.validator.js';
+import { MetadataOptionsService } from '../services/metadata-options.service.js';
+import { MetadataOptionsController } from '../controllers/metadata-options.controller.js';
 
 const deviceRepo = new DeviceRepository();
 const errorRepo = new ErrorRepository();
@@ -58,6 +61,8 @@ const heatmapController = new HeatmapController(heatmapService);
 // 5. Export
 const exportService = new ExportService(queryAlarmsRepo, deviceRepo, errorRepo);
 const exportController = new ExportController(exportService);
+const metadataOptionsService = new MetadataOptionsService(deviceRepo);
+const metadataOptionsController = new MetadataOptionsController(metadataOptionsService);
 
 const router = Router();
 
@@ -182,6 +187,65 @@ const router = Router();
 
 /**
  * @swagger
+ * /api/v1/metadata/options:
+ *   get:
+ *     summary: List metadata filter options
+ *     description: Returns searchable device type, vendor, station, and province options from PostgreSQL metadata.
+ *     tags:
+ *       - Metadata
+ *     parameters:
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *           maxLength: 100
+ *         description: Optional case-insensitive search text.
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 100
+ *           default: 20
+ *         description: Maximum options returned per category.
+ *     responses:
+ *       200:
+ *         description: Metadata options.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     deviceTypes:
+ *                       type: array
+ *                       items:
+ *                         type: string
+ *                     vendors:
+ *                       type: array
+ *                       items:
+ *                         type: string
+ *                     stations:
+ *                       type: array
+ *                       items:
+ *                         type: string
+ *                     provinces:
+ *                       type: array
+ *                       items:
+ *                         type: string
+ */
+router.get(
+  '/metadata/options',
+  validateQueryGeneric(MetadataOptionsSchema),
+  metadataOptionsController.getOptions,
+);
+
+/**
+ * @swagger
  * /api/v1/alarms:
  *   get:
  *     summary: Query alarms
@@ -236,6 +300,19 @@ const router = Router();
  *         schema:
  *           type: string
  *         description: Comma-separated error codes.
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *           maxLength: 200
+ *         description: Case-insensitive search text applied to one selected search_field across the full backend result set, not only the current page.
+ *       - in: query
+ *         name: search_field
+ *         schema:
+ *           type: string
+ *           enum: [alarm_id, device_id, device_name, device_type, error_code, error_name, severity, status, description, raw_log]
+ *           default: alarm_id
+ *         description: Single field to search. device_name and error_name are resolved through PostgreSQL metadata before querying ClickHouse.
  *       - in: query
  *         name: device_type
  *         schema:
@@ -491,8 +568,8 @@ router.post('/analytics/heatmap', validateBody(HeatmapSchema), heatmapController
  * @swagger
  * /api/v1/export:
  *   post:
- *     summary: Export alarms list to Excel or CSV
- *     description: Streams a full/filtered copy of alarm telemetry formatted as comma-separated values or Excel spreadsheet.
+ *     summary: Export alarms list
+ *     description: Streams a full/filtered copy of alarm telemetry formatted as CSV, Excel, JSON, or a compact PDF report.
  *     tags:
  *       - Export
  *     requestBody:
@@ -506,7 +583,7 @@ router.post('/analytics/heatmap', validateBody(HeatmapSchema), heatmapController
  *             properties:
  *               format:
  *                 type: string
- *                 enum: [csv, xlsx]
+ *                 enum: [csv, xlsx, pdf, json]
  *                 example: "csv"
  *               columns:
  *                 type: array
@@ -564,7 +641,7 @@ router.post('/analytics/heatmap', validateBody(HeatmapSchema), heatmapController
  *                     example: 100
  *     responses:
  *       200:
- *         description: Stream download.
+ *         description: Stream download in the requested format.
  */
 router.post('/export', validateBody(ExportSchema), exportController.exportAlarms);
 

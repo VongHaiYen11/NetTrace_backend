@@ -1,8 +1,9 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { nettraceApi, type CommonFilters } from '../../../services/generated/nettrace-api';
+import { nettraceApi } from '../../../services/generated/nettrace-api';
+import type { DashboardFilters } from '../types';
 
-export function useDashboardData(filters: CommonFilters) {
+export function useDashboardData(filters: DashboardFilters) {
   const queryFilters = useMemo(() => filters, [filters]);
 
   const summary = useQuery({
@@ -50,8 +51,8 @@ export function useDashboardData(filters: CommonFilters) {
         ...queryFilters,
         offset: 0,
         limit: 25,
-        sort_by: 'timestamp',
-        sort_order: 'desc',
+        sort_by: queryFilters.sort_by ?? 'timestamp',
+        sort_order: queryFilters.sort_order ?? 'desc',
         detail_level: 'compact',
       }),
   });

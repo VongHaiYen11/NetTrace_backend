@@ -1,4 +1,4 @@
-import type { CommonFilters } from '../../services/generated/nettrace-api';
+import type { CommonFilters, SortBy, SortOrder } from '../../services/generated/nettrace-api';
 
 export interface DashboardFilterFormValues {
   fromDate: string;
@@ -8,6 +8,11 @@ export interface DashboardFilterFormValues {
   deviceId: string;
   errorCode: string;
   province: string;
+  sortBy: SortBy;
+  sortOrder: SortOrder;
 }
 
-export type DashboardFilters = CommonFilters;
+export type DashboardFilters = CommonFilters & {
+  sort_by?: SortBy;
+  sort_order?: SortOrder;
+};

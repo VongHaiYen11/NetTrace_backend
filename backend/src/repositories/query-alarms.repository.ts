@@ -26,6 +26,18 @@ export interface QueryAlarmsParams {
   sort_order: 'asc' | 'desc';
   include_total?: boolean;
   detail_level?: 'compact' | 'full';
+  search?: string;
+  search_field?:
+    | 'alarm_id'
+    | 'device_id'
+    | 'device_name'
+    | 'device_type'
+    | 'error_code'
+    | 'error_name'
+    | 'severity'
+    | 'status'
+    | 'description'
+    | 'raw_log';
 }
 
 export class QueryAlarmsRepository {
@@ -58,6 +70,24 @@ export class QueryAlarmsRepository {
     queryParams.limit = limit;
     queryParams.offset = offset;
 
+    const whereConditions: string[] = [];
+    if (params.search && params.search_field) {
+      const searchFieldMap: Partial<Record<NonNullable<QueryAlarmsParams['search_field']>, string>> = {
+        alarm_id: 'alarm_id',
+        device_id: 'device_id',
+        error_code: 'error_code',
+        severity: 'severity',
+        status: 'status',
+        description: 'description',
+        raw_log: 'raw_log',
+      };
+      const searchColumn = searchFieldMap[params.search_field];
+      if (searchColumn) {
+        whereConditions.push(`positionCaseInsensitive(${searchColumn}, {search: String}) > 0`);
+        queryParams.search = params.search;
+      }
+    }
+
     const prewhereConditions = [
       'time_created BETWEEN {from_time: DateTime} AND {to_time: DateTime}',
     ];
@@ -65,6 +95,8 @@ export class QueryAlarmsRepository {
       prewhereConditions.push(...filterConditions);
     }
     const prewhereClause = `PREWHERE ${prewhereConditions.join(' AND ')}`;
+    const whereClause =
+      whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
 
     const sortFieldMap: Record<string, string> = {
       timestamp: 'time_created',
@@ -102,6 +134,7 @@ export class QueryAlarmsRepository {
         ${selectColumns}
       FROM alarm
       ${prewhereClause}
+      ${whereClause}
       ORDER BY ${orderColumn} ${orderDirection}, alarm_id ${orderDirection}
       LIMIT {limit: UInt32} OFFSET {offset: UInt32}
     `;
@@ -110,6 +143,7 @@ export class QueryAlarmsRepository {
       SELECT count() as total
       FROM alarm
       ${prewhereClause}
+      ${whereClause}
     `;
 
     const dataPromise = executeClickhouseQuery<AlarmRecord>(dataQuery, queryParams);

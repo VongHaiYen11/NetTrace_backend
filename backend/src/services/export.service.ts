@@ -12,6 +12,8 @@ interface ColumnDef {
   getValue: (row: any, dev: any, err: any) => any;
 }
 
+type ExportFormat = 'csv' | 'xlsx' | 'pdf' | 'json';
+
 const COLUMN_DEFS: Record<string, ColumnDef> = {
   alarm_id: { key: 'alarm_id', header: 'Alarm ID', width: 40, getValue: (r) => r.alarm_id },
   time_created: {
@@ -90,7 +92,7 @@ export class ExportService {
 
   async exportAlarms(
     params: {
-      format: 'csv' | 'xlsx';
+      format: ExportFormat;
       columns?: string[];
       filters: {
         from_time: Date;
@@ -174,17 +176,7 @@ export class ExportService {
     const deviceMap: Record<string, any> = {};
     const errorMap: Record<string, any> = {};
 
-    // Set Response Headers
-    if (format === 'csv') {
-      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-      res.setHeader('Content-Disposition', 'attachment; filename="alarms_export.csv"');
-    } else {
-      res.setHeader(
-        'Content-Type',
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      );
-      res.setHeader('Content-Disposition', 'attachment; filename="alarms_export.xlsx"');
-    }
+    this.setExportHeaders(res, format);
 
     let recordsCount = 0;
     const escapeCsvRef = this.escapeCsv.bind(this);
@@ -209,9 +201,7 @@ export class ExportService {
         let output = '';
         for (const row of rows) {
           recordsCount++;
-          const dev = (row.device_id ? deviceMap[row.device_id.toLowerCase()] : null) || {};
-          const err = (row.error_code ? errorMap[row.error_code.toLowerCase()] : null) || {};
-          const values = activeCols.map((col) => col.getValue(row, dev, err));
+          const values = this.projectRowValues(row, activeCols, deviceMap, errorMap);
           output += values.map((v) => this.escapeCsv(v)).join(',') + '\n';
         }
         res.write(output);
@@ -219,6 +209,63 @@ export class ExportService {
 
       metrics.records_returned += recordsCount;
       res.end();
+    } else if (format === 'json') {
+      res.write('[');
+      let isFirstRecord = true;
+
+      for await (const chunk of clickhouseStream as AsyncIterable<Buffer>) {
+        const rows = this.parseJsonRows(chunk);
+        if (rows.length === 0) continue;
+        await this.enrichBatch(rows, {
+          needsDeviceMetadata,
+          needsErrorMetadata,
+          deviceMap,
+          errorMap,
+          metrics,
+        });
+        metrics.export_batches = (metrics.export_batches ?? 0) + 1;
+        metrics.clickhouse_rows_returned = (metrics.clickhouse_rows_returned ?? 0) + rows.length;
+
+        for (const row of rows) {
+          recordsCount++;
+          const rowData = this.projectRowObject(row, activeCols, deviceMap, errorMap);
+          res.write(`${isFirstRecord ? '' : ','}${JSON.stringify(rowData)}`);
+          isFirstRecord = false;
+        }
+      }
+
+      metrics.records_returned += recordsCount;
+      res.write(']');
+      res.end();
+    } else if (format === 'pdf') {
+      const tableLines = [activeCols.map((col) => col.header).join(' | ')];
+
+      for await (const chunk of clickhouseStream as AsyncIterable<Buffer>) {
+        const rows = this.parseJsonRows(chunk);
+        if (rows.length === 0) continue;
+        await this.enrichBatch(rows, {
+          needsDeviceMetadata,
+          needsErrorMetadata,
+          deviceMap,
+          errorMap,
+          metrics,
+        });
+        metrics.export_batches = (metrics.export_batches ?? 0) + 1;
+        metrics.clickhouse_rows_returned = (metrics.clickhouse_rows_returned ?? 0) + rows.length;
+
+        for (const row of rows) {
+          recordsCount++;
+          const values = this.projectRowValues(row, activeCols, deviceMap, errorMap);
+          tableLines.push(values.map((value) => this.formatPdfCell(value)).join(' | '));
+        }
+      }
+
+      if (recordsCount === 0) {
+        tableLines.push('No records found matching filters.');
+      }
+
+      metrics.records_returned += recordsCount;
+      res.end(this.buildSimplePdf(tableLines));
     } else {
       const options = {
         stream: res,
@@ -250,13 +297,7 @@ export class ExportService {
 
         for (const row of rows) {
           recordsCount++;
-          const dev = (row.device_id ? deviceMap[row.device_id.toLowerCase()] : null) || {};
-          const err = (row.error_code ? errorMap[row.error_code.toLowerCase()] : null) || {};
-
-          const rowData: Record<string, any> = {};
-          for (const col of activeCols) {
-            rowData[col.key] = col.getValue(row, dev, err);
-          }
+          const rowData = this.projectRowObject(row, activeCols, deviceMap, errorMap);
 
           worksheet.addRow(rowData).commit();
         }
@@ -265,6 +306,56 @@ export class ExportService {
       await workbook.commit();
       metrics.records_returned += recordsCount;
     }
+  }
+
+  private setExportHeaders(res: Response, format: ExportFormat) {
+    if (format === 'csv') {
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', 'attachment; filename="alarms_export.csv"');
+      return;
+    }
+
+    if (format === 'xlsx') {
+      res.setHeader(
+        'Content-Type',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      );
+      res.setHeader('Content-Disposition', 'attachment; filename="alarms_export.xlsx"');
+      return;
+    }
+
+    if (format === 'pdf') {
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', 'attachment; filename="alarms_export.pdf"');
+      return;
+    }
+
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="alarms_export.json"');
+  }
+
+  private projectRowValues(
+    row: any,
+    activeCols: ColumnDef[],
+    deviceMap: Record<string, any>,
+    errorMap: Record<string, any>,
+  ) {
+    const dev = (row.device_id ? deviceMap[row.device_id.toLowerCase()] : null) || {};
+    const err = (row.error_code ? errorMap[row.error_code.toLowerCase()] : null) || {};
+    return activeCols.map((col) => col.getValue(row, dev, err));
+  }
+
+  private projectRowObject(
+    row: any,
+    activeCols: ColumnDef[],
+    deviceMap: Record<string, any>,
+    errorMap: Record<string, any>,
+  ) {
+    const values = this.projectRowValues(row, activeCols, deviceMap, errorMap);
+    return activeCols.reduce<Record<string, any>>((result, col, index) => {
+      result[col.key] = values[index];
+      return result;
+    }, {});
   }
 
   private parseJsonRows(chunk: Buffer): any[] {
@@ -344,23 +435,88 @@ export class ExportService {
     return str;
   }
 
-  private writeEmptyResponse(res: Response, format: 'csv' | 'xlsx', columns?: string[]) {
+  private formatPdfCell(val: any): string {
+    if (val === null || val === undefined) return '';
+    const normalized = String(val).replace(/\s+/g, ' ').trim();
+    return normalized.length > 32 ? `${normalized.slice(0, 29)}...` : normalized;
+  }
+
+  private escapePdfText(value: string): string {
+    return value.replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
+  }
+
+  private buildSimplePdf(lines: string[]): Buffer {
+    const linesPerPage = 42;
+    const pages: string[][] = [];
+    for (let index = 0; index < lines.length; index += linesPerPage) {
+      pages.push(lines.slice(index, index + linesPerPage));
+    }
+
+    const objects: string[] = [];
+    objects.push('<< /Type /Catalog /Pages 2 0 R >>');
+    objects.push(''); // Pages object is filled once page ids are known.
+    objects.push('<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>');
+
+    const pageObjectIds: number[] = [];
+    for (const pageLines of pages) {
+      const content = [
+        'BT',
+        '/F1 8 Tf',
+        '40 800 Td',
+        '12 TL',
+        ...pageLines.map((line) => `(${this.escapePdfText(line)}) Tj T*`),
+        'ET',
+      ].join('\n');
+      const contentObjectId = objects.length + 1;
+      objects.push(`<< /Length ${Buffer.byteLength(content)} >>\nstream\n${content}\nendstream`);
+      const pageObjectId = objects.length + 1;
+      pageObjectIds.push(pageObjectId);
+      objects.push(
+        `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 842] /Resources << /Font << /F1 3 0 R >> >> /Contents ${contentObjectId} 0 R >>`,
+      );
+    }
+
+    objects[1] =
+      `<< /Type /Pages /Kids [${pageObjectIds.map((id) => `${id} 0 R`).join(' ')}] /Count ${pageObjectIds.length} >>`;
+
+    let pdf = '%PDF-1.4\n';
+    const offsets = [0];
+    for (let index = 0; index < objects.length; index++) {
+      offsets.push(Buffer.byteLength(pdf));
+      pdf += `${index + 1} 0 obj\n${objects[index]}\nendobj\n`;
+    }
+    const xrefOffset = Buffer.byteLength(pdf);
+    pdf += `xref\n0 ${objects.length + 1}\n`;
+    pdf += '0000000000 65535 f \n';
+    for (let index = 1; index < offsets.length; index++) {
+      pdf += `${String(offsets[index]).padStart(10, '0')} 00000 n \n`;
+    }
+    pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
+
+    return Buffer.from(pdf);
+  }
+
+  private writeEmptyResponse(res: Response, format: ExportFormat, columns?: string[]) {
     const selectedKeys = columns && columns.length > 0 ? columns : Object.keys(COLUMN_DEFS);
     const activeCols = selectedKeys.map((key) => COLUMN_DEFS[key]).filter(Boolean);
 
+    this.setExportHeaders(res, format);
+
     if (format === 'csv') {
-      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-      res.setHeader('Content-Disposition', 'attachment; filename="alarms_export.csv"');
       res.write('\ufeff');
       res.write(activeCols.map((col) => this.escapeCsv(col.header)).join(',') + '\n');
       res.write('No records found matching filters.\n');
       res.end();
-    } else {
-      res.setHeader(
-        'Content-Type',
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    } else if (format === 'json') {
+      res.end('[]');
+    } else if (format === 'pdf') {
+      res.end(
+        this.buildSimplePdf([
+          activeCols.map((col) => col.header).join(' | '),
+          'No records found matching filters.',
+        ]),
       );
-      res.setHeader('Content-Disposition', 'attachment; filename="alarms_export.xlsx"');
+    } else {
       const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({ stream: res });
       const worksheet = workbook.addWorksheet('Alarms');
       worksheet.columns = activeCols.map((col) => ({

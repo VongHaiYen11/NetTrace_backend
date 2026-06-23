@@ -2,6 +2,17 @@ export type Severity = 'critical' | 'major' | 'minor' | 'warning' | 'info' | str
 export type AlarmStatus = 'active' | 'closed' | 'acknowledged' | string;
 export type SortBy = 'timestamp' | 'severity' | 'status';
 export type SortOrder = 'asc' | 'desc';
+export type AlarmSearchField =
+  | 'alarm_id'
+  | 'device_id'
+  | 'device_name'
+  | 'device_type'
+  | 'error_code'
+  | 'error_name'
+  | 'severity'
+  | 'status'
+  | 'description'
+  | 'raw_log';
 export type Metric = 'count' | 'avg_duration' | 'max_duration' | 'affected_devices';
 export type GroupBy =
   | 'severity'
@@ -92,6 +103,8 @@ export interface QueryAlarmsParams extends CommonFilters {
   sort_order?: SortOrder;
   include_total?: boolean;
   detail_level?: 'compact' | 'full';
+  search?: string;
+  search_field?: AlarmSearchField;
 }
 
 export interface SummaryResult {
@@ -143,14 +156,40 @@ export interface TemplateSummary {
   time_updated: string;
 }
 
-export interface TemplateWidgetInput {
-  device_id: string;
+export interface PresetSummary {
+  preset_id: number;
   position: number;
   chart_type: string;
+  start_date: string | null;
+  end_date: string | null;
+  status: string | null;
+  severity: string | null;
+  error_code: string | null;
+  vendor: string | null;
+  device_type: string | null;
+}
+
+export interface TemplateWidgetDetail {
+  widget_id: number;
+  preset_id: number;
+  time_created: string;
+  time_updated: string;
+  preset: PresetSummary;
+}
+
+export interface TemplateDetail extends TemplateSummary {
+  widgets: TemplateWidgetDetail[];
+}
+
+export interface TemplateWidgetInput {
+  position: number;
+  chart_type: string;
+  start_date?: string | null;
+  end_date?: string | null;
   status?: string | null;
   severity?: string | null;
   error_code?: string | null;
-  vendor_id?: string | null;
+  vendor?: string | null;
   device_type?: string | null;
 }
 
@@ -158,6 +197,19 @@ export interface CreateTemplateRequest {
   name: string;
   selected_cards?: string | null;
   widgets?: TemplateWidgetInput[];
+}
+
+export interface UpdateTemplateRequest {
+  name?: string;
+  selected_cards?: string | null;
+  widgets?: TemplateWidgetInput[];
+}
+
+export interface MetadataFilterOptions {
+  deviceTypes: string[];
+  vendors: string[];
+  stations: string[];
+  provinces: string[];
 }
 
 export type ExportColumn =
@@ -179,7 +231,7 @@ export type ExportColumn =
   | 'description';
 
 export interface ExportRequest {
-  format: 'csv' | 'xlsx';
+  format: 'csv' | 'xlsx' | 'pdf' | 'json';
   columns?: ExportColumn[];
   filters?: CommonFilters & {
     sort_by?: SortBy;
@@ -218,6 +270,8 @@ function buildQuery(filters: QueryAlarmsParams | CommonFilters = {}) {
     params.set('include_total', String(alarmFilters.include_total));
   }
   if (alarmFilters.detail_level) params.set('detail_level', alarmFilters.detail_level);
+  if (alarmFilters.search) params.set('search', alarmFilters.search);
+  if (alarmFilters.search_field) params.set('search_field', alarmFilters.search_field);
   return params.toString();
 }
 
@@ -270,6 +324,15 @@ export const nettraceApi = {
     });
   },
 
+  async getMetadataOptions(params: { search?: string; limit?: number } = {}) {
+    const query = new URLSearchParams();
+    if (params.search) query.set('search', params.search);
+    if (params.limit) query.set('limit', String(params.limit));
+    return requestJson<MetadataFilterOptions>(
+      `/api/v1/metadata/options${query.size ? `?${query}` : ''}`,
+    );
+  },
+
   async listTemplates(params: { limit?: number; offset?: number } = {}) {
     const query = new URLSearchParams();
     if (params.limit) query.set('limit', String(params.limit));
@@ -283,6 +346,24 @@ export const nettraceApi = {
       body: JSON.stringify(request),
     });
   },
+
+  async updateTemplate(id: number, request: UpdateTemplateRequest) {
+    return requestJson<TemplateSummary>(`/api/v1/templates/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(request),
+    });
+  },
+
+  async deleteTemplate(id: number) {
+    return requestJson<void>(`/api/v1/templates/${id}`, {
+      method: 'DELETE',
+    });
+  },
+
+  async getTemplateDetail(id: number) {
+    return requestJson<TemplateDetail>(`/api/v1/templates/${id}`);
+  },
+
 
   async exportAlarms(request: ExportRequest) {
     const response = await fetch(`${API_BASE_URL}/api/v1/export`, {

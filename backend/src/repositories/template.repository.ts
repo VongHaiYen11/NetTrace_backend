@@ -23,7 +23,7 @@ export class TemplateRepository {
   ): Promise<Template> {
     const executor = this.getQueryExecutor(client);
     const query = `
-      INSERT INTO Template (name, selected_cards, number_of_widgets)
+      INSERT INTO template (name, selected_cards, number_of_widgets)
       VALUES ($1, $2, $3)
       RETURNING template_id, name, selected_cards, time_created, time_updated, number_of_widgets
     `;
@@ -35,7 +35,7 @@ export class TemplateRepository {
     const executor = this.getQueryExecutor(client);
     const query = `
       SELECT template_id, name, selected_cards, time_created, time_updated, number_of_widgets
-      FROM Template
+      FROM template
       WHERE template_id = $1
     `;
     const res = await executor.query(query, [id]);
@@ -45,7 +45,7 @@ export class TemplateRepository {
   async listTemplates(limit: number, offset: number): Promise<Template[]> {
     const query = `
       SELECT template_id, name, selected_cards, time_created, time_updated, number_of_widgets
-      FROM Template
+      FROM template
       ORDER BY template_id DESC
       LIMIT $1 OFFSET $2
     `;
@@ -84,7 +84,7 @@ export class TemplateRepository {
 
     values.push(id);
     const query = `
-      UPDATE Template
+      UPDATE template
       SET ${updates.join(', ')}
       WHERE template_id = $${valIdx}
       RETURNING template_id, name, selected_cards, time_created, time_updated, number_of_widgets
@@ -96,7 +96,7 @@ export class TemplateRepository {
   async deleteTemplate(id: number, client?: pg.PoolClient): Promise<boolean> {
     const executor = this.getQueryExecutor(client);
     const query = `
-      DELETE FROM Template
+      DELETE FROM template
       WHERE template_id = $1
     `;
     const res = await executor.query(query, [id]);

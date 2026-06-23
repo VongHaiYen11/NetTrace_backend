@@ -23,7 +23,7 @@ const EXPORT_COLUMNS = [
 export type ExportColumn = (typeof EXPORT_COLUMNS)[number];
 
 export const ExportSchema = z.object({
-  format: z.enum(['csv', 'xlsx']),
+  format: z.enum(['csv', 'xlsx', 'pdf', 'json']),
   columns: z.array(z.enum(EXPORT_COLUMNS)).optional(),
   filters: CommonAnalyticsFilterSchema.extend({
     sort_by: z.enum(['timestamp', 'severity', 'status']).optional(),

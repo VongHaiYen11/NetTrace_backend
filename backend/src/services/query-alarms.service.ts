@@ -29,8 +29,58 @@ export class QueryAlarmsService {
   ) {
     const { device_type, vendor, station, province } = params;
     let finalDeviceIds = params.device_id;
+    let finalErrorCodes = params.error_code;
     metrics.include_total = params.include_total ?? true;
     metrics.detail_level = params.detail_level ?? 'full';
+
+    if (
+      params.search &&
+      (params.search_field === 'device_name' || params.search_field === 'device_type')
+    ) {
+      const startPgSearch = performance.now();
+      const { deviceIds } = await this.deviceRepo.getDeviceIdsBySearch({
+        field: params.search_field,
+        search: params.search,
+      });
+      metrics.postgres_query_time_ms += Math.round(performance.now() - startPgSearch);
+
+      if (deviceIds.length === 0) {
+        return { alarms: [], total: 0 };
+      }
+
+      if (finalDeviceIds && finalDeviceIds.length > 0) {
+        const set = new Set(deviceIds.map((id) => id.toLowerCase()));
+        finalDeviceIds = finalDeviceIds.filter((id) => set.has(id.toLowerCase()));
+        if (finalDeviceIds.length === 0) {
+          return { alarms: [], total: 0 };
+        }
+      } else {
+        finalDeviceIds = deviceIds;
+      }
+    }
+
+    if (params.search && params.search_field === 'error_name') {
+      const startPgSearch = performance.now();
+      const { errorCodes } = await this.errorRepo.getErrorCodesBySearch({
+        field: 'error_name',
+        search: params.search,
+      });
+      metrics.postgres_query_time_ms += Math.round(performance.now() - startPgSearch);
+
+      if (errorCodes.length === 0) {
+        return { alarms: [], total: 0 };
+      }
+
+      if (finalErrorCodes && finalErrorCodes.length > 0) {
+        const set = new Set(errorCodes.map((code) => code.toLowerCase()));
+        finalErrorCodes = finalErrorCodes.filter((code) => set.has(code.toLowerCase()));
+        if (finalErrorCodes.length === 0) {
+          return { alarms: [], total: 0 };
+        }
+      } else {
+        finalErrorCodes = errorCodes;
+      }
+    }
 
     // 1. Resolve PostgreSQL device filters if present
     if (
@@ -54,9 +104,9 @@ export class QueryAlarmsService {
       }
 
       // If user also passed specific device_id filter, intersect them
-      if (params.device_id && params.device_id.length > 0) {
-        const set = new Set(deviceIds);
-        finalDeviceIds = params.device_id.filter((id) => set.has(id));
+      if (finalDeviceIds && finalDeviceIds.length > 0) {
+        const set = new Set(deviceIds.map((id) => id.toLowerCase()));
+        finalDeviceIds = finalDeviceIds.filter((id) => set.has(id.toLowerCase()));
         if (finalDeviceIds.length === 0) {
           return { alarms: [], total: 0 };
         }
@@ -74,9 +124,25 @@ export class QueryAlarmsService {
       severity: params.severity,
       status: params.status,
       device_id: finalDeviceIds,
-      error_code: params.error_code,
+      error_code: finalErrorCodes,
       sort_by: params.sort_by,
       sort_order: params.sort_order,
+      include_total: params.include_total,
+      detail_level: params.detail_level,
+      search:
+        params.search &&
+        params.search_field !== 'device_name' &&
+        params.search_field !== 'device_type' &&
+        params.search_field !== 'error_name'
+          ? params.search
+          : undefined,
+      search_field:
+        params.search &&
+        params.search_field !== 'device_name' &&
+        params.search_field !== 'device_type' &&
+        params.search_field !== 'error_name'
+          ? params.search_field
+          : undefined,
     };
 
     const {

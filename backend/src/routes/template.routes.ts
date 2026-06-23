@@ -31,19 +31,25 @@ const router = Router();
  *     WidgetInput:
  *       type: object
  *       required:
- *         - device_id
  *         - position
  *         - chart_type
  *       properties:
- *         device_id:
- *           type: string
- *           example: "DEV001"
  *         position:
  *           type: integer
  *           example: 1
  *         chart_type:
  *           type: string
  *           example: "line"
+ *         start_date:
+ *           type: string
+ *           format: date-time
+ *           nullable: true
+ *           example: "2026-06-01T00:00:00Z"
+ *         end_date:
+ *           type: string
+ *           format: date-time
+ *           nullable: true
+ *           example: "2026-06-30T00:00:00Z"
  *         status:
  *           type: string
  *           nullable: true
@@ -56,23 +62,58 @@ const router = Router();
  *           type: string
  *           nullable: true
  *           example: "ERR001"
- *         vendor_id:
+ *         vendor:
  *           type: string
  *           nullable: true
- *           example: "VEND01"
+ *           example: "Cisco"
  *         device_type:
  *           type: string
  *           nullable: true
  *           example: "router"
+ *     PresetResponse:
+ *       type: object
+ *       properties:
+ *         preset_id:
+ *           type: integer
+ *           example: 42
+ *         position:
+ *           type: integer
+ *           example: 1
+ *         chart_type:
+ *           type: string
+ *           example: "line"
+ *         start_date:
+ *           type: string
+ *           format: date-time
+ *           nullable: true
+ *         end_date:
+ *           type: string
+ *           format: date-time
+ *           nullable: true
+ *         status:
+ *           type: string
+ *           nullable: true
+ *         severity:
+ *           type: string
+ *           nullable: true
+ *         error_code:
+ *           type: string
+ *           nullable: true
+ *         vendor:
+ *           type: string
+ *           nullable: true
+ *         device_type:
+ *           type: string
+ *           nullable: true
  *     TemplateWidget:
  *       type: object
  *       properties:
  *         widget_id:
  *           type: integer
  *           example: 1
- *         device_id:
- *           type: string
- *           example: "DEV001"
+ *         preset_id:
+ *           type: integer
+ *           example: 42
  *         time_created:
  *           type: string
  *           format: date-time
@@ -80,32 +121,7 @@ const router = Router();
  *           type: string
  *           format: date-time
  *         preset:
- *           type: object
- *           properties:
- *             device_id:
- *               type: string
- *               example: "DEV001"
- *             position:
- *               type: integer
- *               example: 1
- *             chart_type:
- *               type: string
- *               example: "line"
- *             status:
- *               type: string
- *               nullable: true
- *             severity:
- *               type: string
- *               nullable: true
- *             error_code:
- *               type: string
- *               nullable: true
- *             vendor_id:
- *               type: string
- *               nullable: true
- *             device_type:
- *               type: string
- *               nullable: true
+ *           $ref: '#/components/schemas/PresetResponse'
  *     TemplateResponse:
  *       type: object
  *       properties:
@@ -144,7 +160,7 @@ const router = Router();
  * /api/v1/templates:
  *   post:
  *     summary: Create new Dashboard Template
- *     description: Creates a new dashboard layout template along with widgets and configurations in an atomic transaction.
+ *     description: Creates a new dashboard layout template along with widgets and preset configurations in an atomic PostgreSQL transaction.
  *     tags:
  *       - Templates
  *     requestBody:
@@ -231,7 +247,7 @@ router.get('/', validateQueryGeneric(getTemplatesQuerySchema), templateControlle
  * /api/v1/templates/{id}:
  *   get:
  *     summary: Retrieve detailed dashboard template
- *     description: Fetches a template by ID along with its associated widgets and configuration presets.
+ *     description: Fetches a template by ID along with its associated widgets and preset configurations.
  *     tags:
  *       - Templates
  *     parameters:
@@ -268,7 +284,7 @@ router.get(
  * /api/v1/templates/{id}:
  *   put:
  *     summary: Update dashboard template
- *     description: Updates a template name, selected cards, and synchronizes its widgets (creation/update/deletion) inside a transaction.
+ *     description: Updates a template name, selected cards, and synchronizes its widgets and presets (deletion + re-insertion) inside a PostgreSQL transaction.
  *     tags:
  *       - Templates
  *     parameters:
@@ -323,7 +339,7 @@ router.put(
  * /api/v1/templates/{id}:
  *   delete:
  *     summary: Delete dashboard template
- *     description: Deletes a template and its associated widgets.
+ *     description: Deletes a template. Associated widgets are cascade-deleted by the FK constraint; orphaned presets are deleted in the service layer before the template is removed.
  *     tags:
  *       - Templates
  *     parameters:
@@ -336,6 +352,20 @@ router.put(
  *     responses:
  *       200:
  *         description: Template deleted successfully.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     message:
+ *                       type: string
+ *                       example: "Template and associated widgets deleted successfully"
  *       404:
  *         description: Template not found.
  */

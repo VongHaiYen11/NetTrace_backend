@@ -7,6 +7,7 @@ import { AnalyticsQueryRepository } from '../repositories/analytics-query.reposi
 import { HeatmapService } from '../services/heatmap.service.js';
 import { HeatmapRepository } from '../repositories/heatmap.repository.js';
 import { ExportService } from '../services/export.service.js';
+import { MetadataOptionsService } from '../services/metadata-options.service.js';
 import { DeviceRepository } from '../repositories/device.repository.js';
 import { ErrorRepository } from '../repositories/error.repository.js';
 import { ServiceMetrics } from '../services/shared.js';
@@ -21,11 +22,14 @@ describe('Service Layer Tests', () => {
     mockDeviceRepo = {
       getDevicesByIds: jest.fn(),
       getDeviceIdsByFilters: jest.fn(),
+      getDeviceIdsBySearch: jest.fn(),
       getAllDevices: jest.fn(),
+      getFilterOptions: jest.fn(),
     } as unknown as jest.Mocked<DeviceRepository>;
 
     mockErrorRepo = {
       getErrorsByCodes: jest.fn(),
+      getErrorCodesBySearch: jest.fn(),
       getAllErrors: jest.fn(),
     } as unknown as jest.Mocked<ErrorRepository>;
 
@@ -152,6 +156,51 @@ describe('Service Layer Tests', () => {
       expect(mockQueryRepo.queryAlarms).toHaveBeenCalledWith(
         expect.objectContaining({
           device_id: ['DEV01'],
+        }),
+      );
+    });
+
+    it('should resolve device metadata search through Postgres before querying ClickHouse', async () => {
+      const mockQueryRepo = {
+        queryAlarms: jest.fn(),
+      } as unknown as jest.Mocked<QueryAlarmsRepository>;
+
+      const queryService = new QueryAlarmsService(mockQueryRepo, mockDeviceRepo, mockErrorRepo);
+
+      mockDeviceRepo.getDeviceIdsBySearch.mockResolvedValue({
+        deviceIds: ['DEV01'],
+        durationMs: 7,
+      });
+
+      mockQueryRepo.queryAlarms.mockResolvedValue({
+        alarms: [],
+        total: 0,
+        durationMs: 5,
+      });
+
+      await queryService.queryAlarms(
+        {
+          from_time: new Date(),
+          to_time: new Date(),
+          offset: 0,
+          limit: 10,
+          search: 'Switch',
+          search_field: 'device_type',
+          sort_by: 'timestamp',
+          sort_order: 'desc',
+        },
+        metrics,
+      );
+
+      expect(mockDeviceRepo.getDeviceIdsBySearch).toHaveBeenCalledWith({
+        field: 'device_type',
+        search: 'Switch',
+      });
+      expect(mockQueryRepo.queryAlarms).toHaveBeenCalledWith(
+        expect.objectContaining({
+          device_id: ['DEV01'],
+          search: undefined,
+          search_field: undefined,
         }),
       );
     });
@@ -531,6 +580,137 @@ describe('Service Layer Tests', () => {
       expect(mockDeviceRepo.getDevicesByIds).toHaveBeenCalledWith(['DEV01']);
       expect(mockErrorRepo.getErrorsByCodes).not.toHaveBeenCalled();
       expect(metrics.metadata_ids_fetched).toBe(1);
+    });
+
+    it('should export alarms as JSON with selected columns', async () => {
+      const mockQueryRepo = {
+        queryAlarmsStream: jest.fn(),
+      } as unknown as jest.Mocked<QueryAlarmsRepository>;
+
+      const exportService = new ExportService(mockQueryRepo, mockDeviceRepo, mockErrorRepo);
+
+      const mockStream = new Readable({
+        read() {
+          this.push(
+            JSON.stringify({
+              alarm_id: 'a1',
+              status: 'active',
+              severity: 'critical',
+            }) + '\n',
+          );
+          this.push(null);
+        },
+      });
+
+      mockQueryRepo.queryAlarmsStream.mockResolvedValue(mockStream);
+
+      const chunks: string[] = [];
+      const mockRes = new PassThrough() as any;
+      mockRes.setHeader = jest.fn();
+      mockRes.on('data', (chunk: any) => {
+        chunks.push(chunk.toString());
+      });
+
+      await exportService.exportAlarms(
+        {
+          format: 'json',
+          columns: ['alarm_id', 'severity', 'status'],
+          filters: {
+            from_time: new Date(),
+            to_time: new Date(),
+          },
+        },
+        mockRes,
+        metrics,
+      );
+
+      expect(mockRes.setHeader).toHaveBeenCalledWith(
+        'Content-Type',
+        'application/json; charset=utf-8',
+      );
+      expect(JSON.parse(chunks.join(''))).toEqual([
+        {
+          alarm_id: 'a1',
+          severity: 'critical',
+          status: 'active',
+        },
+      ]);
+    });
+
+    it('should export alarms as PDF with selected columns', async () => {
+      const mockQueryRepo = {
+        queryAlarmsStream: jest.fn(),
+      } as unknown as jest.Mocked<QueryAlarmsRepository>;
+
+      const exportService = new ExportService(mockQueryRepo, mockDeviceRepo, mockErrorRepo);
+
+      const mockStream = new Readable({
+        read() {
+          this.push(
+            JSON.stringify({
+              alarm_id: 'a1',
+              status: 'active',
+              severity: 'critical',
+            }) + '\n',
+          );
+          this.push(null);
+        },
+      });
+
+      mockQueryRepo.queryAlarmsStream.mockResolvedValue(mockStream);
+
+      const chunks: Buffer[] = [];
+      const mockRes = new PassThrough() as any;
+      mockRes.setHeader = jest.fn();
+      mockRes.on('data', (chunk: any) => {
+        chunks.push(Buffer.from(chunk));
+      });
+
+      await exportService.exportAlarms(
+        {
+          format: 'pdf',
+          columns: ['alarm_id', 'severity', 'status'],
+          filters: {
+            from_time: new Date(),
+            to_time: new Date(),
+          },
+        },
+        mockRes,
+        metrics,
+      );
+
+      const pdf = Buffer.concat(chunks).toString();
+      expect(mockRes.setHeader).toHaveBeenCalledWith('Content-Type', 'application/pdf');
+      expect(pdf).toContain('%PDF-1.4');
+      expect(pdf).toContain('Alarm ID | Severity | Status');
+      expect(pdf).toContain('a1 | critical | active');
+    });
+  });
+
+  describe('MetadataOptionsService', () => {
+    it('should return searchable metadata options and update metrics', async () => {
+      mockDeviceRepo.getFilterOptions.mockResolvedValue({
+        options: {
+          deviceTypes: ['Router'],
+          vendors: ['Cisco'],
+          stations: ['Hanoi Central'],
+          provinces: ['Hanoi'],
+        },
+        durationMs: 5,
+      });
+
+      const service = new MetadataOptionsService(mockDeviceRepo);
+      const result = await service.getOptions({ search: 'co', limit: 10 }, metrics);
+
+      expect(mockDeviceRepo.getFilterOptions).toHaveBeenCalledWith({ search: 'co', limit: 10 });
+      expect(result).toEqual({
+        deviceTypes: ['Router'],
+        vendors: ['Cisco'],
+        stations: ['Hanoi Central'],
+        provinces: ['Hanoi'],
+      });
+      expect(metrics.postgres_query_time_ms).toBe(5);
+      expect(metrics.records_returned).toBe(4);
     });
   });
 });

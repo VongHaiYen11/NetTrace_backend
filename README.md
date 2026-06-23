@@ -214,6 +214,34 @@ curl -X GET "http://localhost:3000/api/v1/alarms?limit=1&offset=0&severity=criti
 </details>
 
 <details>
+<summary><b>1.1 Metadata Filter Options (<code>GET /api/v1/metadata/options</code>)</b></summary>
+
+* Returns searchable PostgreSQL metadata values for UI dropdown filters.
+* Provides device types, vendors, stations, and provinces.
+
+**cURL Call:**
+```bash
+curl -X GET "http://localhost:3000/api/v1/metadata/options?search=core&limit=10"
+```
+
+**Response Example:**
+```json
+{
+  "success": true,
+  "data": {
+    "deviceTypes": ["Router"],
+    "vendors": ["Cisco"],
+    "stations": ["Hanoi Central"],
+    "provinces": ["Hanoi"]
+  },
+  "meta": {
+    "execution_time_ms": 12
+  }
+}
+```
+</details>
+
+<details>
 <summary><b>2. Operational Summary KPIs (<code>GET /api/v1/analytics/summary</code>)</b></summary>
 
 * Returns overall count aggregates for KPI cards.
@@ -348,10 +376,11 @@ curl -X POST http://localhost:3000/api/v1/analytics/heatmap \
 <details>
 <summary><b>5. Stream Export (<code>POST /api/v1/export</code>)</b></summary>
 
-* Streams a full/filtered copy of alarm telemetry formatted as `csv` or `xlsx` spreadsheet download.
+* Streams a full/filtered copy of alarm telemetry formatted as `csv`, `xlsx`, `json`, or a compact `pdf` report download.
 * Supports **dynamic column selection** via the `columns` array. If omitted, all columns are exported.
 * Supports all table-like filters, sorting (`sort_by`, `sort_order`), and size limit (`limit`) inside the `filters` object.
-* Streams ClickHouse alarm rows and uses the `exceljs` streaming writer for XLSX output. Device/error metadata is currently loaded into in-memory lookup maps for enrichment, so alarm row data is streamed while metadata memory usage scales with metadata table size.
+* Streams ClickHouse alarm rows for CSV, XLSX, and JSON output. PDF is intended for bounded review reports and should be used with a practical `limit`.
+* Uses the `exceljs` streaming writer for XLSX output. Device/error metadata is resolved in batches only when selected columns need enrichment.
 
 **cURL Call:**
 ```bash
@@ -369,7 +398,7 @@ curl -X POST http://localhost:3000/api/v1/export \
   }' --output alarms_export.csv
 ```
 
-*Note: The command streams the download and saves the output directly to the local file `alarms_export.csv`.*
+*Note: Change `format` and the output extension to download `alarms_export.xlsx`, `alarms_export.json`, or `alarms_export.pdf`.*
 </details>
 
 ### 🎛️ Dashboard Template Management

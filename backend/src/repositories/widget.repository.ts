@@ -5,7 +5,7 @@ import { Preset } from './preset.repository.js';
 export interface Widget {
   widget_id: number;
   template_id: number;
-  device_id: string;
+  preset_id: number;
   time_created: Date;
   time_updated: Date;
 }
@@ -21,23 +21,23 @@ export class WidgetRepository {
 
   async createWidget(
     templateId: number,
-    deviceId: string,
+    presetId: number,
     client?: pg.PoolClient,
   ): Promise<Widget> {
     const executor = this.getQueryExecutor(client);
     const query = `
-      INSERT INTO Widget (template_id, device_id)
+      INSERT INTO widget (template_id, preset_id)
       VALUES ($1, $2)
-      RETURNING widget_id, template_id, device_id, time_created, time_updated
+      RETURNING widget_id, template_id, preset_id, time_created, time_updated
     `;
-    const res = await executor.query(query, [templateId, deviceId]);
+    const res = await executor.query(query, [templateId, presetId]);
     return res.rows[0];
   }
 
   async deleteWidgetsByTemplateId(templateId: number, client?: pg.PoolClient): Promise<number> {
     const executor = this.getQueryExecutor(client);
     const query = `
-      DELETE FROM Widget
+      DELETE FROM widget
       WHERE template_id = $1
     `;
     const res = await executor.query(query, [templateId]);
@@ -50,21 +50,23 @@ export class WidgetRepository {
   ): Promise<WidgetWithPreset[]> {
     const executor = this.getQueryExecutor(client);
     const query = `
-      SELECT 
+      SELECT
         w.widget_id,
         w.template_id,
-        w.device_id,
+        w.preset_id,
         w.time_created,
         w.time_updated,
         p.position,
         p.chart_type,
+        p.start_date,
+        p.end_date,
         p.status,
         p.severity,
         p.error_code,
-        p.vendor_id,
+        p.vendor,
         p.device_type
-      FROM Widget w
-      INNER JOIN Preset p ON w.device_id = p.device_id
+      FROM widget w
+      INNER JOIN preset p ON w.preset_id = p.preset_id
       WHERE w.template_id = $1
       ORDER BY p.position ASC, w.widget_id ASC
     `;
@@ -72,17 +74,19 @@ export class WidgetRepository {
     return res.rows.map((row) => ({
       widget_id: row.widget_id,
       template_id: row.template_id,
-      device_id: row.device_id,
+      preset_id: row.preset_id,
       time_created: row.time_created,
       time_updated: row.time_updated,
       preset: {
-        device_id: row.device_id,
+        preset_id: row.preset_id,
         position: row.position,
         chart_type: row.chart_type,
+        start_date: row.start_date,
+        end_date: row.end_date,
         status: row.status,
         severity: row.severity,
         error_code: row.error_code,
-        vendor_id: row.vendor_id,
+        vendor: row.vendor,
         device_type: row.device_type,
       },
     }));

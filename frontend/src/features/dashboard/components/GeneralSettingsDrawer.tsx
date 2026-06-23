@@ -1,4 +1,3 @@
-import { useEffect, useMemo, useState } from 'react';
 import {
   Activity,
   AlertTriangle,
@@ -6,14 +5,13 @@ import {
   Check,
   ChevronDown,
   ChevronRight,
-  Eye,
-  EyeOff,
   Grid2X2,
   Grid3X3,
   LayoutGrid,
   Maximize2,
   Minimize2,
   PieChart,
+  Plus,
   RadioTower,
   Search,
   Table,
@@ -21,14 +19,22 @@ import {
   Type as TypeIcon,
   X,
 } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { toast } from 'sonner';
 import { Button } from '../../../components/ui/Button';
 import { Field, Input, Select } from '../../../components/ui/Field';
-import { nettraceApi, type TemplateSummary } from '../../../services/generated/nettrace-api';
+import {
+  nettraceApi,
+  type ExportColumn,
+  type TemplateDetail,
+  type TemplateSummary,
+  type TemplateWidgetDetail,
+  type TemplateWidgetInput,
+} from '../../../services/generated/nettrace-api';
 import { cn } from '../../../utils/cn';
 import type { WidgetKind, WidgetSettingsValues } from './WidgetSettingsDrawer';
-import { toast } from 'sonner';
 
-type DashboardWidgetConfig = WidgetSettingsValues & {
+export type DashboardWidgetConfig = WidgetSettingsValues & {
   id: string;
   title: string;
   type: WidgetKind;
@@ -36,11 +42,13 @@ type DashboardWidgetConfig = WidgetSettingsValues & {
   layoutSpan: 1 | 2;
 };
 
+type LayoutCount = 2 | 3 | 4 | 5 | 6;
+
 interface DashboardTemplate {
   id: string;
   name: string;
   description: string;
-  layoutCount: 2 | 4 | 6;
+  layoutCount: LayoutCount;
   apply: (widgets: DashboardWidgetConfig[]) => DashboardWidgetConfig[];
 }
 
@@ -48,18 +56,47 @@ interface GeneralSettingsDrawerProps {
   isOpen: boolean;
   widgets: DashboardWidgetConfig[];
   activeTemplate: { id: string; name: string } | null;
+  createTemplateRequestId?: number;
+  variant?: 'drawer' | 'modal';
+  templateId?: number;
+  templateName?: string;
   onClose: () => void;
   onSave: (widgets: DashboardWidgetConfig[]) => void;
   onTemplateChange: (template: { id: string; name: string } | null) => void;
+  onTemplateSaved?: () => void;
+}
+
+interface TemplateEditorModalProps {
+  isOpen: boolean;
+  mode: 'create' | 'edit';
+  widgets: DashboardWidgetConfig[];
+  templateId?: number;
+  templateName?: string;
+  onClose: () => void;
+  onSaved?: () => void;
 }
 
 const summaryOptions = [
   {
-    key: 'kpi-count',
+    key: 'kpi-total',
     icon: RadioTower,
-    title: 'Alarm count',
-    fields: ['totalAlarms', 'activeAlarms', 'closedAlarms'],
-    description: 'Shows total, active, and closed alarms.',
+    title: 'Total alarms',
+    fields: ['totalAlarms'],
+    description: 'Shows total alarms.',
+  },
+  {
+    key: 'kpi-active',
+    icon: Activity,
+    title: 'Active alarms',
+    fields: ['activeAlarms'],
+    description: 'Shows active alarms.',
+  },
+  {
+    key: 'kpi-closed',
+    icon: Check,
+    title: 'Closed alarms',
+    fields: ['closedAlarms'],
+    description: 'Shows closed alarms.',
   },
   {
     key: 'kpi-devices',
@@ -69,15 +106,21 @@ const summaryOptions = [
     description: 'Shows the unique affected device count.',
   },
   {
-    key: 'kpi-status',
+    key: 'kpi-critical',
     icon: AlertTriangle,
     title: 'Critical alarms',
     fields: ['criticalAlarms'],
-    description: 'Shows status and critical alarm count.',
+    description: 'Shows critical alarms.',
   },
 ] as const;
 
 type KpiWidgetKind = (typeof summaryOptions)[number]['key'];
+
+function normalizeKpiKind(kind: WidgetKind): KpiWidgetKind {
+  if (kind === 'kpi-count') return 'kpi-total';
+  if (kind === 'kpi-status') return 'kpi-critical';
+  return kind as KpiWidgetKind;
+}
 
 const informationScenarios = [
   { value: 'count', label: 'Alarm count' },
@@ -119,6 +162,34 @@ const chartTypeOptions = [
   { value: 'table', label: 'Data table', icon: Table },
 ] as const;
 
+const tableColumnOptions: Array<{ value: ExportColumn; label: string }> = [
+  { value: 'alarm_id', label: 'Alarm ID' },
+  { value: 'time_created', label: 'Time created' },
+  { value: 'time_solved', label: 'Time solved' },
+  { value: 'status', label: 'Status' },
+  { value: 'severity', label: 'Severity' },
+  { value: 'error_code', label: 'Error code' },
+  { value: 'error_name', label: 'Error name' },
+  { value: 'error_domain', label: 'Error domain' },
+  { value: 'device_id', label: 'Device ID' },
+  { value: 'device_name', label: 'Device name' },
+  { value: 'device_type', label: 'Device type' },
+  { value: 'station_name', label: 'Station name' },
+  { value: 'station_province', label: 'Province' },
+  { value: 'vendor_name', label: 'Vendor name' },
+  { value: 'raw_log', label: 'Raw log' },
+  { value: 'description', label: 'Description' },
+];
+
+const defaultTableColumns: ExportColumn[] = [
+  'time_created',
+  'error_name',
+  'status',
+  'severity',
+  'device_name',
+  'description',
+];
+
 function getDisplayOptions(widget: DashboardWidgetConfig) {
   if (widget.chartType === 'table') {
     return [
@@ -141,7 +212,6 @@ function getDisplayOptions(widget: DashboardWidgetConfig) {
   }
   return [
     { key: 'info1', label: 'Grid', checked: widget.info1 },
-    { key: 'info2', label: 'Value axis', checked: widget.info2 },
     { key: 'info3', label: 'Hover tooltip', checked: widget.info3 },
   ] as const;
 }
@@ -161,7 +231,7 @@ function normalizeChartPatch(
   return { chartType, groupBy: 'none', layoutSpan: 2 };
 }
 
-function withVisibleChartCount(widgets: DashboardWidgetConfig[], count: 2 | 4 | 6) {
+function withVisibleChartCount(widgets: DashboardWidgetConfig[], count: LayoutCount) {
   const orderedIds = getChartWidgets(widgets).map((widget) => widget.id);
   return widgets.map((widget) => {
     if (widget.type.startsWith('kpi')) return widget;
@@ -190,8 +260,50 @@ function updateKpiContent(
   });
 }
 
+function getSelectedKpiKinds(widgets: DashboardWidgetConfig[]) {
+  return widgets
+    .filter((widget) => widget.type.startsWith('kpi') && widget.visible)
+    .map((widget) => normalizeKpiKind(widget.type));
+}
+
+function getKpiWidgetForKind(widgets: DashboardWidgetConfig[], kind: KpiWidgetKind) {
+  return widgets.find((widget) => widget.type.startsWith('kpi') && widget.visible && normalizeKpiKind(widget.type) === kind);
+}
+
+function applyKpiSelection(widgets: DashboardWidgetConfig[], kind: KpiWidgetKind, checked: boolean) {
+  const selectedKinds = getSelectedKpiKinds(widgets);
+  const existingWidget = getKpiWidgetForKind(widgets, kind);
+
+  if (!checked) {
+    return existingWidget ? updateWidget(widgets, existingWidget.id, { visible: false }) : widgets;
+  }
+
+  if (existingWidget || selectedKinds.length >= 3) return widgets;
+
+  const availableSlot = widgets.find((widget) => widget.type.startsWith('kpi') && !widget.visible);
+  if (!availableSlot) return widgets;
+
+  return updateKpiContent(
+    updateWidget(widgets, availableSlot.id, { visible: true }),
+    availableSlot.id,
+    kind,
+  );
+}
+
 function getCurrentIsoDate() {
   return new Date().toISOString().slice(0, 10);
+}
+
+function getDraftTemplateName() {
+  const now = new Date();
+  const parts = [
+    now.getFullYear().toString().slice(-2),
+    String(now.getMonth() + 1).padStart(2, '0'),
+    String(now.getDate()).padStart(2, '0'),
+    String(now.getHours()).padStart(2, '0'),
+    String(now.getMinutes()).padStart(2, '0'),
+  ];
+  return `Untitled${parts.join('')}`;
 }
 
 function getYearFromDate(value: string) {
@@ -232,9 +344,7 @@ function compactVisibleChartOrder(widgets: DashboardWidgetConfig[]) {
 
 function getLayoutCapacity(widgets: DashboardWidgetConfig[]) {
   const visibleCount = getVisibleChartWidgets(widgets).length;
-  if (visibleCount <= 2) return 2;
-  if (visibleCount <= 4) return 4;
-  return 6;
+  return Math.min(6, Math.max(2, visibleCount)) as LayoutCount;
 }
 
 function hideChartWidget(widgets: DashboardWidgetConfig[], widgetId: string) {
@@ -260,52 +370,15 @@ function restoreChartWidget(widgets: DashboardWidgetConfig[], widgetId: string, 
   });
 }
 
-const templates: DashboardTemplate[] = [
-  {
-    id: 'operations',
-    name: 'Network ops',
-    description: 'SYS_MON / TELEMETRY',
-    layoutCount: 4,
-    apply: (widgets) =>
-      withVisibleChartCount(widgets, 4).map((widget) => {
-        if (widget.id === 'chart-1') return { ...widget, chartType: 'line', metric: 'count', groupBy: 'none', timeBucket: 'day', layoutSpan: 2 };
-        if (widget.id === 'chart-2') return { ...widget, chartType: 'pie', metric: 'count', groupBy: 'severity' };
-        if (widget.id === 'chart-3') return { ...widget, chartType: 'bar', metric: 'count', groupBy: 'none', timeBucket: 'week' };
-        if (widget.id === 'chart-4') return { ...widget, chartType: 'heatmap', metric: 'count', groupBy: 'none', heatmapMode: 'weekday', layoutSpan: 2 };
-        return widget;
-      }),
-  },
-  {
-    id: 'critical',
-    name: 'Security audit',
-    description: 'LOG_VIEW / ALERTS',
-    layoutCount: 2,
-    apply: (widgets) =>
-      withVisibleChartCount(widgets, 2).map((widget) => {
-        if (widget.id === 'chart-1') return { ...widget, chartType: 'bar', metric: 'count', groupBy: 'severity', layoutSpan: 1 };
-        if (widget.id === 'chart-2') return { ...widget, chartType: 'pie', metric: 'count', groupBy: 'status' };
-        return widget;
-      }),
-  },
-  {
-    id: 'full',
-    name: 'User telemetry',
-    description: 'DATA_VIZ / METRICS',
-    layoutCount: 6,
-    apply: (widgets) =>
-      withVisibleChartCount(widgets, 6).map((widget) => {
-        if (widget.id === 'chart-5') return { ...widget, chartType: 'bar', metric: 'affected_devices', groupBy: 'province', visible: true, layoutSpan: 1 };
-        if (widget.id === 'table-1') return { ...widget, chartType: 'table', visible: true, layoutSpan: 2 };
-        return widget;
-      }),
-  },
-];
-
-const extraTemplate = {
-  id: 'terminal',
-  name: 'Terminal focus',
-  description: 'CLI / RAW_DATA',
-};
+function insertChartWidget(widgets: DashboardWidgetConfig[], widget: DashboardWidgetConfig, slot: number) {
+  const shiftedWidgets = compactVisibleChartOrder(widgets).map((item) => {
+    if (!item.type.startsWith('kpi') && item.visible && item.layoutOrder >= slot) {
+      return { ...item, layoutOrder: item.layoutOrder + 1 };
+    }
+    return item;
+  });
+  return [...shiftedWidgets, { ...widget, visible: true, layoutOrder: slot }];
+}
 
 const drawerIconButtonClass =
   'flex shrink-0 items-center justify-center rounded bg-transparent text-[#00f5d4] transition hover:text-[#9ef7ee] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00f5d4]/30';
@@ -315,13 +388,6 @@ const drawerMutedIconButtonClass =
 
 const drawerDangerIconButtonClass =
   'flex shrink-0 items-center justify-center rounded bg-transparent text-[#ff5a9d] transition hover:text-[#ff8fbd] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff2d85]/30';
-
-function getVisibleChartCount(widgets: DashboardWidgetConfig[]) {
-  const count = widgets.filter((widget) => !widget.type.startsWith('kpi') && widget.visible).length;
-  if (count <= 2) return 2;
-  if (count <= 4) return 4;
-  return 6;
-}
 
 function getLayoutCountLabel(count: number) {
   return `${count}-widget layout`;
@@ -350,18 +416,37 @@ function normalizeWidgetTitle(widget: DashboardWidgetConfig) {
   };
 }
 
-function buildTemplateSnapshot(widgets: DashboardWidgetConfig[]) {
+function buildTemplateSnapshot(widgets: DashboardWidgetConfig[], layoutCount: LayoutCount) {
   return JSON.stringify({
     version: 1,
+    layoutCount,
     widgets: widgets.map(normalizeWidgetTitle),
   });
+}
+
+function buildTemplateWidgetInputs(widgets: DashboardWidgetConfig[]): TemplateWidgetInput[] {
+  return getVisibleChartWidgets(widgets).map((widget) => ({
+    position: widget.layoutOrder,
+    chart_type: widget.chartType,
+    start_date: widget.startDate || null,
+    end_date: widget.endDate || null,
+    status: null,
+    severity: null,
+    error_code: null,
+    vendor: null,
+    device_type: null,
+  }));
 }
 
 function readTemplateSnapshot(value: string | null) {
   if (!value) return null;
   try {
-    const parsed = JSON.parse(value) as { widgets?: DashboardWidgetConfig[] };
-    return Array.isArray(parsed.widgets) ? parsed.widgets : null;
+    const parsed = JSON.parse(value) as { widgets?: DashboardWidgetConfig[]; layoutCount?: LayoutCount };
+    if (!Array.isArray(parsed.widgets)) return null;
+    return {
+      widgets: parsed.widgets,
+      layoutCount: parsed.layoutCount,
+    };
   } catch {
     return null;
   }
@@ -372,50 +457,138 @@ function getSavedTemplateName(template: TemplateSummary) {
 }
 
 function createDashboardTemplateFromSaved(template: TemplateSummary): DashboardTemplate | null {
-  const snapshotWidgets = readTemplateSnapshot(template.selected_cards);
-  if (!snapshotWidgets) return null;
+  const snapshot = readTemplateSnapshot(template.selected_cards);
+  if (!snapshot) return null;
 
   return {
     id: `db:${template.template_id}`,
     name: getSavedTemplateName(template),
     description: 'POSTGRES / SAVED_LAYOUT',
-    layoutCount: getLayoutCapacity(snapshotWidgets),
-    apply: () => snapshotWidgets,
+    layoutCount: snapshot.layoutCount ?? getLayoutCapacity(snapshot.widgets),
+    apply: () => snapshot.widgets,
   };
+}
+
+function normalizeTemplateChartType(value: string | null | undefined): DashboardWidgetConfig['chartType'] {
+  if (value === 'line' || value === 'bar' || value === 'pie' || value === 'table' || value === 'heatmap') {
+    return value;
+  }
+  return 'line';
+}
+
+function normalizeTemplateDate(value: string | null | undefined, fallback: string) {
+  return value ? value.slice(0, 10) : fallback;
+}
+
+function applyTemplateWidgetsFromDb(
+  sourceWidgets: DashboardWidgetConfig[],
+  templateWidgets: TemplateWidgetDetail[],
+) {
+  const orderedTemplateWidgets = [...templateWidgets].sort(
+    (a, b) => a.preset.position - b.preset.position || a.widget_id - b.widget_id,
+  );
+  const chartSlots = getChartWidgets(sourceWidgets);
+  const visibleCount = Math.min(Math.max(orderedTemplateWidgets.length, 2), 6) as LayoutCount;
+  const updatesById = new Map<string, Partial<DashboardWidgetConfig>>();
+
+  orderedTemplateWidgets.slice(0, chartSlots.length).forEach((templateWidget, index) => {
+    const slot = chartSlots[index];
+    const chartType = normalizeTemplateChartType(templateWidget.preset.chart_type);
+    updatesById.set(slot.id, {
+      visible: true,
+      layoutOrder: templateWidget.preset.position || index + 1,
+      chartType,
+      groupBy: chartType === 'pie' ? 'severity' : 'none',
+      metric: 'count',
+      timeBucket: 'day',
+      heatmapMode: chartType === 'heatmap' ? 'weekday' : slot.heatmapMode,
+      layoutSpan: chartType === 'table' || chartType === 'heatmap' ? 2 : 1,
+      startDate: normalizeTemplateDate(templateWidget.preset.start_date, slot.startDate || '2026-06-01'),
+      endDate: normalizeTemplateDate(templateWidget.preset.end_date, slot.endDate || '2026-06-30'),
+    });
+  });
+
+  return withVisibleChartCount(
+    sourceWidgets.map((widget) => {
+      if (widget.type.startsWith('kpi')) return widget;
+      const patch = updatesById.get(widget.id);
+      return patch
+        ? { ...widget, ...patch }
+        : { ...widget, visible: false };
+    }),
+    visibleCount,
+  );
+}
+
+function createDashboardTemplateFromDetail(template: TemplateDetail): DashboardTemplate {
+  const snapshotTemplate = createDashboardTemplateFromSaved(template);
+  if (snapshotTemplate) return snapshotTemplate;
+
+  const layoutCount = Math.min(Math.max(template.widgets.length, 2), 6) as LayoutCount;
+  return {
+    id: `db:${template.template_id}`,
+    name: getSavedTemplateName(template),
+    description: 'POSTGRES / SAVED_LAYOUT',
+    layoutCount,
+    apply: (widgets) => applyTemplateWidgetsFromDb(widgets, template.widgets),
+  };
+}
+
+function getSavedTemplateId(templateId: string | undefined) {
+  if (!templateId?.startsWith('db:')) return null;
+  const id = Number(templateId.replace('db:', ''));
+  return Number.isFinite(id) ? id : null;
 }
 
 export function GeneralSettingsDrawer({
   isOpen,
   widgets,
   activeTemplate,
+  createTemplateRequestId = 0,
+  variant = 'drawer',
+  templateId,
+  templateName,
   onClose,
   onSave,
   onTemplateChange,
+  onTemplateSaved,
 }: GeneralSettingsDrawerProps) {
+  const handledCreateTemplateRequestRef = useRef(0);
+  const modalOnly = variant === 'modal';
   const [draftWidgets, setDraftWidgets] = useState(widgets);
   const [detailDraftWidgets, setDetailDraftWidgets] = useState(widgets);
+  const [draftLayoutCount, setDraftLayoutCount] = useState<LayoutCount>(getLayoutCapacity(widgets));
   const [selectedTemplateId, setSelectedTemplateId] = useState('none');
   const [savedTemplates, setSavedTemplates] = useState<DashboardTemplate[]>([]);
   const [templateSearch, setTemplateSearch] = useState('');
+  const [draftTemplateName, setDraftTemplateName] = useState(getDraftTemplateName);
+  const [detailTemplateName, setDetailTemplateName] = useState('');
   const [creatingTemplate, setCreatingTemplate] = useState(false);
   const [dashboardStatusOpen, setDashboardStatusOpen] = useState(false);
   const [templateDropdownOpen, setTemplateDropdownOpen] = useState(false);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
+  const [detailMode, setDetailMode] = useState<'edit' | 'create'>('edit');
   const [detailStep, setDetailStep] = useState<'template' | 'widget'>('template');
   const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
+  const [detailLayoutCount, setDetailLayoutCount] = useState<LayoutCount>(getLayoutCapacity(widgets));
   const [restoreWidgetId, setRestoreWidgetId] = useState<string | null>(null);
 
   useEffect(() => {
     if (isOpen) {
       setDraftWidgets(widgets);
       setDetailDraftWidgets(widgets);
+      setDraftLayoutCount(getLayoutCapacity(widgets));
       setSelectedTemplateId(activeTemplate?.id ?? 'none');
       setTemplateSearch('');
+      setDraftTemplateName(getDraftTemplateName());
+      setDetailTemplateName('');
       setDashboardStatusOpen(false);
       setTemplateDropdownOpen(false);
       setDetailModalOpen(false);
+      setDetailMode('edit');
       setDetailStep('template');
       setSelectedSlotId(null);
+      setDetailLayoutCount(getLayoutCapacity(widgets));
       setRestoreWidgetId(null);
     }
   }, [activeTemplate?.id, isOpen, widgets]);
@@ -428,12 +601,30 @@ export function GeneralSettingsDrawer({
       try {
         const response = await nettraceApi.listTemplates({ limit: 50, offset: 0 });
         if (cancelled) return;
-        const parsedTemplates = response.data
-          .map(createDashboardTemplateFromSaved)
-          .filter((template): template is DashboardTemplate => template !== null);
+        const parsedTemplates = await Promise.all(
+          response.data.map(async (template) => {
+            const snapshotTemplate = createDashboardTemplateFromSaved(template);
+            if (snapshotTemplate) return snapshotTemplate;
+
+            try {
+              const detail = await nettraceApi.getTemplateDetail(template.template_id);
+              return createDashboardTemplateFromDetail(detail.data);
+            } catch {
+              return {
+                id: `db:${template.template_id}`,
+                name: getSavedTemplateName(template),
+                description: 'POSTGRES / SAVED_LAYOUT',
+                layoutCount: Math.min(Math.max(template.number_of_widgets || 2, 2), 6) as LayoutCount,
+                apply: (currentWidgets: DashboardWidgetConfig[]) =>
+                  withVisibleChartCount(currentWidgets, Math.min(Math.max(template.number_of_widgets || 2, 2), 6) as LayoutCount),
+              };
+            }
+          }),
+        );
+        if (cancelled) return;
         setSavedTemplates(parsedTemplates);
       } catch {
-        // The drawer can still work with built-in templates if Postgres is unavailable.
+        setSavedTemplates([]);
       }
     }
 
@@ -443,15 +634,14 @@ export function GeneralSettingsDrawer({
     };
   }, [isOpen]);
 
-  const layoutCount = useMemo(() => getLayoutCapacity(detailDraftWidgets), [detailDraftWidgets]);
-  const kpiWidgets = detailDraftWidgets.filter((widget) => widget.type.startsWith('kpi'));
+  const layoutCount = detailLayoutCount;
   const sidebarKpiWidgets = draftWidgets.filter((widget) => widget.type.startsWith('kpi'));
   const chartWidgets = getChartWidgets(detailDraftWidgets);
   const visibleChartWidgets = getVisibleChartWidgets(detailDraftWidgets);
-  const hiddenChartWidgets = getHiddenChartWidgets(detailDraftWidgets);
+  const availableChartWidgets = getHiddenChartWidgets(detailDraftWidgets);
   const sidebarVisibleCharts = getVisibleChartWidgets(draftWidgets);
   const sidebarHiddenCharts = getHiddenChartWidgets(draftWidgets);
-  const sidebarLayoutCount = getLayoutCapacity(draftWidgets);
+  const sidebarLayoutCount = draftLayoutCount;
   const sidebarEmptySlots = Array.from(
     { length: Math.max(0, sidebarLayoutCount - sidebarVisibleCharts.length) },
     (_, index) => sidebarVisibleCharts.length + index + 1,
@@ -461,16 +651,39 @@ export function GeneralSettingsDrawer({
     : null;
   const selectedSlot = selectedSlotId?.startsWith('empty:')
     ? null
-    : chartWidgets.find((widget) => widget.id === selectedSlotId) ?? visibleChartWidgets[0] ?? chartWidgets[0];
-  const allTemplates = [...templates, ...savedTemplates];
+    : visibleChartWidgets.find((widget) => widget.id === selectedSlotId) ?? visibleChartWidgets[0] ?? null;
+  const allTemplates = savedTemplates;
   const selectedTemplate = allTemplates.find((template) => template.id === selectedTemplateId);
-  const displayedTemplateName =
-    selectedTemplateId === 'none'
-      ? 'Current setup'
-      : selectedTemplate?.name ?? activeTemplate?.name ?? 'Current setup';
+  const headerTemplateName = selectedTemplate?.name ?? activeTemplate?.name ?? draftTemplateName;
   const filteredTemplates = allTemplates.filter((template) =>
     `${template.name} ${template.description}`.toLowerCase().includes(templateSearch.toLowerCase()),
   );
+
+  useEffect(() => {
+    if (!isOpen || createTemplateRequestId === 0) return;
+    if (handledCreateTemplateRequestRef.current === createTemplateRequestId) return;
+
+    handledCreateTemplateRequestRef.current = createTemplateRequestId;
+    openCreateTemplateModal();
+  }, [createTemplateRequestId, isOpen]);
+
+  useEffect(() => {
+    if (!modalOnly || !isOpen) return;
+
+    if (templateId) {
+      setDetailDraftWidgets(widgets);
+      setDetailLayoutCount(getLayoutCapacity(widgets));
+      setDetailTemplateName(templateName ?? '');
+      setDetailMode('edit');
+      setSelectedTemplateId('none');
+      setSelectedSlotId(getVisibleChartWidgets(widgets)[0]?.id ?? 'empty:1');
+      setDetailStep('template');
+      setDetailModalOpen(true);
+      return;
+    }
+
+    openCreateTemplateModal();
+  }, [isOpen, modalOnly, templateId, templateName, widgets]);
 
   if (!isOpen) return null;
 
@@ -480,20 +693,55 @@ export function GeneralSettingsDrawer({
     const template = allTemplates.find((item) => item.id === templateId);
     if (!template) {
       setDraftWidgets(widgets);
+      setDraftLayoutCount(getLayoutCapacity(widgets));
       return;
     }
     setDraftWidgets(template.apply(widgets));
+    setDraftLayoutCount(template.layoutCount);
   }
 
-  function applyLayoutCount(count: 2 | 4 | 6) {
+  function applyLayoutCount(count: LayoutCount) {
     setSelectedTemplateId('none');
-    setDetailDraftWidgets((current) => withVisibleChartCount(current, count));
+    setDetailLayoutCount(count);
+    setDetailDraftWidgets((current) => {
+      const visibleCharts = getVisibleChartWidgets(current);
+      if (visibleCharts.length <= count) return current;
+      const keptIds = new Set(visibleCharts.slice(0, count).map((widget) => widget.id));
+      return compactVisibleChartOrder(
+        current.map((widget) =>
+          !widget.type.startsWith('kpi') && widget.visible && !keptIds.has(widget.id)
+            ? { ...widget, visible: false }
+            : widget,
+        ),
+      );
+    });
+    setSelectedSlotId((current) => {
+      if (current?.startsWith('empty:')) {
+        const slot = Number(current.replace('empty:', ''));
+        return `empty:${Math.min(slot || 1, count)}`;
+      }
+      const selectedWidget = visibleChartWidgets.find((widget) => widget.id === current);
+      if (selectedWidget && selectedWidget.layoutOrder <= count) return current;
+      return `empty:${Math.min(getVisibleChartWidgets(detailDraftWidgets).length + 1, count)}`;
+    });
   }
 
-  function hideSidebarWidget(widgetId: string) {
+  function applySidebarLayoutCount(count: LayoutCount) {
     setSelectedTemplateId('none');
+    setDraftLayoutCount(count);
     setRestoreWidgetId(null);
-    setDraftWidgets((current) => hideChartWidget(current, widgetId));
+    setDraftWidgets((current) => {
+      const visibleCharts = getVisibleChartWidgets(current);
+      if (visibleCharts.length <= count) return current;
+      const keptIds = new Set(visibleCharts.slice(0, count).map((widget) => widget.id));
+      return compactVisibleChartOrder(
+        current.map((widget) =>
+          !widget.type.startsWith('kpi') && widget.visible && !keptIds.has(widget.id)
+            ? { ...widget, visible: false }
+            : widget,
+        ),
+      );
+    });
   }
 
   function startRestoreSidebarWidget(widgetId: string) {
@@ -513,18 +761,42 @@ export function GeneralSettingsDrawer({
     setSelectedSlotId(widgetId);
   }
 
-  function toggleSidebarKpi(widgetId: string) {
+  function clearDetailSlot(widgetId: string) {
     setSelectedTemplateId('none');
-    setDraftWidgets((current) =>
-      current.map((widget) => (widget.id === widgetId ? { ...widget, visible: !widget.visible } : widget)),
-    );
+    setDetailDraftWidgets((current) => {
+      const nextWidgets = hideChartWidget(current, widgetId);
+      const nextEmptySlot = Math.min(detailLayoutCount, getVisibleChartWidgets(nextWidgets).length + 1);
+      setSelectedSlotId(`empty:${nextEmptySlot}`);
+      return nextWidgets;
+    });
   }
 
-  function toggleKpi(widgetId: string) {
+  function createDetailWidget(slot: number) {
+    const sourceWidget = visibleChartWidgets[0] ?? chartWidgets[0] ?? detailDraftWidgets[0];
+    const widgetId = `custom-${Date.now()}`;
+    const nextWidget: DashboardWidgetConfig = {
+      id: widgetId,
+      type: 'chart-extra',
+      title: '',
+      layoutOrder: slot,
+      layoutSpan: 1,
+      visible: true,
+      chartType: 'line',
+      metric: 'count',
+      groupBy: 'none',
+      timeBucket: 'day',
+      heatmapMode: 'weekday',
+      info1: true,
+      info2: true,
+      info3: true,
+      tableColumns: defaultTableColumns,
+      preset: sourceWidget?.preset ?? 'Active Connections',
+      startDate: sourceWidget?.startDate ?? '2026-06-01',
+      endDate: sourceWidget?.endDate ?? '2026-06-30',
+    };
     setSelectedTemplateId('none');
-    setDetailDraftWidgets((current) =>
-      current.map((widget) => (widget.id === widgetId ? { ...widget, visible: !widget.visible } : widget)),
-    );
+    setDetailDraftWidgets((current) => insertChartWidget(current, nextWidget, slot));
+    setSelectedSlotId(widgetId);
   }
 
   function saveAndClose() {
@@ -538,46 +810,100 @@ export function GeneralSettingsDrawer({
 
   function openDetailModal() {
     setDetailDraftWidgets(draftWidgets);
-    setSelectedSlotId(getVisibleChartWidgets(draftWidgets)[0]?.id ?? getChartWidgets(draftWidgets)[0]?.id ?? null);
+    setDetailLayoutCount(draftLayoutCount);
+    setDetailTemplateName(selectedTemplateId === 'none' ? '' : selectedTemplate?.name ?? activeTemplate?.name ?? '');
+    setDetailMode('edit');
+    setSelectedSlotId(getVisibleChartWidgets(draftWidgets)[0]?.id ?? 'empty:1');
     setDetailStep('template');
+    setDetailModalOpen(true);
+  }
+
+  function openCreateTemplateModal() {
+    const emptyWidgets = compactVisibleChartOrder(
+      widgets.map((widget) => (widget.type.startsWith('kpi') ? widget : { ...widget, visible: false })),
+    );
+    setDetailDraftWidgets(emptyWidgets);
+    setDetailLayoutCount(2);
+    setDetailTemplateName('');
+    setDetailMode('create');
+    setSelectedTemplateId('none');
+    setSelectedSlotId('empty:1');
+    setDetailStep('template');
+    setTemplateDropdownOpen(false);
     setDetailModalOpen(true);
   }
 
   function saveDetailDraft() {
     setDraftWidgets(detailDraftWidgets.map(normalizeWidgetTitle));
+    setDraftLayoutCount(detailLayoutCount);
     setSelectedTemplateId('none');
     onTemplateChange(null);
     setDetailModalOpen(false);
   }
 
-  async function createTemplateFromDraft() {
+  async function createTemplateFromDraft(sourceWidgets = draftWidgets, sourceLayoutCount = draftLayoutCount) {
     setCreatingTemplate(true);
     try {
-      const normalizedWidgets = draftWidgets.map(normalizeWidgetTitle);
-      const baseName =
-        selectedTemplate?.name && selectedTemplate.id !== 'none'
-          ? `${selectedTemplate.name} copy`
-          : 'Current setup';
+      const normalizedWidgets = sourceWidgets.map(normalizeWidgetTitle);
+      const normalizedTemplateName = detailTemplateName.trim() || 'Untitled';
       const created = await nettraceApi.createTemplate({
-        name: `${baseName} ${new Date().toLocaleString('en-US', {
-          month: 'short',
-          day: '2-digit',
-          hour: '2-digit',
-          minute: '2-digit',
-        })}`,
-        selected_cards: buildTemplateSnapshot(normalizedWidgets),
-        widgets: [],
+        name: normalizedTemplateName,
+        selected_cards: buildTemplateSnapshot(normalizedWidgets, sourceLayoutCount),
+        widgets: buildTemplateWidgetInputs(normalizedWidgets),
       });
       const savedTemplate = createDashboardTemplateFromSaved(created.data);
       if (savedTemplate) {
         setSavedTemplates((current) => [savedTemplate, ...current]);
         setSelectedTemplateId(savedTemplate.id);
         setDraftWidgets(savedTemplate.apply(normalizedWidgets));
+        setDraftLayoutCount(savedTemplate.layoutCount);
+        setDetailTemplateName('');
       }
       toast.success('Template saved');
+      onTemplateSaved?.();
+      return true;
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Could not save template.';
       toast.error(message);
+      return false;
+    } finally {
+      setCreatingTemplate(false);
+    }
+  }
+
+  async function updateTemplateFromDraft(
+    sourceWidgets = detailDraftWidgets,
+    sourceLayoutCount = detailLayoutCount,
+    targetTemplateId = templateId,
+    fallbackTemplateName = templateName,
+  ) {
+    if (!targetTemplateId) return false;
+
+    setCreatingTemplate(true);
+    try {
+      const normalizedWidgets = sourceWidgets.map(normalizeWidgetTitle);
+      const normalizedTemplateName = detailTemplateName.trim() || fallbackTemplateName || 'Untitled';
+      const updated = await nettraceApi.updateTemplate(targetTemplateId, {
+        name: normalizedTemplateName,
+        selected_cards: buildTemplateSnapshot(normalizedWidgets, sourceLayoutCount),
+        widgets: buildTemplateWidgetInputs(normalizedWidgets),
+      });
+      const savedTemplate = createDashboardTemplateFromSaved(updated.data);
+      if (savedTemplate) {
+        setSavedTemplates((current) =>
+          current.map((item) => (item.id === savedTemplate.id ? savedTemplate : item)),
+        );
+        setSelectedTemplateId(savedTemplate.id);
+        setDraftWidgets(savedTemplate.apply(normalizedWidgets));
+        setDraftLayoutCount(savedTemplate.layoutCount);
+      }
+      toast.success('Template updated');
+      onTemplateSaved?.();
+      return true;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Could not update template.';
+      toast.error(message);
+      return false;
     } finally {
       setCreatingTemplate(false);
     }
@@ -597,28 +923,83 @@ export function GeneralSettingsDrawer({
 
   function closeDetailModal() {
     setDetailModalOpen(false);
+    setDetailMode('edit');
     setDetailStep('template');
+    if (modalOnly) {
+      onClose();
+    }
+  }
+
+  async function saveDetailModal() {
+    if (detailMode === 'create') {
+      const saved = await createTemplateFromDraft(detailDraftWidgets, detailLayoutCount);
+      if (!saved) return;
+      setDetailModalOpen(false);
+      setDetailMode('edit');
+      if (modalOnly) {
+        onClose();
+      }
+      return;
+    }
+    if (modalOnly && templateId) {
+      const saved = await updateTemplateFromDraft(detailDraftWidgets, detailLayoutCount);
+      if (!saved) return;
+      setDetailModalOpen(false);
+      if (modalOnly) {
+        onClose();
+      }
+      return;
+    }
+    const savedTemplateId = getSavedTemplateId(selectedTemplate?.id);
+    if (savedTemplateId) {
+      const saved = await updateTemplateFromDraft(
+        detailDraftWidgets,
+        detailLayoutCount,
+        savedTemplateId,
+        selectedTemplate?.name,
+      );
+      if (!saved) return;
+      setDetailModalOpen(false);
+      onTemplateChange({
+        id: `db:${savedTemplateId}`,
+        name: detailTemplateName.trim() || selectedTemplate?.name || 'Untitled',
+      });
+      return;
+    }
+    saveDetailDraft();
   }
 
   function goToWidgetStep() {
-    setSelectedSlotId((current) => current ?? visibleChartWidgets[0]?.id ?? chartWidgets[0]?.id ?? null);
+    setSelectedSlotId((current) => current ?? visibleChartWidgets[0]?.id ?? 'empty:1');
     setDetailStep('widget');
   }
 
   return (
     <>
+      {!modalOnly ? (
+        <>
       <div className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm" onClick={onClose} />
       <aside className="fixed bottom-0 right-0 top-0 z-50 flex w-[480px] max-w-[calc(100vw-1rem)] flex-col border-l border-white/10 bg-[#151421] text-[#f3edff] shadow-2xl">
-        <div className="flex items-center justify-between border-b border-[#ff2d85]/30 px-6 py-5">
+        <div className="relative flex items-center justify-between overflow-hidden border-b border-[#ff2d85]/30 px-6 py-5">
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#ff2d85] to-transparent opacity-80" />
           <div>
-            <h2 className="text-2xl font-black text-[#f3edff] drop-shadow-[0_0_14px_rgba(255,45,133,0.7)]">
+            <p className="font-mono text-[10px] font-black uppercase tracking-[0.22em] text-[#00f5d4]">
+              Dashboard console
+            </p>
+            <h2 className="mt-1 text-2xl font-black text-[#f3edff] drop-shadow-[0_0_14px_rgba(255,45,133,0.7)]">
               Customize dashboard
             </h2>
-            <p className="mt-1 font-mono text-xs text-[#a69db6]">
-              Template: <span className="text-[#00f5d4]">{displayedTemplateName}</span>
+            <p className="mt-3 inline-flex max-w-full border border-[#00f5d4]/25 bg-[#00f5d4]/5 px-2.5 py-1 font-mono text-xs font-black text-[#00f5d4]">
+              <span className="truncate">{headerTemplateName}</span>
             </p>
           </div>
-          <button className="rounded p-1.5 text-[#ff2d85] hover:bg-[#ff2d85]/10" onClick={onClose}>
+          <button
+            type="button"
+            aria-label="Close settings"
+            title="Close settings"
+            className="rounded p-1.5 text-[#ff2d85] hover:bg-[#ff2d85]/10"
+            onClick={onClose}
+          >
             <X size={20} />
           </button>
         </div>
@@ -635,7 +1016,7 @@ export function GeneralSettingsDrawer({
                   Dashboard status
                 </span>
                 <span className="mt-1 block font-mono text-xs leading-relaxed text-[#a69db6]">
-                  Review the current layout and toggle widgets.
+                  Review the current layout and KPI visibility.
                 </span>
               </span>
               {dashboardStatusOpen ? (
@@ -652,15 +1033,24 @@ export function GeneralSettingsDrawer({
                     Current state
                   </p>
                   <div className="mt-3 grid grid-cols-2 gap-3">
-                    <div className="bg-[#191727] p-3 rounded">
+                    <div className="flex flex-col items-center gap-3 rounded bg-[#191727] p-3">
                       <p className="font-mono text-[11px] text-[#a69db6]">Layout</p>
-                      <p className="mt-1 font-mono text-sm font-black text-[#f3edff]">
-                        {getLayoutCountLabel(sidebarLayoutCount)}
-                      </p>
+                      <Select
+                        value={String(sidebarLayoutCount)}
+                        onChange={(event) => applySidebarLayoutCount(Number(event.target.value) as LayoutCount)}
+                        className="h-9 w-auto min-w-[132px] px-2 py-0 font-mono text-sm font-black"
+                        aria-label="Dashboard layout"
+                      >
+                        {[2, 3, 4, 5, 6].map((count) => (
+                          <option key={count} value={count}>
+                            {count}-widget layout
+                          </option>
+                        ))}
+                      </Select>
                     </div>
-                    <div className="bg-[#191727] p-3 rounded">
+                    <div className="flex flex-col items-center gap-3 rounded bg-[#191727] p-3">
                       <p className="font-mono text-[11px] text-[#a69db6]">Visible</p>
-                      <p className="mt-1 font-mono text-sm font-black text-[#f3edff]">
+                      <p className="font-mono text-sm font-black text-[#f3edff]">
                         {sidebarVisibleCharts.length}/{getChartWidgets(draftWidgets).length} widget
                       </p>
                     </div>
@@ -675,33 +1065,44 @@ export function GeneralSettingsDrawer({
                     </span>
                   </div>
                   <div className="space-y-2">
-                    {sidebarKpiWidgets.map((widget) => {
-                      const option = summaryOptions.find((item) => item.key === widget.type);
-                      const Icon = option?.icon ?? Activity;
+                    {summaryOptions.map((option) => {
+                      const widget = getKpiWidgetForKind(draftWidgets, option.key);
+                      const checked = Boolean(widget);
+                      const disabled = !checked && getSelectedKpiKinds(draftWidgets).length >= 3;
+                      const Icon = option.icon;
                       return (
                         <div
-                          key={widget.id}
-                          className="flex items-center justify-between gap-3 border-b border-white/5 py-2"
+                          key={option.key}
+                          className={cn(
+                            'flex items-center justify-between gap-3 rounded border border-[#2b2740] bg-[#191727] px-3 py-3 transition',
+                            disabled ? 'opacity-45' : 'hover:border-[#00f5d4]/35',
+                          )}
                         >
                           <div className="flex min-w-0 items-center gap-2">
-                            <Icon size={16} className={widget.visible ? 'text-[#00f5d4]' : 'text-[#777086]'} />
+                            <Icon size={16} className={checked ? 'text-[#00f5d4]' : 'text-[#777086]'} />
                             <div className="min-w-0">
-                              <p className="truncate font-mono text-sm font-bold text-[#f3edff]">{option?.title ?? widget.title}</p>
+                              <p className="truncate font-mono text-sm font-bold text-[#f3edff]">{option.title}</p>
                               <p className="font-mono text-[11px] text-[#a69db6]">
-                                {widget.visible ? 'Visible' : 'Hidden'}
+                                {checked ? 'Selected' : disabled ? 'Limit reached' : 'Available'}
                               </p>
                             </div>
                           </div>
                           <button
                             type="button"
-                            title={widget.visible ? 'Hide KPI card' : 'Show KPI card'}
-                            onClick={() => toggleSidebarKpi(widget.id)}
+                            aria-label={checked ? `Remove ${option.title}` : `Select ${option.title}`}
+                            title={checked ? 'Remove KPI card' : disabled ? 'Remove another KPI first' : 'Select KPI card'}
+                            disabled={disabled}
+                            onClick={() => {
+                              setSelectedTemplateId('none');
+                              setDraftWidgets((current) => applyKpiSelection(current, option.key, !checked));
+                            }}
                             className={cn(
                               'h-9 w-9',
-                              widget.visible ? drawerIconButtonClass : drawerDangerIconButtonClass,
+                              checked ? drawerIconButtonClass : drawerMutedIconButtonClass,
+                              disabled && 'cursor-not-allowed',
                             )}
                           >
-                            {widget.visible ? <Eye size={17} /> : <EyeOff size={17} />}
+                            {checked ? <Check size={17} /> : <Plus size={17} />}
                           </button>
                         </div>
                       );
@@ -718,10 +1119,10 @@ export function GeneralSettingsDrawer({
                     {sidebarVisibleCharts.map((widget) => (
                       <div
                         key={widget.id}
-                        className="flex items-center justify-between gap-3 border-b border-white/5 py-2"
+                        className="flex items-center justify-between gap-3 rounded border border-[#2b2740] bg-[#191727] px-3 py-3 transition hover:border-[#00f5d4]/35"
                       >
                         <div className="min-w-0">
-                          <p className="truncate font-mono text-sm font-bold text-[#f3edff]">{widget.title}</p>
+                          <p className="truncate font-mono text-sm font-bold text-[#f3edff]">{widget.title || getDefaultWidgetTitle(widget)}</p>
                           <p className="font-mono text-[11px] text-[#a69db6]">
                             Slot {widget.layoutOrder} · {widget.layoutSpan === 2 ? '2 desktop cells' : '1 cell'}
                           </p>
@@ -729,6 +1130,7 @@ export function GeneralSettingsDrawer({
                         <div className="flex items-center gap-2 shrink-0">
                           <button
                             type="button"
+                            aria-label={widget.layoutSpan === 2 ? `Make ${widget.title || getDefaultWidgetTitle(widget)} half width` : `Make ${widget.title || getDefaultWidgetTitle(widget)} full width`}
                             title={widget.layoutSpan === 2 ? 'Full width. Click for half width.' : 'Half width. Click for full width.'}
                             onClick={() => {
                               setSelectedTemplateId('none');
@@ -751,14 +1153,6 @@ export function GeneralSettingsDrawer({
                               <Maximize2 size={15} />
                             )}
                           </button>
-                          <button
-                            type="button"
-                            title="Hide widget"
-                            onClick={() => hideSidebarWidget(widget.id)}
-                            className={cn('h-9 w-9', drawerIconButtonClass)}
-                          >
-                            <Eye size={17} />
-                          </button>
                         </div>
                       </div>
                     ))}
@@ -766,7 +1160,7 @@ export function GeneralSettingsDrawer({
                 </div>
 
                 <div className="space-y-3">
-                  <p className="font-mono text-base font-black text-[#00f5d4]">Hidden widgets</p>
+                  <p className="font-mono text-base font-black text-[#00f5d4]">Available widgets</p>
                   {sidebarHiddenCharts.length > 0 ? (
                     <div className="space-y-2">
                       {sidebarHiddenCharts.map((widget) => {
@@ -774,55 +1168,47 @@ export function GeneralSettingsDrawer({
                         return (
                           <div
                             key={widget.id}
-                            className="border-b border-white/5 py-2.5"
+                            className="rounded border border-[#2b2740] bg-[#191727] px-3 py-3 transition hover:border-[#00f5d4]/35"
                           >
                             <div className="flex items-center justify-between gap-3">
                               <div className="min-w-0">
-                                <p className="truncate font-mono text-sm font-bold text-[#f3edff]">{widget.title}</p>
+                                <p className="truncate font-mono text-sm font-bold text-[#f3edff]">{widget.title || getDefaultWidgetTitle(widget)}</p>
                                 <p className="font-mono text-[11px] text-[#a69db6]">
                                   {widget.layoutSpan === 2 ? 'Prefers 2 desktop cells' : 'Prefers 1 cell'}
                                 </p>
                               </div>
                               <button
                                 type="button"
-                                title="Restore widget"
+                                title="Add widget"
+                                aria-label={`Add ${widget.title || getDefaultWidgetTitle(widget)}`}
                                 onClick={() => startRestoreSidebarWidget(widget.id)}
                                 className={cn(
                                   'h-9 w-9',
-                                  isRestoring ? drawerDangerIconButtonClass : drawerDangerIconButtonClass,
+                                  isRestoring ? drawerIconButtonClass : drawerMutedIconButtonClass,
                                 )}
                               >
-                                <EyeOff size={17} />
+                                <Plus size={17} />
                               </button>
                             </div>
 
                             {isRestoring ? (
-                              <div className="mt-3 border-t border-white/5 pt-3">
-                                <div className="grid grid-cols-2 gap-2">
-                                  {sidebarEmptySlots.map((slot) => (
-                                    <button
-                                      key={slot}
-                                      type="button"
-                                      onClick={() => restoreSidebarWidget(widget.id, slot)}
-                                      className="h-9 border border-[#00f5d4]/40 bg-[#00f5d4]/5 font-mono text-xs font-bold text-[#00f5d4] transition hover:bg-[#00f5d4]/10"
-                                    >
-                                      Slot {slot}
-                                    </button>
-                                  ))}
-                                  <button
-                                    type="button"
-                                    onClick={() => restoreSidebarWidget(widget.id)}
-                                    className={cn(
-                                      "h-9 border border-[#ff2d85]/50 bg-[#ff2d85]/5 font-mono text-xs font-bold text-[#ff2d85] transition hover:bg-[#ff2d85]/10",
-                                      sidebarEmptySlots.length === 0 && "col-span-2"
-                                    )}
-                                  >
-                                    After last
-                                  </button>
-                                </div>
-                                <p className="mt-2 font-mono text-[10px] text-[#a69db6] italic">
-                                  Empty cells are unused positions in the current layout.
-                                </p>
+                              <div className="mt-3 border-t border-white/10 pt-3">
+                                {sidebarEmptySlots.length > 0 ? (
+                                  <div className="grid grid-cols-2 gap-2">
+                                    {sidebarEmptySlots.map((slot) => (
+                                      <button
+                                        key={slot}
+                                        type="button"
+                                        onClick={() => restoreSidebarWidget(widget.id, slot)}
+                                        className="h-9 border border-[#00f5d4]/40 bg-[#00f5d4]/5 font-mono text-xs font-bold text-[#00f5d4] transition hover:bg-[#00f5d4]/10"
+                                      >
+                                        Slot {slot}
+                                      </button>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <p className="font-mono text-xs text-[#a69db6]">No open slots.</p>
+                                )}
                               </div>
                             ) : null}
                           </div>
@@ -830,8 +1216,8 @@ export function GeneralSettingsDrawer({
                       })}
                     </div>
                   ) : (
-                    <p className="border-b border-white/5 py-3 font-mono text-xs text-[#a69db6]">
-                      No hidden widgets.
+                    <p className="rounded border border-[#2b2740] bg-[#191727] px-3 py-3 font-mono text-xs text-[#a69db6]">
+                      No available widgets.
                     </p>
                   )}
                 </div>
@@ -852,7 +1238,7 @@ export function GeneralSettingsDrawer({
                 <span className="mt-1 block font-mono text-xs leading-relaxed text-[#a69db6]">
                   {selectedTemplate
                     ? `${selectedTemplate.name} · ${getLayoutCountLabel(selectedTemplate.layoutCount)}`
-                    : 'Quickly apply a 2/4/6-widget layout.'}
+                    : 'Apply a saved template from the database.'}
                 </span>
               </span>
               {templateDropdownOpen ? (
@@ -864,7 +1250,12 @@ export function GeneralSettingsDrawer({
 
             {templateDropdownOpen ? (
               <div className="space-y-4 px-1 pb-2">
-                <label className="flex h-11 items-center gap-2 rounded border border-[#ff2d85]/40 bg-[#211b2d] px-3 shadow-[0_0_20px_rgba(255,45,133,0.12)]">
+                <div className="rounded border border-[#2b2740] bg-[#191727] px-3 py-2">
+                  <p className="font-mono text-xs leading-relaxed text-[#a69db6]">
+                    Templates save the dashboard shell, KPI choices, widget slots, and each widget preset snapshot.
+                  </p>
+                </div>
+                <label className="flex h-11 items-center gap-2 rounded border border-[#2b2740] bg-[#191727] px-3 shadow-[0_0_20px_rgba(255,45,133,0.08)] transition hover:border-[#ff2d85]/60">
                   <Search size={20} className="text-[#ff2d85]" />
                   <input
                     value={templateSearch}
@@ -875,6 +1266,12 @@ export function GeneralSettingsDrawer({
                 </label>
 
                 <div className="max-h-[360px] space-y-4 overflow-y-auto pr-1">
+                  {filteredTemplates.length === 0 ? (
+                    <p className="rounded border border-[#2b2740] bg-[#191727] px-3 py-4 font-mono text-xs leading-relaxed text-[#a69db6]">
+                      No saved templates in the database.
+                    </p>
+                  ) : null}
+
                   {filteredTemplates.map((template) => {
                     const selected = selectedTemplateId === template.id;
                     return (
@@ -910,23 +1307,15 @@ export function GeneralSettingsDrawer({
                       </button>
                     );
                   })}
-
-                  <div className="p-3 rounded border border-[#2b2740] bg-[#191727]">
-                    <div className="h-20 border border-[#2b2740] bg-[#151421]" />
-                    <p className="mt-4 font-mono text-base font-black">Terminal focus</p>
-                    <p className="mt-1 font-mono text-xs tracking-normal text-[#a69db6]">
-                      {extraTemplate.description}
-                    </p>
-                  </div>
                 </div>
 
                 <button
                   type="button"
-                  onClick={createTemplateFromDraft}
+                  onClick={openCreateTemplateModal}
                   disabled={creatingTemplate}
                   className="h-12 w-full rounded border border-dashed border-[#ff2d85]/50 bg-transparent font-mono text-sm font-bold text-[#ff2d85] transition hover:bg-[#ff2d85]/10"
                 >
-                  {creatingTemplate ? 'Saving template...' : '+ Add template'}
+                  + Add template
                 </button>
               </div>
             ) : null}
@@ -950,6 +1339,8 @@ export function GeneralSettingsDrawer({
           </Button>
         </div>
       </aside>
+        </>
+      ) : null}
 
       {detailModalOpen ? (
         <>
@@ -958,18 +1349,32 @@ export function GeneralSettingsDrawer({
             <div className="flex items-center justify-between border-b border-white/10 px-7 py-5">
               <div>
                 <p className="font-mono text-xs font-bold uppercase tracking-[0.18em] text-[#00f5d4]">
-                  Advanced settings
+                  {detailMode === 'create' ? 'Creating template' : 'Advanced settings'}
                 </p>
                 <h2 className="mt-1 font-mono text-3xl font-black text-[#f3edff]">
-                  {detailStep === 'template' ? 'Template setup' : 'Widget editor'}
+                  {detailMode === 'create'
+                    ? detailStep === 'template'
+                      ? 'Create template'
+                      : 'Create widgets'
+                    : detailStep === 'template'
+                      ? 'Template'
+                      : 'Widgets'}
                 </h2>
                 <p className="mt-1 font-mono text-xs text-[#a69db6]">
                   {detailStep === 'template'
-                    ? 'Choose the layout, KPI cards, and baseline dashboard structure.'
-                    : 'Select an existing widget or an empty slot to configure the dashboard.'}
+                    ? detailMode === 'create'
+                      ? 'Name, layout, and KPI cards.'
+                      : 'Name, layout, and KPI cards.'
+                    : 'Slots, data, and display.'}
                 </p>
               </div>
-              <button className="rounded p-1.5 text-[#a69db6] hover:bg-white/10 hover:text-white" onClick={closeDetailModal}>
+              <button
+                type="button"
+                aria-label="Close advanced settings"
+                title="Close advanced settings"
+                className="rounded p-1.5 text-[#a69db6] hover:bg-white/10 hover:text-white"
+                onClick={closeDetailModal}
+              >
                 <X size={20} />
               </button>
             </div>
@@ -977,8 +1382,16 @@ export function GeneralSettingsDrawer({
             {detailStep === 'template' ? (
               <div className="grid gap-7 px-7 py-7 lg:grid-cols-[280px_1fr]">
                 <aside className="rounded-md border border-white/10 bg-[#0f0e19] p-5">
-                  <p className="font-mono text-sm font-black text-[#00f5d4]">Current template</p>
-                  <p className="mt-3 font-mono text-xl font-black text-[#f3edff]">{displayedTemplateName}</p>
+                  <p className="font-mono text-sm font-black text-[#00f5d4]">
+                    {detailMode === 'create' ? 'New template' : 'Current template'}
+                  </p>
+                  <Field label="Template name">
+                    <Input
+                      value={detailTemplateName}
+                      onChange={(event) => setDetailTemplateName(event.target.value)}
+                      placeholder="Untitled"
+                    />
+                  </Field>
                   <div className="mt-5 grid grid-cols-2 gap-3">
                     <div className="rounded bg-[#191727] p-3">
                       <p className="font-mono text-[10px] uppercase text-[#777086]">Layout</p>
@@ -990,7 +1403,7 @@ export function GeneralSettingsDrawer({
                     </div>
                   </div>
                   <p className="mt-5 text-sm leading-6 text-[#a69db6]">
-                    This step controls the template shell. Use the widget editor for slot-level data, sizing, and date ranges.
+                    Template shell. Widget slots stay fixed to the selected count.
                   </p>
                 </aside>
 
@@ -999,13 +1412,15 @@ export function GeneralSettingsDrawer({
                     <div className="flex items-end justify-between gap-3">
                       <div>
                         <p className="font-mono text-lg font-black text-[#f3edff]">Layout</p>
-                        <p className="mt-1 text-sm text-[#a69db6]">Pick the canvas density for desktop dashboards.</p>
+                        <p className="mt-1 text-sm text-[#a69db6]">Pick the chart/table slot count.</p>
                       </div>
                     </div>
-                    <div className="mt-3 grid gap-3 md:grid-cols-3">
+                    <div className="mt-3 grid gap-3 md:grid-cols-5">
                       {[
                         { count: 2, icon: Grid2X2, label: 'Focused' },
+                        { count: 3, icon: LayoutGrid, label: 'Simple' },
                         { count: 4, icon: LayoutGrid, label: 'Balanced' },
+                        { count: 5, icon: Grid3X3, label: 'Wide' },
                         { count: 6, icon: Grid3X3, label: 'Dense' },
                       ].map((option) => {
                         const Icon = option.icon;
@@ -1014,9 +1429,9 @@ export function GeneralSettingsDrawer({
                           <button
                             key={option.count}
                             type="button"
-                            onClick={() => applyLayoutCount(option.count as 2 | 4 | 6)}
+                            onClick={() => applyLayoutCount(option.count as LayoutCount)}
                             className={cn(
-                              'rounded-md border p-4 text-left transition',
+                              'rounded-md border p-3 text-left transition',
                               selected
                                 ? 'border-[#ff2d85] bg-[#2b1020] text-[#f3edff] shadow-[0_0_22px_rgba(255,45,133,0.22)]'
                                 : 'border-white/10 bg-[#0f0e19] text-[#a69db6] hover:border-white/25 hover:text-[#f3edff]',
@@ -1026,7 +1441,7 @@ export function GeneralSettingsDrawer({
                               <Icon size={22} className={selected ? 'text-[#ff5a9d]' : 'text-[#00f5d4]'} />
                               {selected ? <Check size={16} className="text-[#ff5a9d]" /> : null}
                             </div>
-                            <p className="mt-4 font-mono text-base font-black">{option.count} widgets</p>
+                            <p className="mt-4 font-mono text-base font-black">{option.count}</p>
                             <p className="mt-1 font-mono text-xs text-[#a69db6]">{option.label}</p>
                           </button>
                         );
@@ -1040,74 +1455,58 @@ export function GeneralSettingsDrawer({
                         <p className="font-mono text-lg font-black text-[#f3edff]">
                           KPI cards
                         </p>
-                        <p className="mt-1 text-sm text-[#a69db6]">Choose summary cards and light display details.</p>
+                        <p className="mt-1 text-sm text-[#a69db6]">Content and visibility.</p>
                       </div>
                       <span className="font-mono text-[11px] text-[#777086]">
                         Summary API fields
                       </span>
                     </div>
                     <div className="mt-3 divide-y divide-white/10 rounded-md border border-white/10 bg-[#0f0e19]">
-                      {kpiWidgets.map((widget) => {
-                        const option = summaryOptions.find((item) => item.key === widget.type);
-                        const Icon = option?.icon ?? Activity;
+                      {summaryOptions.map((option) => {
+                        const widget = getKpiWidgetForKind(detailDraftWidgets, option.key);
+                        const checked = Boolean(widget);
+                        const disabled = !checked && getSelectedKpiKinds(detailDraftWidgets).length >= 3;
+                        const Icon = option.icon;
                         return (
-                          <div key={widget.id} className="grid gap-3 p-4 lg:grid-cols-[minmax(220px,1fr)_minmax(220px,320px)_auto] lg:items-center">
+                          <div key={option.key} className={cn('grid gap-3 p-4 lg:grid-cols-[minmax(220px,1fr)_auto] lg:items-center', disabled && 'opacity-45')}>
                             <div className="flex min-w-0 items-center gap-3">
-                              <Icon size={18} className="shrink-0 text-[#00f5d4]" />
+                              <Icon size={18} className={cn('shrink-0', checked ? 'text-[#00f5d4]' : 'text-[#777086]')} />
                               <div className="min-w-0">
-                                <p className="truncate font-bold text-[#f3edff]">{option?.title ?? widget.title}</p>
-                                <p className="mt-1 truncate text-sm text-[#a69db6]">{option?.description}</p>
+                                <p className="truncate font-bold text-[#f3edff]">{option.title}</p>
+                                <p className="mt-1 truncate text-sm text-[#a69db6]">{checked ? option.description : disabled ? 'Remove another KPI first.' : 'Available KPI card.'}</p>
                               </div>
                             </div>
 
-                            <Select
-                              value={widget.type}
-                              onChange={(event) =>
-                                setDetailDraftWidgets((current) =>
-                                  updateKpiContent(current, widget.id, event.target.value as KpiWidgetKind),
-                                )
-                              }
-                            >
-                              {summaryOptions.map((item) => (
-                                <option key={item.key} value={item.key}>
-                                  {item.title}
-                                </option>
-                              ))}
-                            </Select>
-
                             <div className="flex items-center justify-end gap-2">
+                              {widget ? (
+                                <>
+                                  <button
+                                    type="button"
+                                    aria-label={widget.info1 ? `Hide description for ${option.title}` : `Show description for ${option.title}`}
+                                    title={widget.info1 ? 'Description visible' : 'Description hidden'}
+                                    onClick={() => setDetailDraftWidgets((current) => updateWidget(current, widget.id, { info1: !widget.info1 }))}
+                                    className={cn(
+                                      'h-9 w-9',
+                                      widget.info1 ? drawerIconButtonClass : drawerMutedIconButtonClass,
+                                    )}
+                                  >
+                                    <TypeIcon size={16} />
+                                  </button>
+                                </>
+                              ) : null}
                               <button
                                 type="button"
-                                title={widget.info1 ? 'Description visible' : 'Description hidden'}
-                                onClick={() => setDetailDraftWidgets((current) => updateWidget(current, widget.id, { info1: !widget.info1 }))}
+                                aria-label={checked ? `Remove ${option.title}` : `Select ${option.title}`}
+                                title={checked ? 'Remove KPI card' : disabled ? 'Remove another KPI first' : 'Select KPI card'}
+                                disabled={disabled}
+                                onClick={() => setDetailDraftWidgets((current) => applyKpiSelection(current, option.key, !checked))}
                                 className={cn(
                                   'h-9 w-9',
-                                  widget.info1 ? drawerIconButtonClass : drawerMutedIconButtonClass,
+                                  checked ? drawerIconButtonClass : drawerMutedIconButtonClass,
+                                  disabled && 'cursor-not-allowed',
                                 )}
                               >
-                                <TypeIcon size={16} />
-                              </button>
-                              <button
-                                type="button"
-                                title={widget.info2 ? 'Icon visible' : 'Icon hidden'}
-                                onClick={() => setDetailDraftWidgets((current) => updateWidget(current, widget.id, { info2: !widget.info2 }))}
-                                className={cn(
-                                  'h-9 w-9',
-                                  widget.info2 ? drawerIconButtonClass : drawerMutedIconButtonClass,
-                                )}
-                              >
-                                <Icon size={16} />
-                              </button>
-                              <button
-                                type="button"
-                                title={widget.visible ? 'Hide KPI card' : 'Show KPI card'}
-                                onClick={() => toggleKpi(widget.id)}
-                                className={cn(
-                                  'h-9 w-9',
-                                  widget.visible ? drawerIconButtonClass : drawerDangerIconButtonClass,
-                                )}
-                              >
-                                {widget.visible ? <Eye size={17} /> : <EyeOff size={17} />}
+                                {checked ? <Check size={17} /> : <Plus size={17} />}
                               </button>
                             </div>
                           </div>
@@ -1119,9 +1518,11 @@ export function GeneralSettingsDrawer({
                   <div className="flex items-center justify-end gap-3 border-t border-white/10 pt-5">
                     <Button variant="ghost" className="h-11 px-5" onClick={closeDetailModal}>Cancel</Button>
                     <Button variant="secondary" className="h-11 px-6 border-[#00f5d4] text-[#00f5d4]" onClick={goToWidgetStep}>
-                      Edit widgets
+                      Widgets
                     </Button>
-                    <Button className="h-11 px-6" onClick={saveDetailDraft}>Save changes</Button>
+                    <Button className="h-11 px-6" onClick={saveDetailModal} disabled={creatingTemplate}>
+                      {detailMode === 'create' ? (creatingTemplate ? 'Creating...' : 'Create template') : 'Save changes'}
+                    </Button>
                   </div>
                 </div>
               </div>
@@ -1172,16 +1573,13 @@ export function GeneralSettingsDrawer({
                               )}
                             >
                               <span className="text-2xl font-black">{widget.layoutOrder}</span>
-                              <span className="mt-2 max-w-full truncate text-xs">{widget.title}</span>
+                              <span className="mt-2 max-w-full truncate text-xs">{widget.title || getDefaultWidgetTitle(widget)}</span>
                               {widget.layoutSpan === 2 ? <span className="mt-1 font-mono text-[10px] text-[#00f5d4]">2 desktop cells</span> : null}
                             </button>
                           );
                         })}
                       </div>
                     </div>
-                    <p className="mt-4 text-sm italic text-[#a69db6]">
-                      + cells are open slots in the current {getLayoutCountLabel(layoutCount).toLowerCase()}.
-                    </p>
                   </div>
 
                   <div>
@@ -1192,64 +1590,68 @@ export function GeneralSettingsDrawer({
                       {selectedSlot ? (
                         <button
                           type="button"
-                          aria-pressed={selectedSlot.visible}
-                          title={selectedSlot.visible ? 'Hide widget' : 'Show widget'}
-                          onClick={() =>
-                            setDetailDraftWidgets((current) => {
-                              const nextWidgets = selectedSlot.visible
-                                ? hideChartWidget(current, selectedSlot.id)
-                                : restoreChartWidget(current, selectedSlot.id);
-                              const nextSelected = getVisibleChartWidgets(nextWidgets)[0]?.id ?? getChartWidgets(nextWidgets)[0]?.id ?? null;
-                              setSelectedSlotId(selectedSlot.visible ? nextSelected : selectedSlot.id);
-                              return nextWidgets;
-                            })
-                          }
-                          className={cn(
-                            'inline-flex h-9 items-center gap-2 rounded-full border px-3 font-mono text-xs font-black transition focus-visible:outline-none focus-visible:ring-2',
-                            selectedSlot.visible
-                              ? 'border-[#00f5d4]/45 bg-[#00f5d4]/10 text-[#00f5d4] hover:bg-[#00f5d4]/15 focus-visible:ring-[#00f5d4]/30'
-                              : 'border-[#ff2d85]/45 bg-[#ff2d85]/10 text-[#ff5a9d] hover:bg-[#ff2d85]/15 focus-visible:ring-[#ff2d85]/30',
-                          )}
+                          title="Clear slot"
+                          aria-label={`Clear ${selectedSlot.title || getDefaultWidgetTitle(selectedSlot)}`}
+                          onClick={() => clearDetailSlot(selectedSlot.id)}
+                          className={cn('h-9 w-9', drawerDangerIconButtonClass)}
                         >
-                          {selectedSlot.visible ? <Eye size={15} /> : <EyeOff size={15} />}
-                          {selectedSlot.visible ? 'Visible' : 'Hidden'}
+                          <X size={17} />
                         </button>
                       ) : null}
                     </div>
                     {selectedEmptySlot ? (
-                      <div className="mt-4 rounded border border-[#00f5d4]/45 bg-[#0c0b14] p-6">
-                        <p className="font-mono text-lg font-black text-[#00f5d4]">Empty slot</p>
-                        <p className="mt-2 text-sm leading-6 text-[#a69db6]">
-                          Add a hidden widget to this slot, then configure its data and display options.
-                        </p>
+                      <div className="mt-4 rounded border border-[#00f5d4]/45 bg-[#0c0b14] p-5">
+                        <div className="flex items-center justify-between">
+                          <p className="font-mono text-lg font-black text-[#00f5d4]">Empty slot</p>
+                          <span className="font-mono text-xs text-[#a69db6]">{availableChartWidgets.length}</span>
+                        </div>
 
-                        <div className="mt-5 space-y-3">
-                          {hiddenChartWidgets.length > 0 ? (
-                            hiddenChartWidgets.map((widget) => (
+                        <div className="mt-4 space-y-2">
+                          <button
+                            type="button"
+                            title="Create widget"
+                            aria-label={`Create widget in slot ${selectedEmptySlot}`}
+                            onClick={() => createDetailWidget(selectedEmptySlot)}
+                            className="flex w-full items-center justify-between gap-4 rounded-md border border-[#ff2d85]/45 bg-[#ff2d85]/5 px-4 py-3 text-left transition hover:bg-[#ff2d85]/10"
+                          >
+                            <span className="min-w-0">
+                              <span className="block truncate font-mono text-sm font-black text-[#f3edff]">
+                                New widget
+                              </span>
+                              <span className="mt-1 block font-mono text-xs text-[#a69db6]">
+                                Line chart · 1 cell
+                              </span>
+                            </span>
+                            <Plus size={18} className="shrink-0 text-[#ff5a9d]" />
+                          </button>
+
+                          {availableChartWidgets.length > 0 ? (
+                            <p className="pt-2 font-mono text-xs font-black text-[#00f5d4]">Available widgets</p>
+                          ) : null}
+
+                          {availableChartWidgets.length > 0 ? (
+                            availableChartWidgets.map((widget) => (
                               <button
                                 key={widget.id}
                                 type="button"
+                                title={`Add ${widget.title || getDefaultWidgetTitle(widget)}`}
+                                aria-label={`Add ${widget.title || getDefaultWidgetTitle(widget)}`}
                                 onClick={() => restoreDetailWidget(widget.id, selectedEmptySlot)}
-                                className="flex w-full items-center justify-between gap-4 rounded-md border border-white/10 bg-[#151421] p-4 text-left transition hover:border-[#00f5d4]/50 hover:bg-[#102321]"
+                                className="flex w-full items-center justify-between gap-4 rounded-md border border-white/10 bg-[#151421] px-4 py-3 text-left transition hover:border-[#00f5d4]/50 hover:bg-[#102321]"
                               >
                                 <span className="min-w-0">
                                   <span className="block truncate font-mono text-sm font-black text-[#f3edff]">
-                                    {widget.title}
+                                    {widget.title || getDefaultWidgetTitle(widget)}
                                   </span>
                                   <span className="mt-1 block font-mono text-xs text-[#a69db6]">
                                     {widget.chartType} · prefers {widget.layoutSpan === 2 ? '2 cells' : '1 cell'}
                                   </span>
                                 </span>
-                                <span className="font-mono text-xs font-black text-[#00f5d4]">Add</span>
+                                <Plus size={18} className="shrink-0 text-[#00f5d4]" />
                               </button>
                             ))
                           ) : (
-                            <div className="rounded-md border border-dashed border-white/10 bg-[#151421]/70 p-5">
-                              <p className="font-mono text-sm font-black text-[#f3edff]">No hidden widgets</p>
-                              <p className="mt-2 text-sm leading-6 text-[#a69db6]">
-                                Hide a widget first or increase the layout density to create available widgets for this slot.
-                              </p>
-                            </div>
+                            <p className="pt-2 font-mono text-xs text-[#a69db6]">No available widgets.</p>
                           )}
                         </div>
                       </div>
@@ -1288,7 +1690,7 @@ export function GeneralSettingsDrawer({
                           </Field>
 
                           <div>
-                            <p className="mb-3 font-mono text-sm font-bold tracking-normal text-[#a69db6]">
+                            <p className="mb-3 font-mono text-base font-black tracking-normal text-[#c9bfd8]">
                               Desktop size
                             </p>
                             <div className="grid grid-cols-2 gap-3">
@@ -1399,44 +1801,123 @@ export function GeneralSettingsDrawer({
                           ) : null}
 
                           <div>
-                            <p className="mb-3 font-mono text-sm font-bold tracking-normal text-[#a69db6]">
-                              Display options
+                            <p className="mb-3 font-mono text-base font-black tracking-normal text-[#c9bfd8]">
+                              {selectedSlot.chartType === 'table' ? 'Table columns' : 'Display options'}
                             </p>
-                            <div className="grid gap-2 sm:grid-cols-2">
-                              {getDisplayOptions(selectedSlot).map((option) => (
-                                <button
-                                  key={option.key}
-                                  type="button"
-                                  onClick={() =>
-                                    setDetailDraftWidgets((current) =>
-                                      updateWidget(current, selectedSlot.id, { [option.key]: !option.checked }),
-                                    )
-                                  }
-                                  className={cn(
-                                    'flex items-center justify-between border p-3 text-left font-mono text-sm transition',
-                                    option.checked
-                                      ? 'border-[#00f5d4]/40 bg-[#00f5d4]/5 text-[#f3edff]'
-                                      : 'border-[#2b2740] bg-[#191727] text-[#a69db6]',
-                                  )}
-                                >
-                                  <span>{option.label}</span>
-                                  <span
+                            {selectedSlot.chartType === 'table' ? (
+                              <div className="space-y-3">
+                                <div className="flex flex-wrap gap-2">
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() =>
+                                      setDetailDraftWidgets((current) =>
+                                        updateWidget(current, selectedSlot.id, { tableColumns: defaultTableColumns }),
+                                      )
+                                    }
+                                  >
+                                    Default
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() =>
+                                      setDetailDraftWidgets((current) =>
+                                        updateWidget(current, selectedSlot.id, { tableColumns: [] }),
+                                      )
+                                    }
+                                  >
+                                    Deselect all
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="secondary"
+                                    onClick={() =>
+                                      setDetailDraftWidgets((current) =>
+                                        updateWidget(current, selectedSlot.id, {
+                                          tableColumns: tableColumnOptions.map((item) => item.value),
+                                        }),
+                                      )
+                                    }
+                                  >
+                                    Select all
+                                  </Button>
+                                </div>
+                                <div className="grid gap-2 sm:grid-cols-2">
+                                  {tableColumnOptions.map((option) => {
+                                    const selectedColumns = selectedSlot.tableColumns ?? defaultTableColumns;
+                                    const checked = selectedColumns.includes(option.value);
+                                    return (
+                                      <button
+                                        key={option.value}
+                                        type="button"
+                                        onClick={() =>
+                                          setDetailDraftWidgets((current) =>
+                                            updateWidget(current, selectedSlot.id, {
+                                              tableColumns: checked
+                                                ? selectedColumns.filter((item) => item !== option.value)
+                                                : [...selectedColumns, option.value],
+                                            }),
+                                          )
+                                        }
+                                        className={cn(
+                                          'flex items-center justify-between border p-3 text-left font-mono text-sm transition',
+                                          checked
+                                            ? 'border-[#00f5d4]/40 bg-[#00f5d4]/5 text-[#f3edff]'
+                                            : 'border-[#2b2740] bg-[#191727] text-[#a69db6]',
+                                        )}
+                                      >
+                                        <span>{option.label}</span>
+                                        <span
+                                          className={cn(
+                                            'flex h-5 w-5 items-center justify-center rounded transition',
+                                            checked ? 'bg-[#00f5d4] text-[#0c0b14]' : 'border border-white/20',
+                                          )}
+                                        >
+                                          {checked ? <Check size={13} strokeWidth={3} /> : null}
+                                        </span>
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="grid gap-2 sm:grid-cols-2">
+                                {getDisplayOptions(selectedSlot).map((option) => (
+                                  <button
+                                    key={option.key}
+                                    type="button"
+                                    onClick={() =>
+                                      setDetailDraftWidgets((current) =>
+                                        updateWidget(current, selectedSlot.id, { [option.key]: !option.checked }),
+                                      )
+                                    }
                                     className={cn(
-                                      'flex h-5 w-5 items-center justify-center rounded transition',
-                                      option.checked ? 'bg-[#00f5d4] text-[#0c0b14]' : 'border border-white/20',
+                                      'flex items-center justify-between border p-3 text-left font-mono text-sm transition',
+                                      option.checked
+                                        ? 'border-[#00f5d4]/40 bg-[#00f5d4]/5 text-[#f3edff]'
+                                        : 'border-[#2b2740] bg-[#191727] text-[#a69db6]',
                                     )}
                                   >
-                                    {option.checked ? <Check size={13} strokeWidth={3} /> : null}
-                                  </span>
-                                </button>
-                              ))}
-                            </div>
+                                    <span>{option.label}</span>
+                                    <span
+                                      className={cn(
+                                        'flex h-5 w-5 items-center justify-center rounded transition',
+                                        option.checked ? 'bg-[#00f5d4] text-[#0c0b14]' : 'border border-white/20',
+                                      )}
+                                    >
+                                      {option.checked ? <Check size={13} strokeWidth={3} /> : null}
+                                    </span>
+                                  </button>
+                                ))}
+                              </div>
+                            )}
                           </div>
 
                           <div>
                             {selectedSlot.chartType === 'heatmap' && selectedSlot.heatmapMode === 'calendar' ? (
                               <>
-                                <p className="mb-3 font-mono text-sm font-bold tracking-normal text-[#a69db6]">
+                                <p className="mb-3 font-mono text-base font-black tracking-normal text-[#c9bfd8]">
                                   Year
                                 </p>
                                 <p className="mb-4 border border-[#2b2740] bg-[#191727] px-3 py-2 font-mono text-xs text-[#f3edff]">
@@ -1444,7 +1925,7 @@ export function GeneralSettingsDrawer({
                                     ? `${getYearFromDate(selectedSlot.startDate)} · Jan 1 to today`
                                     : `${getYearFromDate(selectedSlot.startDate)} · Jan 1 to Dec 31`}
                                 </p>
-                                <Field label="Year">
+                                <Field label="Year" labelVariant="nested">
                                   <Input
                                     type="number"
                                     min="2020"
@@ -1460,11 +1941,11 @@ export function GeneralSettingsDrawer({
                               </>
                             ) : (
                               <>
-                                <p className="mb-3 font-mono text-sm font-bold tracking-normal text-[#a69db6]">
+                                <p className="mb-3 font-mono text-base font-black tracking-normal text-[#c9bfd8]">
                                   Time range
                                 </p>
                                 <div className="grid gap-4 sm:grid-cols-2">
-                                  <Field label="Start date">
+                                  <Field label="Start date" labelVariant="nested">
                                     <Input
                                       type="date"
                                       value={selectedSlot.startDate}
@@ -1475,7 +1956,7 @@ export function GeneralSettingsDrawer({
                                       }
                                     />
                                   </Field>
-                                  <Field label="End date">
+                                  <Field label="End date" labelVariant="nested">
                                     <Input
                                       type="date"
                                       value={selectedSlot.endDate}
@@ -1500,7 +1981,9 @@ export function GeneralSettingsDrawer({
                   <Button variant="ghost" className="h-11 px-5" onClick={() => setDetailStep('template')}>Back</Button>
                   <div className="flex items-center gap-3">
                     <Button variant="ghost" className="h-11 px-5" onClick={closeDetailModal}>Cancel</Button>
-                    <Button className="h-11 px-6" onClick={saveDetailDraft}>Save changes</Button>
+                    <Button className="h-11 px-6" onClick={saveDetailModal} disabled={creatingTemplate}>
+                      {detailMode === 'create' ? (creatingTemplate ? 'Creating...' : 'Create template') : 'Save changes'}
+                    </Button>
                   </div>
                 </div>
               </div>
@@ -1509,5 +1992,30 @@ export function GeneralSettingsDrawer({
         </>
       ) : null}
     </>
+  );
+}
+
+export function TemplateEditorModal({
+  isOpen,
+  mode,
+  widgets,
+  templateId,
+  templateName,
+  onClose,
+  onSaved,
+}: TemplateEditorModalProps) {
+  return (
+    <GeneralSettingsDrawer
+      isOpen={isOpen}
+      widgets={widgets}
+      activeTemplate={null}
+      variant="modal"
+      templateId={mode === 'edit' ? templateId : undefined}
+      templateName={mode === 'edit' ? templateName : undefined}
+      onClose={onClose}
+      onSave={() => undefined}
+      onTemplateChange={() => undefined}
+      onTemplateSaved={onSaved}
+    />
   );
 }

@@ -4,6 +4,7 @@ import { SummarySchema } from '../validators/summary.validator.js';
 import { AnalyticsQuerySchema } from '../validators/analytics-query.validator.js';
 import { HeatmapSchema } from '../validators/heatmap.validator.js';
 import { ExportSchema } from '../validators/export.validator.js';
+import { MetadataOptionsSchema } from '../validators/metadata-options.validator.js';
 
 describe('Validation Layer Tests', () => {
   describe('Time Range Custom Validator', () => {
@@ -81,6 +82,21 @@ describe('Validation Layer Tests', () => {
       expect(parsed.include_total).toBe(false);
       expect(parsed.detail_level).toBe('compact');
     });
+
+    it('should parse alarm search parameters for one whitelisted field', () => {
+      const parsed = QueryAlarmsSchema.parse({
+        search: 'Core Switch',
+        search_field: 'device_type',
+      });
+      expect(parsed.search).toBe('Core Switch');
+      expect(parsed.search_field).toBe('device_type');
+
+      const invalid = QueryAlarmsSchema.safeParse({
+        search: 'Core Switch',
+        search_field: 'all',
+      });
+      expect(invalid.success).toBe(false);
+    });
   });
 
   describe('SummarySchema', () => {
@@ -147,13 +163,14 @@ describe('Validation Layer Tests', () => {
   });
 
   describe('ExportSchema', () => {
-    it('should accept csv and xlsx formats', () => {
-      expect(ExportSchema.parse({ format: 'csv' }).format).toBe('csv');
-      expect(ExportSchema.parse({ format: 'xlsx' }).format).toBe('xlsx');
+    it('should accept supported export formats', () => {
+      for (const format of ['csv', 'xlsx', 'pdf', 'json']) {
+        expect(ExportSchema.parse({ format }).format).toBe(format);
+      }
     });
 
     it('should reject other export formats', () => {
-      expect(ExportSchema.safeParse({ format: 'pdf' }).success).toBe(false);
+      expect(ExportSchema.safeParse({ format: 'xml' }).success).toBe(false);
     });
 
     it('should accept sort and limit in filters', () => {
@@ -168,6 +185,18 @@ describe('Validation Layer Tests', () => {
       expect(parsed.filters.sort_by).toBe('severity');
       expect(parsed.filters.sort_order).toBe('asc');
       expect(parsed.filters.limit).toBe(100);
+    });
+  });
+
+  describe('MetadataOptionsSchema', () => {
+    it('should parse searchable metadata option queries', () => {
+      const parsed = MetadataOptionsSchema.parse({ search: 'Cisco', limit: '12' });
+      expect(parsed.search).toBe('Cisco');
+      expect(parsed.limit).toBe(12);
+    });
+
+    it('should default metadata option limit', () => {
+      expect(MetadataOptionsSchema.parse({}).limit).toBe(20);
     });
   });
 });

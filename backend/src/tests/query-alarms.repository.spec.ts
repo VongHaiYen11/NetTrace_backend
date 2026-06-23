@@ -79,4 +79,25 @@ describe('QueryAlarmsRepository performance query shape', () => {
     expect(query).not.toContain('lower(device_id)');
     expect(query).not.toContain('lower(error_code)');
   });
+
+  it('should apply whitelisted backend search to the ClickHouse query', async () => {
+    const repo = new QueryAlarmsRepository();
+
+    await repo.queryAlarms({
+      from_time: new Date('2026-06-01T00:00:00Z'),
+      to_time: new Date('2026-06-02T00:00:00Z'),
+      offset: 0,
+      limit: 10,
+      sort_by: 'timestamp',
+      sort_order: 'desc',
+      include_total: false,
+      search: 'link down',
+      search_field: 'description',
+    });
+
+    const query = (executeClickhouseQuery as jest.Mock).mock.calls[0][0] as string;
+    const queryParams = (executeClickhouseQuery as jest.Mock).mock.calls[0][1] as Record<string, unknown>;
+    expect(query).toContain('positionCaseInsensitive(description, {search: String}) > 0');
+    expect(queryParams.search).toBe('link down');
+  });
 });

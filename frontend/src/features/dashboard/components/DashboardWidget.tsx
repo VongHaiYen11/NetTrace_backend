@@ -22,9 +22,12 @@ import { Card, CardContent, CardHeader } from '../../../components/ui/Card';
 import { Badge } from '../../../components/ui/Badge';
 import { StateBlock } from '../../../components/shared/StateBlock';
 import { nettraceApi } from '../../../services/generated/nettrace-api';
+import { cn } from '../../../utils/cn';
 import type {
   AnalyticsRow,
+  Alarm,
   CalendarHeatmapCell,
+  ExportColumn,
   GroupBy,
   Metric,
   WeekdayHeatmapCell,
@@ -37,8 +40,12 @@ interface DashboardWidgetProps {
     title: string;
     type:
       | 'kpi-count'
+      | 'kpi-total'
+      | 'kpi-active'
+      | 'kpi-closed'
       | 'kpi-devices'
       | 'kpi-status'
+      | 'kpi-critical'
       | 'chart-trend'
       | 'chart-severity'
       | 'chart-weekly'
@@ -74,6 +81,38 @@ const darkTooltipProps = {
     stroke: 'rgba(255, 45, 133, 0.28)',
   },
 };
+
+function normalizeKpiType(type: DashboardWidgetProps['config']['type']) {
+  if (type === 'kpi-count') return 'kpi-total';
+  if (type === 'kpi-status') return 'kpi-critical';
+  return type;
+}
+
+function getKpiStatusTone(ratio: number, inverse = false) {
+  const score = inverse ? 1 - ratio : ratio;
+  if (score >= 0.8) {
+    return {
+      border: 'border-[#ff2d85]/80',
+      iconBg: 'bg-[#ff2d85]/18',
+      tone: 'text-[#ff5a9d]',
+      valueClass: 'text-[#ff5a9d] drop-shadow-[0_0_10px_rgba(255,45,133,0.45)]',
+    };
+  }
+  if (score >= 0.5) {
+    return {
+      border: 'border-[#f8e231]/75',
+      iconBg: 'bg-[#f8e231]/15',
+      tone: 'text-[#f8e231]',
+      valueClass: 'text-[#f8e231] drop-shadow-[0_0_10px_rgba(248,226,49,0.35)]',
+    };
+  }
+  return {
+    border: 'border-[#00f5d4]/70',
+    iconBg: 'bg-[#00f5d4]/15',
+    tone: 'text-[#00f5d4]',
+    valueClass: 'text-[#00f5d4] drop-shadow-[0_0_10px_rgba(0,245,212,0.28)]',
+  };
+}
 
 function formatNumberWithSuffix(val: number): string {
   if (val >= 1000000) {
@@ -245,6 +284,58 @@ const tableHeightClassByMode: Record<NonNullable<DashboardWidgetProps['layoutCon
   roomy: 'max-h-[520px]',
 };
 
+const tableColumnLabels: Record<ExportColumn, string> = {
+  alarm_id: 'Alarm ID',
+  time_created: 'Time',
+  time_solved: 'Solved',
+  status: 'Status',
+  severity: 'Severity',
+  error_code: 'Error code',
+  error_name: 'Error name',
+  error_domain: 'Domain',
+  device_id: 'Device ID',
+  device_name: 'Device name',
+  device_type: 'Device type',
+  station_name: 'Station',
+  station_province: 'Province',
+  vendor_name: 'Vendor',
+  raw_log: 'Raw log',
+  description: 'Description',
+};
+
+const defaultTableColumns: ExportColumn[] = [
+  'time_created',
+  'error_name',
+  'status',
+  'severity',
+  'device_name',
+  'description',
+];
+
+function renderAlarmTableCell(alarm: Alarm, column: ExportColumn) {
+  if (column === 'time_created') {
+    return <span className="font-mono text-xs text-[#a69db6]">{format(parseISO(alarm.time_created), 'dd/MM/yyyy HH:mm:ss')}</span>;
+  }
+  if (column === 'time_solved') {
+    return alarm.time_solved ? <span className="font-mono text-xs text-[#a69db6]">{format(parseISO(alarm.time_solved), 'dd/MM/yyyy HH:mm:ss')}</span> : 'N/A';
+  }
+  if (column === 'status') {
+    return (
+      <Badge tone={alarm.status.toLowerCase() === 'active' ? 'amber' : 'green'}>
+        {alarm.status.toLowerCase() === 'active' ? 'Active' : 'Closed'}
+      </Badge>
+    );
+  }
+  if (column === 'error_name') return alarm.error_details?.name ?? alarm.description ?? alarm.error_code;
+  if (column === 'error_domain') return alarm.error_details?.domain ?? 'N/A';
+  if (column === 'device_name') return alarm.device_details?.name ?? alarm.device_id;
+  if (column === 'device_type') return alarm.device_details?.device_type ?? 'N/A';
+  if (column === 'station_name') return alarm.device_details?.station_name ?? 'N/A';
+  if (column === 'station_province') return alarm.device_details?.station_province ?? 'N/A';
+  if (column === 'vendor_name') return alarm.device_details?.vendor_name ?? 'N/A';
+  return alarm[column] ?? 'N/A';
+}
+
 export function DashboardWidget({ id, config, layoutContext, onSettingsClick }: DashboardWidgetProps) {
   if (!config.visible) return null;
 
@@ -263,6 +354,9 @@ export function DashboardWidget({ id, config, layoutContext, onSettingsClick }: 
   const analyticsTimeBucket = shouldBucketByTime ? config.timeBucket : null;
   const tableHeightMode = layoutContext?.tableHeightMode ?? 'middle';
   const tableHeightClass = tableHeightClassByMode[tableHeightMode];
+  const visibleTableColumns = config.tableColumns && config.tableColumns.length > 0
+    ? config.tableColumns
+    : defaultTableColumns;
 
   const dateFilters =
     isHeatmap && config.heatmapMode === 'calendar'
@@ -352,7 +446,7 @@ export function DashboardWidget({ id, config, layoutContext, onSettingsClick }: 
   });
 
   const alarmsQuery = useQuery({
-    queryKey: ['alarms', id, dateFilters],
+    queryKey: ['alarms', id, dateFilters, visibleTableColumns],
     queryFn: () =>
       nettraceApi.queryAlarms({
         ...dateFilters,
@@ -383,87 +477,66 @@ export function DashboardWidget({ id, config, layoutContext, onSettingsClick }: 
     if (isLoading) return <StateBlock state="loading" title="Loading..." />;
     if (isError || !data) return <StateBlock state="error" title="Data load failed" />;
 
-    if (config.type === 'kpi-count') {
-      return (
-        <Card className="border-[#ff2d85]/70">
-          <CardContent className="min-h-[136px] pt-5">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="font-mono text-sm text-[#a69db6]">{config.title}</p>
-                <p className="mt-3 text-3xl font-black tabular-nums text-[#f3edff]">
-                  {data.totalAlarms.toLocaleString('vi-VN')}
-                </p>
-                {config.info1 && (
-                  <p className="mt-4 text-sm text-[#a69db6]">
-                    {data.activeAlarms.toLocaleString('vi-VN')} active · {data.closedAlarms.toLocaleString('vi-VN')} closed
-                  </p>
-                )}
-              </div>
-              <div className="flex flex-col items-end">
-                {config.info2 && (
-                  <span className="flex h-10 w-10 items-center justify-center rounded bg-[#ff2d85]/20">
-                    <RadioTower className="text-[#ff2d85]" size={20} />
-                  </span>
-                )}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      );
-    }
+    const kpiType = normalizeKpiType(config.type);
+    const totalAlarms = Math.max(data.totalAlarms, 1);
+    const alarmHealthTone = getKpiStatusTone(data.criticalAlarms / totalAlarms);
+    const totalTone = alarmHealthTone;
+    const activeTone = alarmHealthTone;
+    const closedTone = getKpiStatusTone(data.closedAlarms / totalAlarms, true);
+    const criticalTone = getKpiStatusTone(data.criticalAlarms / totalAlarms);
+    const deviceTone = getKpiStatusTone(0);
+    const kpiConfig = {
+      'kpi-total': {
+        value: data.totalAlarms.toLocaleString('vi-VN'),
+        subtitle: `${data.activeAlarms.toLocaleString('vi-VN')} active · ${data.closedAlarms.toLocaleString('vi-VN')} closed`,
+        ...totalTone,
+        Icon: RadioTower,
+      },
+      'kpi-active': {
+        value: data.activeAlarms.toLocaleString('vi-VN'),
+        subtitle: `${data.activeAlarms.toLocaleString('vi-VN')} active alarms`,
+        ...activeTone,
+        Icon: RadioTower,
+      },
+      'kpi-closed': {
+        value: data.closedAlarms.toLocaleString('vi-VN'),
+        subtitle: `${data.closedAlarms.toLocaleString('vi-VN')} closed alarms`,
+        ...closedTone,
+        Icon: MoreHorizontal,
+      },
+      'kpi-devices': {
+        value: data.affectedDevices.toLocaleString('vi-VN'),
+        subtitle: `${data.affectedDevices.toLocaleString('vi-VN')} unique devices`,
+        ...deviceTone,
+        Icon: TrendingUp,
+      },
+      'kpi-critical': {
+        value: data.criticalAlarms.toLocaleString('vi-VN'),
+        subtitle: `${data.criticalAlarms.toLocaleString('vi-VN')} critical alarms`,
+        ...criticalTone,
+        Icon: AlertTriangle,
+      },
+    }[kpiType as 'kpi-total' | 'kpi-active' | 'kpi-closed' | 'kpi-devices' | 'kpi-critical'];
 
-    if (config.type === 'kpi-devices') {
+    if (kpiConfig) {
+      const Icon = kpiConfig.Icon;
       return (
-        <Card className="border-[#00f5d4]/70">
+        <Card className={kpiConfig.border}>
           <CardContent className="min-h-[136px] pt-5">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="font-mono text-sm text-[#a69db6]">{config.title}</p>
-                <p className="mt-3 text-3xl font-black tabular-nums text-[#f3edff]">
-                  {data.affectedDevices.toLocaleString('vi-VN')}
+                <p className={cn('mt-3 text-3xl font-black tabular-nums', kpiConfig.valueClass)}>
+                  {kpiConfig.value}
                 </p>
                 {config.info1 && (
-                  <p className="mt-4 text-sm text-[#a69db6]">
-                    {data.affectedDevices.toLocaleString('vi-VN')} unique devices
-                  </p>
+                  <p className="mt-4 text-sm text-[#a69db6]">{kpiConfig.subtitle}</p>
                 )}
               </div>
               <div className="flex flex-col items-end">
-                {config.info2 && (
-                  <span className="flex h-10 w-10 items-center justify-center rounded bg-[#00f5d4]/15">
-                    <TrendingUp className="text-[#00f5d4]" size={20} />
-                  </span>
-                )}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      );
-    }
-
-    if (config.type === 'kpi-status') {
-      const isWarning = data.criticalAlarms > 0;
-      return (
-        <Card className="border-[#f8e231]/70">
-          <CardContent className="min-h-[136px] pt-5">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="font-mono text-sm text-[#a69db6]">{config.title}</p>
-                <p className="mt-3 text-3xl font-black tabular-nums text-[#f8e231] drop-shadow-[0_0_10px_rgba(248,226,49,0.45)]">
-                  {isWarning ? 'Warning' : 'Normal'}
-                </p>
-                {config.info1 && (
-                  <p className="mt-4 text-sm text-[#a69db6]">
-                    {data.criticalAlarms.toLocaleString('vi-VN')} critical alarms
-                  </p>
-                )}
-              </div>
-              <div className="flex flex-col items-end">
-                {config.info2 && (
-                  <span className="flex h-10 w-10 items-center justify-center rounded bg-[#f8e231]/15">
-                    <AlertTriangle className="text-[#f8e231]" size={20} />
-                  </span>
-                )}
+                <span className={cn('flex h-10 w-10 items-center justify-center rounded', kpiConfig.iconBg)}>
+                  <Icon className={kpiConfig.tone} size={20} />
+                </span>
               </div>
             </div>
           </CardContent>
@@ -511,7 +584,7 @@ export function DashboardWidget({ id, config, layoutContext, onSettingsClick }: 
               </defs>
               {config.info1 && <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />}
               <XAxis dataKey="name" tickLine={false} axisLine={false} minTickGap={24} />
-              {config.info2 && <YAxis tickLine={false} axisLine={false} width={44} tickFormatter={formatNumberWithSuffix} />}
+              <YAxis tickLine={false} axisLine={false} width={44} tickFormatter={formatNumberWithSuffix} />
               {config.info3 && (
                 <Tooltip
                   {...darkTooltipProps}
@@ -531,7 +604,7 @@ export function DashboardWidget({ id, config, layoutContext, onSettingsClick }: 
             <BarChart data={trendData} margin={{ left: 0, right: 8, top: 12, bottom: 0 }}>
               {config.info1 && <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />}
               <XAxis dataKey="name" tickLine={false} axisLine={false} />
-              {config.info2 && <YAxis tickLine={false} axisLine={false} width={44} tickFormatter={formatNumberWithSuffix} />}
+              <YAxis tickLine={false} axisLine={false} width={44} tickFormatter={formatNumberWithSuffix} />
               {config.info3 && (
                 <Tooltip
                   {...darkTooltipProps}
@@ -734,43 +807,27 @@ export function DashboardWidget({ id, config, layoutContext, onSettingsClick }: 
           <table className="w-full min-w-full border-separate border-spacing-0 text-left text-sm">
             <thead>
               <tr>
-                {config.info1 && (
-                  <th className="sticky top-0 z-10 border-b border-white/10 bg-[#151421] px-3 py-3 font-mono text-xs font-semibold uppercase text-[#a69db6]">
-                    TIME
+                {visibleTableColumns.map((column) => (
+                  <th
+                    key={column}
+                    className="sticky top-0 z-10 border-b border-white/10 bg-[#151421] px-3 py-3 font-mono text-xs font-semibold uppercase text-[#a69db6]"
+                  >
+                    {tableColumnLabels[column]}
                   </th>
-                )}
-                {config.info2 && (
-                  <th className="sticky top-0 z-10 border-b border-white/10 bg-[#151421] px-3 py-3 font-mono text-xs font-semibold uppercase text-[#a69db6]">
-                    ERROR TYPE
-                  </th>
-                )}
-                {config.info3 && (
-                  <th className="sticky top-0 z-10 border-b border-white/10 bg-[#151421] px-3 py-3 font-mono text-xs font-semibold uppercase text-[#a69db6]">
-                    STATUS
-                  </th>
-                )}
+                ))}
               </tr>
             </thead>
             <tbody>
               {rawAlarms.map((alarm) => (
                 <tr key={alarm.alarm_id} className="hover:bg-white/[0.03]">
-                  {config.info1 && (
-                    <td className="border-b border-white/10 px-3 py-3 font-mono text-xs text-[#a69db6]">
-                      {format(parseISO(alarm.time_created), 'dd/MM/yyyy HH:mm:ss')}
+                  {visibleTableColumns.map((column) => (
+                    <td
+                      key={column}
+                      className="max-w-[18rem] truncate border-b border-white/10 px-3 py-3 text-[#cfc7dc]"
+                    >
+                      {renderAlarmTableCell(alarm, column)}
                     </td>
-                  )}
-                  {config.info2 && (
-                    <td className="border-b border-white/10 px-3 py-3 text-[#cfc7dc]">
-                      {alarm.error_details?.name ?? alarm.description ?? alarm.error_code}
-                    </td>
-                  )}
-                  {config.info3 && (
-                    <td className="border-b border-white/10 px-3 py-3 text-[#cfc7dc]">
-                      <Badge tone={alarm.status.toLowerCase() === 'active' ? 'amber' : 'green'}>
-                        {alarm.status.toLowerCase() === 'active' ? 'Active' : 'Closed'}
-                      </Badge>
-                    </td>
-                  )}
+                  ))}
                 </tr>
               ))}
             </tbody>

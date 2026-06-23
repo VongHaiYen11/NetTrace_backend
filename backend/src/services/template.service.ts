@@ -18,13 +18,13 @@ export class TemplateService {
   async createTemplate(
     name: string,
     selectedCards: string | null,
-    widgetsData: Omit<Preset, 'template_id'>[],
+    widgetsData: Omit<Preset, 'preset_id'>[],
   ): Promise<Template> {
     const client = await pgPool.connect();
     try {
       await client.query('BEGIN');
 
-      // Create Template with initial widgets count of 0 (will be updated)
+      // Create Template with initial widgets count
       const template = await this.templateRepo.createTemplate(
         name,
         selectedCards,
@@ -34,23 +34,24 @@ export class TemplateService {
 
       // Create Presets and Widgets
       for (const wData of widgetsData) {
-        // Upsert Preset
-        await this.presetRepo.upsertPreset(
+        // Insert Preset
+        const preset = await this.presetRepo.createPreset(
           {
-            device_id: wData.device_id,
             position: wData.position,
             chart_type: wData.chart_type,
+            start_date: wData.start_date || null,
+            end_date: wData.end_date || null,
             status: wData.status || null,
             severity: wData.severity || null,
             error_code: wData.error_code || null,
-            vendor_id: wData.vendor_id || null,
+            vendor: wData.vendor || null,
             device_type: wData.device_type || null,
           },
           client,
         );
 
-        // Create Widget
-        await this.widgetRepo.createWidget(template.template_id, wData.device_id, client);
+        // Create Widget linking template and preset
+        await this.widgetRepo.createWidget(template.template_id, preset.preset_id!, client);
       }
 
       await client.query('COMMIT');
@@ -84,7 +85,7 @@ export class TemplateService {
     id: number,
     name?: string,
     selectedCards?: string | null,
-    widgetsData?: Omit<Preset, 'template_id'>[],
+    widgetsData?: Omit<Preset, 'preset_id'>[],
   ): Promise<Template | null> {
     const client = await pgPool.connect();
     try {
@@ -103,26 +104,33 @@ export class TemplateService {
       if (selectedCards !== undefined) updates.selected_cards = selectedCards;
 
       if (widgetsData !== undefined) {
-        // Delete all old widgets of this template
-        await this.widgetRepo.deleteWidgetsByTemplateId(id, client);
+        // Query old widgets of this template to find their preset_ids
+        const oldWidgets = await this.widgetRepo.getWidgetsWithPresetsByTemplateId(id, client);
+        const oldPresetIds = oldWidgets.map((w) => w.preset_id);
+
+        // Delete old presets (widget rows cascade-deleted via FK ON DELETE CASCADE)
+        if (oldPresetIds.length > 0) {
+          await this.presetRepo.deletePresetsByIds(oldPresetIds, client);
+        }
 
         // Insert new presets and widgets
         for (const wData of widgetsData) {
-          await this.presetRepo.upsertPreset(
+          const preset = await this.presetRepo.createPreset(
             {
-              device_id: wData.device_id,
               position: wData.position,
               chart_type: wData.chart_type,
+              start_date: wData.start_date || null,
+              end_date: wData.end_date || null,
               status: wData.status || null,
               severity: wData.severity || null,
               error_code: wData.error_code || null,
-              vendor_id: wData.vendor_id || null,
+              vendor: wData.vendor || null,
               device_type: wData.device_type || null,
             },
             client,
           );
 
-          await this.widgetRepo.createWidget(id, wData.device_id, client);
+          await this.widgetRepo.createWidget(id, preset.preset_id!, client);
         }
 
         updates.number_of_widgets = widgetsData.length;
@@ -140,6 +148,22 @@ export class TemplateService {
   }
 
   async deleteTemplate(id: number): Promise<boolean> {
-    return this.templateRepo.deleteTemplate(id);
+    const client = await pgPool.connect();
+    try {
+      await client.query('BEGIN');
+      const widgets = await this.widgetRepo.getWidgetsWithPresetsByTemplateId(id, client);
+      const presetIds = widgets.map((w) => w.preset_id);
+      if (presetIds.length > 0) {
+        await this.presetRepo.deletePresetsByIds(presetIds, client);
+      }
+      const success = await this.templateRepo.deleteTemplate(id, client);
+      await client.query('COMMIT');
+      return success;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 }

@@ -3,6 +3,18 @@ import { DateStringSchema, QueryArraySchema } from './shared.js';
 
 const SORT_BY_WHITELIST = ['timestamp', 'severity', 'status'] as const;
 const SORT_ORDER_WHITELIST = ['asc', 'desc'] as const;
+const SEARCH_FIELD_WHITELIST = [
+  'alarm_id',
+  'device_id',
+  'device_name',
+  'device_type',
+  'error_code',
+  'error_name',
+  'severity',
+  'status',
+  'description',
+  'raw_log',
+] as const;
 const parseBoolean = (val: unknown) => {
   if (val === undefined) return undefined;
   if (typeof val === 'boolean') return val;
@@ -34,4 +46,6 @@ export const QueryAlarmsSchema = z.object({
   sort_order: z.enum(SORT_ORDER_WHITELIST).default('desc'),
   include_total: z.preprocess(parseBoolean, z.boolean().default(true)),
   detail_level: z.enum(['compact', 'full']).default('full'),
+  search: z.string().trim().min(1).max(200).optional(),
+  search_field: z.enum(SEARCH_FIELD_WHITELIST).default('alarm_id'),
 });

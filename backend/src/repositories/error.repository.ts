@@ -36,6 +36,25 @@ export class ErrorRepository {
     return { errors: rows, durationMs };
   }
 
+  async getErrorCodesBySearch(params: {
+    field: 'error_name';
+    search: string;
+  }): Promise<{ errorCodes: string[]; durationMs: number }> {
+    const query = `
+      SELECT DISTINCT error_code
+      FROM error
+      WHERE LOWER(name) LIKE $1
+    `;
+
+    const { rows, durationMs } = await executePgQuery<{ error_code: string }>(query, [
+      `%${params.search.toLowerCase()}%`,
+    ]);
+    return {
+      errorCodes: rows.map((row) => row.error_code),
+      durationMs,
+    };
+  }
+
   /**
    * Fetches all error definitions.
    */
