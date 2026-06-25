@@ -182,19 +182,19 @@ function MultiChoiceSelect({
         <button
           type="button"
           onClick={() => setOpen((current) => !current)}
-          className="flex h-10 w-full items-center justify-between gap-3 rounded border border-[#2b2740] bg-[#191727] px-3 text-left text-sm text-[#f3edff] outline-none transition hover:border-[#ff2d85]/60 focus-visible:border-[#00f5d4] focus-visible:ring-2 focus-visible:ring-[#00f5d4]/15"
+          className="flex h-10 w-full items-center justify-between gap-3 rounded border border-border bg-input px-3 text-left text-sm text-light outline-none transition hover:border-primary/60 focus-visible:border-secondary focus-visible:ring-2 focus-visible:ring-secondary/15"
         >
-          <span className={cn('truncate', values.length === 0 && 'text-[#777086]')}>
+          <span className={cn('truncate', values.length === 0 && 'text-placeholder')}>
             {values.length > 0 ? values.join(', ') : placeholder}
           </span>
           <ChevronDown
             size={14}
-            className={cn('shrink-0 text-[#00f5d4] transition', open && 'rotate-180')}
+            className={cn('shrink-0 text-secondary transition', open && 'rotate-180')}
           />
         </button>
 
         {open ? (
-          <div className="absolute left-0 right-0 top-full z-40 mt-2 overflow-hidden rounded-lg border border-[#2b2740] bg-[#11101b] p-2 shadow-2xl">
+          <div className="absolute left-0 right-0 top-full z-40 mt-2 overflow-hidden rounded-lg border border-border bg-panel p-2 shadow-2xl">
             {values.length > 0 ? (
               <div className="mb-2 flex flex-wrap gap-2 border-b border-white/10 p-1 pb-3">
                 {values.map((value) => (
@@ -202,7 +202,7 @@ function MultiChoiceSelect({
                     key={value}
                     type="button"
                     onClick={() => toggleValue(value)}
-                    className="inline-flex items-center gap-1 rounded border border-[#00f5d4]/40 bg-[#00f5d4]/10 px-2 py-1 text-xs font-semibold text-[#f3edff]"
+                    className="inline-flex items-center gap-1 rounded border border-secondary/40 bg-secondary/10 px-2 py-1 text-xs font-semibold text-light"
                   >
                     {value}
                     <X size={12} />
@@ -212,9 +212,9 @@ function MultiChoiceSelect({
             ) : null}
             <div className="max-h-52 overflow-y-auto">
               {isLoading ? (
-                <p className="px-2 py-3 text-sm text-[#a69db6]">Loading...</p>
+                <p className="px-2 py-3 text-sm text-muted">Loading...</p>
               ) : options.length === 0 ? (
-                <p className="px-2 py-3 text-sm text-[#a69db6]">No options found.</p>
+                <p className="px-2 py-3 text-sm text-muted">No options found.</p>
               ) : (
                 options.map((option) => {
                   const selected = values.includes(option.value);
@@ -226,15 +226,15 @@ function MultiChoiceSelect({
                       className={cn(
                         'flex w-full items-center justify-between rounded px-3 py-2.5 text-left text-sm transition',
                         selected
-                          ? 'bg-[#00f5d4]/10 text-[#f7f3ff]'
-                          : 'text-[#a69db6] hover:bg-white/[0.04] hover:text-[#f7f3ff]',
+                          ? 'bg-secondary/10 text-bright'
+                          : 'text-muted hover:bg-white/[0.04] hover:text-bright',
                       )}
                     >
                       <span>{option.label}</span>
                       <span
                         className={cn(
                           'flex h-5 w-5 items-center justify-center rounded transition',
-                          selected ? 'bg-[#00f5d4] text-[#0c0b14]' : 'border border-white/20',
+                          selected ? 'bg-secondary text-input-dark' : 'border border-white/20',
                         )}
                       >
                         {selected ? <Check size={13} strokeWidth={3} /> : null}
@@ -378,20 +378,23 @@ export function ExportPage() {
               className={cn(
                 'rounded-lg border p-5 text-left transition',
                 active
-                  ? 'border-[#00f5d4] bg-[#00f5d4]/10 shadow-[0_0_28px_rgba(0,245,212,0.12)]'
-                  : 'border-white/10 bg-[#151421]/80 hover:border-[#ff2d85]/60 hover:bg-[#191727]',
+                  ? 'border-primary bg-primary/10 shadow-glow-primary'
+                  : 'border-white/10 bg-panel-light/80 hover:border-primary/60 hover:bg-input',
               )}
             >
               <span className="flex items-center justify-between">
-                <span className="flex h-11 w-11 items-center justify-center rounded border border-white/10 bg-[#090911] text-[#00f5d4]">
+                <span className={cn(
+                  "flex h-11 w-11 items-center justify-center rounded border border-white/10 bg-background-alt",
+                  active ? "text-primary" : "text-secondary"
+                )}>
                   <Icon size={20} />
                 </span>
-                {active ? <Check size={18} className="text-[#00f5d4]" /> : null}
+                {active ? <Check size={18} className="text-primary" /> : null}
               </span>
-              <span className="mt-5 block text-xl font-semibold text-[#f7f3ff]">
+              <span className="mt-5 block text-xl font-semibold text-bright">
                 {option.label}
               </span>
-              <span className="mt-2 block text-sm leading-6 text-[#a69db6]">
+              <span className="mt-2 block text-sm leading-6 text-muted">
                 {option.description}
               </span>
             </button>
@@ -401,10 +404,10 @@ export function ExportPage() {
 
       <section className="grid gap-6 xl:grid-cols-[1fr_22rem]">
         <div className="space-y-6">
-          <div className="rounded-lg border border-white/10 bg-[#151421]/80 p-6">
+          <div className="rounded-lg border border-white/10 bg-panel-light/80 p-6">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
               <div>
-                <h2 className="text-xl font-bold text-[#f7f3ff]">Columns</h2>
+                <h2 className="text-xl font-bold text-bright">Columns</h2>
               </div>
               <div className="flex gap-2">
                 <Button size="sm" variant="ghost" onClick={() => setColumns(DEFAULT_COLUMNS)}>
@@ -434,15 +437,15 @@ export function ExportPage() {
                     className={cn(
                       'flex cursor-pointer items-center justify-between gap-3 rounded border px-3 py-3 text-left text-sm transition',
                       checked
-                        ? 'border-[#00f5d4]/40 bg-[#00f5d4]/5 text-[#f3edff]'
-                        : 'border-[#2b2740] bg-[#191727] text-[#a69db6] hover:border-[#ff2d85]/60 hover:text-[#f7f3ff]',
+                        ? 'border-secondary/40 bg-secondary/5 text-light'
+                        : 'border-border bg-input text-muted hover:border-primary/60 hover:text-bright',
                     )}
                   >
                     <span>{column.label}</span>
                     <span
                       className={cn(
                         'flex h-5 w-5 shrink-0 items-center justify-center rounded transition',
-                        checked ? 'bg-[#00f5d4] text-[#0c0b14]' : 'border border-white/20',
+                        checked ? 'bg-secondary text-input-dark' : 'border border-white/20',
                       )}
                     >
                       {checked ? <Check size={13} strokeWidth={3} /> : null}
@@ -453,8 +456,8 @@ export function ExportPage() {
             </div>
           </div>
 
-          <div className="rounded-lg border border-white/10 bg-[#151421]/80 p-6">
-            <h2 className="text-xl font-bold text-[#f7f3ff]">Filters</h2>
+          <div className="rounded-lg border border-white/10 bg-panel-light/80 p-6">
+            <h2 className="text-xl font-bold text-bright">Filters</h2>
             <div className="mt-5 grid gap-4 md:grid-cols-3">
               <Field label="From date">
                 <Input
@@ -558,16 +561,16 @@ export function ExportPage() {
           </div>
         </div>
 
-        <aside className="h-fit overflow-hidden rounded-lg border border-[#00f5d4]/45 bg-[#07070f] shadow-[0_0_0_1px_rgba(255,45,133,0.16),0_24px_70px_rgba(0,0,0,0.42),0_0_44px_rgba(0,245,212,0.1)] xl:sticky xl:top-8">
-          <div className="border-b border-[#00f5d4]/25 bg-[#00f5d4]/10 p-6">
+        <aside className="h-fit overflow-hidden rounded-lg border border-secondary/45 bg-background shadow-export-panel xl:sticky xl:top-8">
+          <div className="border-b border-secondary/25 bg-secondary/10 p-6">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h2 className="text-xl font-bold text-[#f7f3ff]">
+                <h2 className="text-xl font-bold text-bright">
                   Download
                 </h2>
-                <p className="mt-2 text-sm leading-6 text-[#c9bfd8]">Check the information again before exporting.</p>
+                <p className="mt-2 text-sm leading-6 text-medium">Check the information again before exporting.</p>
               </div>
-              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded border border-[#ff2d85]/70 bg-[#ff2d85]/15 text-[#ff2d85] shadow-[0_0_24px_rgba(255,45,133,0.2)]">
+              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded border border-primary/70 bg-primary/15 text-primary shadow-glow-primary-soft">
                 <ActiveFormatIcon size={22} />
               </span>
             </div>
@@ -575,7 +578,7 @@ export function ExportPage() {
           </div>
 
           <div className="p-6">
-            <div className="rounded-lg border border-white/10 bg-[#11101b]/80 px-4 py-2">
+            <div className="rounded-lg border border-white/10 bg-panel/80 px-4 py-2">
               {[
                 { label: 'Format', value: format.toUpperCase(), accent: true },
                 { label: 'Columns', value: columns.length.toString() },
@@ -586,11 +589,11 @@ export function ExportPage() {
                   key={item.label}
                   className="flex items-center justify-between gap-4 border-b border-white/10 py-3 last:border-b-0"
                 >
-                  <p className="text-sm font-semibold text-[#7f8ca3]">{item.label}</p>
+                  <p className="text-sm font-semibold text-placeholder">{item.label}</p>
                   <p
                     className={cn(
                       'truncate text-right text-sm font-bold',
-                      item.accent ? 'text-[#00f5d4]' : 'text-[#f7f3ff]',
+                      item.accent ? 'text-secondary' : 'text-bright',
                     )}
                   >
                     {item.value}
@@ -600,14 +603,14 @@ export function ExportPage() {
             </div>
 
             {format === 'pdf' ? (
-              <p className="mt-5 rounded border border-[#00f5d4]/30 bg-[#00f5d4]/10 p-3 text-sm leading-6 text-[#c9bfd8]">
+              <p className="mt-5 rounded border border-secondary/30 bg-secondary/10 p-3 text-sm leading-6 text-medium">
                 PDF is best for bounded review packets. Use CSV, Excel, or JSON for very large
                 datasets.
               </p>
             ) : null}
 
             <Button
-              className="mt-6 h-12 w-full border-[#ff2d85] bg-[#ff2d85] text-base font-black text-white shadow-[0_0_28px_rgba(255,45,133,0.28)] hover:bg-[#e11d72]"
+              className="mt-6 h-12 w-full border-primary bg-primary text-base font-black text-white shadow-glow-primary hover:bg-primary-dark"
               onClick={handleExport}
               disabled={exporting}
             >

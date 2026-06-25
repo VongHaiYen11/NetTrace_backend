@@ -33,7 +33,7 @@ const columns: ColumnDef<Alarm>[] = [
     cell: ({ row }) => {
       try {
         return (
-          <span className="font-mono text-[#a69db6]">
+          <span className="font-mono text-muted">
             {format(parseISO(row.original.time_created), 'HH:mm:ss')}
           </span>
         );
@@ -71,7 +71,7 @@ export function AlarmTable({ data, isLoading, isError }: AlarmTableProps) {
       <CardHeader>
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-bold">Alarm list</h2>
-            <span className="font-mono text-lg leading-none text-[#a69db6]">•••</span>
+            <span className="font-mono text-lg leading-none text-muted">•••</span>
           </div>
       </CardHeader>
       <CardContent>
@@ -94,7 +94,7 @@ export function AlarmTable({ data, isLoading, isError }: AlarmTableProps) {
                     {headerGroup.headers.map((header) => (
                       <th
                         key={header.id}
-                        className="border-b border-white/10 px-3 py-3 font-mono text-xs font-semibold uppercase tracking-normal text-[#a69db6]"
+                        className="border-b border-white/10 px-3 py-3 font-mono text-xs font-semibold uppercase tracking-normal text-muted"
                       >
                         {flexRender(header.column.columnDef.header, header.getContext())}
                       </th>
@@ -106,7 +106,7 @@ export function AlarmTable({ data, isLoading, isError }: AlarmTableProps) {
                 {table.getRowModel().rows.map((row) => (
                   <tr key={row.id} className="hover:bg-white/[0.03]">
                     {row.getVisibleCells().map((cell) => (
-                      <td key={cell.id} className="border-b border-white/10 px-3 py-3 text-[#cfc7dc]">
+                      <td key={cell.id} className="border-b border-white/10 px-3 py-3 text-medium">
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}
                       </td>
                     ))}

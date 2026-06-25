@@ -60,10 +60,10 @@ export function DashboardFilters({ values, onApply }: DashboardFiltersProps) {
         <form className="grid gap-4 lg:grid-cols-12" onSubmit={handleSubmit(submit)}>
           <div className="flex items-center gap-2 lg:col-span-12">
             <Filter size={18} className="text-muted" />
-            <h2 className="text-sm font-semibold text-[#f3edff]">Alarm filters</h2>
+            <h2 className="text-sm font-semibold text-light">Alarm filters</h2>
           </div>
-          <div className="rounded border border-[#2b2740] bg-[#191727] px-3 py-2 lg:col-span-12">
-            <p className="font-mono text-xs text-[#a69db6]">
+          <div className="rounded border border-border bg-input px-3 py-2 lg:col-span-12">
+            <p className="font-mono text-xs text-muted">
               Filters narrow the alarm API query. Sort only affects the alarm list/export order.
             </p>
           </div>

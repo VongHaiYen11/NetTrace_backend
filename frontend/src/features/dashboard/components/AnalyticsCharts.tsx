@@ -30,10 +30,10 @@ interface AnalyticsChartsProps {
 const darkTooltipProps = {
   contentStyle: {
     backgroundColor: '#0c0b14',
-    border: '1px solid rgba(255, 45, 133, 0.45)',
+    border: '1px solid var(--chart-primary-45)',
     borderRadius: '6px',
     color: '#f3edff',
-    boxShadow: '0 16px 40px rgba(0, 0, 0, 0.45)',
+    boxShadow: 'var(--chart-shadow)',
   },
   labelStyle: {
     color: '#00f5d4',
@@ -43,8 +43,8 @@ const darkTooltipProps = {
     color: '#f3edff',
   },
   cursor: {
-    fill: 'rgba(255, 45, 133, 0.08)',
-    stroke: 'rgba(255, 45, 133, 0.28)',
+    fill: 'var(--chart-primary-08)',
+    stroke: 'var(--chart-primary-28)',
   },
 };
 
@@ -126,7 +126,7 @@ export function AnalyticsCharts({
                       <stop offset="95%" stopColor="#ff2d85" stopOpacity={0.02} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />
+                  <CartesianGrid stroke="var(--chart-grid)" vertical={false} />
                   <XAxis dataKey="name" tickLine={false} axisLine={false} minTickGap={24} />
                   <YAxis tickLine={false} axisLine={false} width={44} tickFormatter={formatNumberWithSuffix} />
                   <Tooltip {...darkTooltipProps} formatter={(value: any) => [formatNumberWithSuffix(Number(value)), 'Count']} />
@@ -174,7 +174,7 @@ export function AnalyticsCharts({
                     verticalAlign="bottom"
                     height={36}
                     iconType="circle"
-                    formatter={(value) => <span className="text-xs font-mono text-[#a69db6]">{value}</span>}
+                    formatter={(value) => <span className="text-xs font-mono text-muted">{value}</span>}
                   />
                 </PieChart>
               </ResponsiveContainer>
@@ -236,5 +236,5 @@ export function WeeklyAlarmChart({ trend, isLoading, isError }: WeeklyAlarmChart
 }
 
 function MoreDots() {
-  return <span className="font-mono text-lg leading-none text-[#a69db6]">•••</span>;
+  return <span className="font-mono text-lg leading-none text-muted">•••</span>;
 }

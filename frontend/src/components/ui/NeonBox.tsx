@@ -15,19 +15,19 @@ export function NeonBox<T extends ElementType = 'div'>({
   return (
     <Component
       className={cn(
-        'relative border border-[#2b2740] bg-[#191727] p-4',
+        'relative border border-border bg-input p-4',
         className
       )}
       {...props}
     >
       {/* Top-left (Cyan) */}
-      <span className="absolute -left-px -top-px h-3 w-3 border-l-2 border-t-2 border-[#00f5d4]" />
+      <span className="absolute -left-px -top-px h-3 w-3 border-l-2 border-t-2 border-secondary" />
       {/* Top-right (Magenta) */}
-      <span className="absolute -right-px -top-px h-3 w-3 border-r-2 border-t-2 border-[#ff2d85]" />
+      <span className="absolute -right-px -top-px h-3 w-3 border-r-2 border-t-2 border-primary" />
       {/* Bottom-left (Cyan) */}
-      <span className="absolute -bottom-px -left-px h-3 w-3 border-b-2 border-l-2 border-[#00f5d4]" />
+      <span className="absolute -bottom-px -left-px h-3 w-3 border-b-2 border-l-2 border-secondary" />
       {/* Bottom-right (Magenta) */}
-      <span className="absolute -bottom-px -right-px h-3 w-3 border-b-2 border-r-2 border-[#ff2d85]" />
+      <span className="absolute -bottom-px -right-px h-3 w-3 border-b-2 border-r-2 border-primary" />
       {children}
     </Component>
   );

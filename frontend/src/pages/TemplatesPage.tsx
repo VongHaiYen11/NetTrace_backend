@@ -64,84 +64,7 @@ type TemplateModalState =
   | { mode: 'edit'; templateId: number; templateName: string; widgets: DashboardWidgetConfig[] };
 
 function createTemplateDraftWidgets(): DashboardWidgetConfig[] {
-  return [
-    {
-      id: 'kpi-total',
-      type: 'kpi-total',
-      title: 'Total alarms',
-      layoutOrder: 0,
-      layoutSpan: 1,
-      visible: true,
-      chartType: 'line',
-      metric: 'count',
-      groupBy: 'none',
-      timeBucket: 'day',
-      heatmapMode: 'weekday',
-      info1: true,
-      info2: true,
-      info3: true,
-      preset: 'Active Connections',
-      startDate: '2026-06-01',
-      endDate: '2026-06-30',
-    },
-    {
-      id: 'kpi-active',
-      type: 'kpi-active',
-      title: 'Active alarms',
-      layoutOrder: 0,
-      layoutSpan: 1,
-      visible: true,
-      chartType: 'line',
-      metric: 'count',
-      groupBy: 'none',
-      timeBucket: 'day',
-      heatmapMode: 'weekday',
-      info1: true,
-      info2: true,
-      info3: true,
-      preset: 'Active Connections',
-      startDate: '2026-06-01',
-      endDate: '2026-06-30',
-    },
-    {
-      id: 'chart-trend',
-      type: 'chart-trend',
-      title: 'Daily alarms',
-      layoutOrder: 1,
-      layoutSpan: 2,
-      visible: true,
-      chartType: 'line',
-      metric: 'count',
-      groupBy: 'none',
-      timeBucket: 'day',
-      heatmapMode: 'weekday',
-      info1: true,
-      info2: true,
-      info3: true,
-      preset: 'Active Connections',
-      startDate: '2026-06-01',
-      endDate: '2026-06-30',
-    },
-    {
-      id: 'chart-severity',
-      type: 'chart-severity',
-      title: 'Severity split',
-      layoutOrder: 2,
-      layoutSpan: 1,
-      visible: true,
-      chartType: 'pie',
-      metric: 'count',
-      groupBy: 'severity',
-      timeBucket: 'day',
-      heatmapMode: 'weekday',
-      info1: true,
-      info2: true,
-      info3: true,
-      preset: 'Active Connections',
-      startDate: '2026-06-01',
-      endDate: '2026-06-30',
-    },
-  ];
+  return [];
 }
 
 function getTemplateWidgets(template: TemplateSummary) {
@@ -200,14 +123,14 @@ function ControlMenu({
         className={`flex h-10 items-center gap-2 rounded-lg px-3 text-sm font-medium transition-colors ${
           highlighted
             ? 'bg-white/[0.06] text-white'
-            : 'text-[#a69db6] hover:bg-white/[0.05] hover:text-white'
+            : 'text-muted hover:bg-white/[0.05] hover:text-white'
         }`}
       >
         <Icon size={14} style={{ color: highlighted ? accentColor : undefined }} />
         {label}
         {badge ? (
           <span
-            className="flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[10px] font-black text-[#0c0b14]"
+            className="flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[10px] font-black text-input-dark"
             style={{ background: accentColor }}
           >
             {badge}
@@ -221,7 +144,7 @@ function ControlMenu({
       </button>
 
       {open ? (
-        <div className="absolute right-0 top-full z-30 mt-2 w-[min(18rem,calc(100vw-2rem))] overflow-hidden rounded-lg bg-[#151421]/95 p-4 shadow-xl backdrop-blur-xl">
+        <div className="absolute right-0 top-full z-30 mt-2 w-[min(18rem,calc(100vw-2rem))] overflow-hidden rounded-lg bg-panel-light/95 p-4 shadow-xl backdrop-blur-xl">
           {children}
         </div>
       ) : null}
@@ -232,7 +155,7 @@ function ControlMenu({
 function MenuSection({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="space-y-2">
-      <p className="px-2 text-[15px] font-semibold text-[#f3edff]">{label}</p>
+      <p className="px-2 text-[15px] font-semibold text-light">{label}</p>
       {children}
     </div>
   );
@@ -258,7 +181,7 @@ function MenuOption<T extends string>({
       className={`flex w-full items-center justify-between rounded-md px-3 py-2.5 text-left text-sm transition-colors ${
         selected
           ? 'bg-white/[0.07] text-white'
-          : 'text-[#a69db6] hover:bg-white/[0.04] hover:text-white'
+          : 'text-muted hover:bg-white/[0.04] hover:text-white'
       }`}
     >
       <span>{label}</span>
@@ -310,7 +233,7 @@ function SortMenu<T extends string>({
                 className={`rounded-md px-3 py-2 text-left text-sm transition-colors ${
                   direction === nextDirection
                     ? 'bg-white/[0.08] text-white'
-                    : 'text-[#777086] hover:text-white'
+                    : 'text-placeholder hover:text-white'
                 }`}
               >
                 {nextDirection === 'desc' ? 'Descending' : 'Ascending'}
@@ -339,7 +262,7 @@ function FilterChip({
       type="button"
       onClick={onClick}
       className={`w-full rounded-md px-3 py-2.5 text-left text-sm transition-colors ${
-        active ? 'bg-white/[0.07] text-white' : 'text-[#a69db6] hover:bg-white/[0.04] hover:text-white'
+        active ? 'bg-white/[0.07] text-white' : 'text-muted hover:bg-white/[0.04] hover:text-white'
       }`}
     >
       {label}
@@ -362,11 +285,11 @@ function CompactSelect({
 }) {
   return (
     <label className="block space-y-1.5">
-      <span className="px-2 text-xs font-medium text-[#a69db6]">{label}</span>
+      <span className="px-2 text-xs font-medium text-muted">{label}</span>
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="h-10 w-full rounded-md border border-white/10 bg-[#0c0b14] px-3 text-sm text-white outline-none transition-colors hover:border-white/20 focus:ring-2"
+        className="h-10 w-full rounded-md border border-white/10 bg-input-dark px-3 text-sm text-white outline-none transition-colors hover:border-white/20 focus:ring-2"
         style={{
           borderColor: value ? `${accentColor}70` : undefined,
           '--tw-ring-color': `${accentColor}30`,
@@ -399,7 +322,7 @@ function SearchInput({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="h-10 w-full rounded-full border border-white/10 bg-white/[0.03] py-2 pl-10 pr-4 font-mono text-xs text-white outline-none transition-all placeholder:text-[#777086] hover:border-white/20 focus:ring-2 sm:w-56"
+        className="h-10 w-full rounded-full border border-white/10 bg-white/[0.03] py-2 pl-10 pr-4 font-mono text-xs text-white outline-none transition-all placeholder:text-placeholder hover:border-white/20 focus:ring-2 sm:w-56"
         style={{
           '--tw-ring-color': `${accentColor}25`,
         } as React.CSSProperties}
@@ -496,7 +419,7 @@ function PresetFilterMenu({
         <button
           type="button"
           onClick={onClear}
-          className="flex h-9 w-full items-center justify-center gap-2 rounded-md text-sm text-[#a69db6] transition-colors hover:bg-white/[0.04] hover:text-white"
+          className="flex h-9 w-full items-center justify-center gap-2 rounded-md text-sm text-muted transition-colors hover:bg-white/[0.04] hover:text-white"
         >
           <X size={12} />
           Clear filters
@@ -513,7 +436,7 @@ function ReferenceLine({
 }: {
   description: string;
 }) {
-  return <p className="mb-6 max-w-3xl text-sm leading-6 text-[#a69db6]">{description}</p>;
+  return <p className="mb-6 max-w-3xl text-sm leading-6 text-muted">{description}</p>;
 }
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
@@ -759,7 +682,7 @@ export function TemplatesPage() {
       {/* ───────────────── Templates Section ───────────────── */}
       <section>
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <h2 className="font-headline text-2xl font-bold uppercase tracking-widest text-[#ff2d85] drop-shadow-[0_0_8px_rgba(255,45,133,0.8)]">
+          <h2 className="font-headline text-2xl font-bold uppercase tracking-widest text-primary drop-shadow-glow-primary">
             Templates
           </h2>
           <Toolbar>
@@ -800,10 +723,10 @@ export function TemplatesPage() {
             {/* Create Template Card */}
             <button
               onClick={openCreateTemplateFlow}
-              className="group relative flex flex-col items-center justify-center h-72 border-2 border-dashed border-[#ff2d85]/30 rounded-xl bg-[#151421]/30 hover:bg-[#ff2d85]/5 hover:border-[#ff2d85] transition-all duration-300 shadow-[inset_0_0_12px_rgba(255,45,133,0.05)]"
+              className="group relative flex flex-col items-center justify-center h-72 border-2 border-dashed border-primary/30 rounded-xl bg-panel-light/30 hover:bg-primary/5 hover:border-primary transition-all duration-300 shadow-glow-primary-inset"
             >
-              <div className="w-14 h-14 rounded-full border border-[#ff2d85] flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300 shadow-[0_0_12px_rgba(255,45,133,0.2)] bg-[#ff2d85]/5">
-                <Plus className="text-[#ff2d85]" size={32} />
+              <div className="w-14 h-14 rounded-full border border-primary flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300 shadow-glow-primary bg-primary/5">
+                <Plus className="text-primary" size={32} />
               </div>
               <span className="font-heading font-bold text-white text-base">New Template</span>
             </button>
@@ -822,19 +745,19 @@ export function TemplatesPage() {
                 <div
                   key={template.template_id}
                   onClick={() => openEditTemplateFlow(template)}
-                  className="group relative flex h-72 cursor-pointer flex-col overflow-hidden rounded-lg border border-[#ff2d85]/30 bg-[#151421] transition-all duration-300 hover:border-[#00f5d4]/50 hover:shadow-[0_0_15px_rgba(0,245,212,0.1)]"
+                  className="group relative flex h-72 cursor-pointer flex-col overflow-hidden rounded-lg border border-primary/30 bg-panel-light transition-all duration-300 hover:border-secondary/50 hover:shadow-glow-secondary"
                 >
                   {/* Thumbnail Area */}
-                  <div className="relative h-32 w-full overflow-hidden border-b border-[#2b2740]/70 bg-[#1c1a2e]/70">
-                    <div className="absolute inset-4 flex flex-col gap-2 rounded border border-[#00f5d4]/20 p-2">
-                      <div className="h-3 w-1/3 rounded bg-[#00f5d4]/10" />
+                  <div className="relative h-32 w-full overflow-hidden border-b border-border/70 bg-input/70">
+                    <div className="absolute inset-4 flex flex-col gap-2 rounded border border-secondary/20 p-2">
+                      <div className="h-3 w-1/3 rounded bg-secondary/10" />
                       <div className="flex flex-1 gap-2">
-                        <div className="flex-1 rounded border border-[#ff2d85]/20 bg-[#ff2d85]/5" />
-                        <div className="w-1/3 rounded border border-[#00f5d4]/20 bg-[#00f5d4]/5" />
+                        <div className="flex-1 rounded border border-primary/20 bg-primary/5" />
+                        <div className="w-1/3 rounded border border-secondary/20 bg-secondary/5" />
                       </div>
                     </div>
                     {isActive ? (
-                      <span className="absolute right-2 top-2 rounded border border-[#00f5d4]/50 bg-[#102321] px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-[#00f5d4] shadow-[0_0_14px_rgba(0,245,212,0.2)]">
+                      <span className="absolute right-2 top-2 rounded border border-secondary/50 bg-secondary-dark px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-secondary shadow-glow-secondary">
                         Active
                       </span>
                     ) : null}
@@ -843,7 +766,7 @@ export function TemplatesPage() {
                   {/* Content Area */}
                   <div className="flex flex-1 flex-col p-4">
                     <div className="mb-2 flex items-start justify-between gap-3">
-                      <h4 className="truncate pr-2 font-heading text-xl font-bold text-white transition-colors group-hover:text-[#00f5d4]">
+                      <h4 className="truncate pr-2 font-heading text-xl font-bold text-white transition-colors group-hover:text-secondary">
                         {template.name}
                       </h4>
                       <button
@@ -851,7 +774,7 @@ export function TemplatesPage() {
                           e.stopPropagation();
                           setTemplateToDelete({ id: template.template_id, name: template.name });
                         }}
-                        className="shrink-0 text-[#a69db6] opacity-0 transition-colors hover:text-[#ff2d85] group-hover:opacity-100"
+                        className="shrink-0 text-muted opacity-0 transition-colors hover:text-primary group-hover:opacity-100"
                         title="Delete template"
                       >
                         <Trash2 size={14} />
@@ -863,11 +786,11 @@ export function TemplatesPage() {
                     {/* Footer */}
                     <div className="mt-auto flex items-end justify-between gap-3">
                       <div className="flex flex-wrap gap-2">
-                        <span className="rounded border border-white/10 bg-[#0c0b14]/60 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[#a69db6]">
+                        <span className="rounded border border-white/10 bg-input-dark/60 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-muted">
                           {widgetCount} Widgets
                         </span>
                       </div>
-                      <span className="shrink-0 text-[10px] font-mono text-[#a69db6]/50">
+                      <span className="shrink-0 text-[10px] font-mono text-muted/50">
                         Mod: {formattedDate}
                       </span>
                     </div>
@@ -882,13 +805,13 @@ export function TemplatesPage() {
       {/* ───────────────── Presets Section ───────────────── */}
       <section className="mt-4">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <h2 className="font-headline text-2xl font-bold uppercase tracking-widest text-[#00f5d4] drop-shadow-[0_0_8px_rgba(0,245,212,0.8)]">
+          <h2 className="font-headline text-2xl font-bold uppercase tracking-widest text-secondary drop-shadow-glow-secondary">
             Presets
           </h2>
           <Toolbar>
             <Button
               variant="secondary"
-              className="h-10 border-[#00f5d4]/70 text-[#00f5d4] hover:bg-[#00f5d4]/10"
+              className="h-10 border-secondary/70 text-secondary hover:bg-secondary/10"
               onClick={openPresetModal}
             >
               <Plus size={14} />
@@ -934,14 +857,14 @@ export function TemplatesPage() {
             description="Could not retrieve preset data from the template endpoints."
           />
         ) : (
-          <div className="overflow-hidden border border-[#2b2740] rounded-xl bg-[#151421]/60 backdrop-blur-sm shadow-xl">
+          <div className="overflow-hidden border border-border rounded-xl bg-panel-light/60 backdrop-blur-sm shadow-xl">
             {selectedPresetIds.size > 0 ? (
-              <div className="flex items-center justify-between border-b border-white/10 px-4 py-3 text-xs text-[#a69db6]">
+              <div className="flex items-center justify-between border-b border-white/10 px-4 py-3 text-xs text-muted">
                 <span>{selectedPresetIds.size} selected</span>
                 <button
                   type="button"
                   onClick={() => setSelectedPresetIds(new Set())}
-                  className="font-semibold text-[#00f5d4] transition hover:text-[#7fffee]"
+                  className="font-semibold text-secondary transition hover:text-secondary-light"
                 >
                   Clear selection
                 </button>
@@ -950,7 +873,7 @@ export function TemplatesPage() {
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="bg-[#1c1a2e]/60 border-b border-[#2b2740]">
+                  <tr className="bg-input/60 border-b border-border">
                     <th className="w-12 px-4 py-4">
                       <Checkbox
                         aria-label="Select all visible presets"
@@ -959,33 +882,33 @@ export function TemplatesPage() {
                         onChange={toggleVisiblePresets}
                       />
                     </th>
-                    <th className="px-6 py-4 font-mono text-[10px] uppercase tracking-[0.2em] text-[#a69db6] font-bold">
+                    <th className="px-6 py-4 font-mono text-[10px] uppercase tracking-[0.2em] text-muted font-bold">
                       Preset Name
                     </th>
-                    <th className="px-6 py-4 font-mono text-[10px] uppercase tracking-[0.2em] text-[#a69db6] font-bold">
+                    <th className="px-6 py-4 font-mono text-[10px] uppercase tracking-[0.2em] text-muted font-bold">
                       Chart Type
                     </th>
-                    <th className="px-6 py-4 font-mono text-[10px] uppercase tracking-[0.2em] text-[#a69db6] font-bold">
+                    <th className="px-6 py-4 font-mono text-[10px] uppercase tracking-[0.2em] text-muted font-bold">
                       Severity
                     </th>
-                    <th className="px-6 py-4 font-mono text-[10px] uppercase tracking-[0.2em] text-[#a69db6] font-bold">
+                    <th className="px-6 py-4 font-mono text-[10px] uppercase tracking-[0.2em] text-muted font-bold">
                       Status
                     </th>
-                    <th className="px-6 py-4 font-mono text-[10px] uppercase tracking-[0.2em] text-[#a69db6] font-bold">
+                    <th className="px-6 py-4 font-mono text-[10px] uppercase tracking-[0.2em] text-muted font-bold">
                       Vendor
                     </th>
-                    <th className="px-6 py-4 font-mono text-[10px] uppercase tracking-[0.2em] text-[#a69db6] font-bold">
+                    <th className="px-6 py-4 font-mono text-[10px] uppercase tracking-[0.2em] text-muted font-bold">
                       Device
                     </th>
-                    <th className="px-6 py-4 font-mono text-[10px] uppercase tracking-[0.2em] text-[#a69db6] font-bold">
+                    <th className="px-6 py-4 font-mono text-[10px] uppercase tracking-[0.2em] text-muted font-bold">
                       Template
                     </th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-[#2b2740]/40">
+                <tbody className="divide-y divide-border/40">
                   {filteredPresets.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="px-6 py-10 text-center text-sm text-[#a69db6]">
+                      <td colSpan={8} className="px-6 py-10 text-center text-sm text-muted">
                         {allPresets.length === 0
                           ? 'No reusable presets have been created yet.'
                           : 'No presets match the current filters.'}
@@ -1016,11 +939,11 @@ export function TemplatesPage() {
                               onChange={() => togglePresetSelection(preset.preset_id)}
                             />
                           </td>
-                          <td className="px-6 py-4 text-xs font-mono text-[#a69db6]">
+                          <td className="px-6 py-4 text-xs font-mono text-muted">
                             {preset.preset_name ?? '—'}
                           </td>
                           <td className="px-6 py-4">
-                            <span className="font-mono text-xs text-[#a69db6]">
+                            <span className="font-mono text-xs text-muted">
                               {preset.chart_type}
                             </span>
                           </td>
@@ -1028,24 +951,24 @@ export function TemplatesPage() {
                             {preset.severity ? (
                               <Badge tone={severityTone as 'red' | 'orange' | 'green' | 'yellow' | 'blue'}>{preset.severity}</Badge>
                             ) : (
-                              <span className="text-[#777086] text-xs font-mono">—</span>
+                              <span className="text-placeholder text-xs font-mono">—</span>
                             )}
                           </td>
                           <td className="px-6 py-4">
                             {preset.status ? (
                               <Badge tone={preset.status === 'active' ? 'green' : 'neutral'}>{preset.status}</Badge>
                             ) : (
-                              <span className="text-[#777086] text-xs font-mono">—</span>
+                              <span className="text-placeholder text-xs font-mono">—</span>
                             )}
                           </td>
-                          <td className="px-6 py-4 text-xs font-mono text-[#a69db6]">
+                          <td className="px-6 py-4 text-xs font-mono text-muted">
                             {preset.vendor ?? '—'}
                           </td>
-                          <td className="px-6 py-4 text-xs font-mono text-[#a69db6]">
+                          <td className="px-6 py-4 text-xs font-mono text-muted">
                             {preset.device_type ?? '—'}
                           </td>
                           <td className="px-6 py-4">
-                            <span className="text-xs font-mono text-[#a69db6]/60 italic">
+                            <span className="text-xs font-mono text-muted/60 italic">
                               {preset.template_name ?? 'Unassigned'}
                             </span>
                           </td>
@@ -1062,18 +985,18 @@ export function TemplatesPage() {
 
       {/* ───────────────── Delete Confirmation Modal ───────────────── */}
       {templateToDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#07070f]/80 p-4 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
           <div className="w-full max-w-sm">
-            <NeonBox className="p-6 rounded-lg bg-[#151421] shadow-2xl">
+            <NeonBox className="p-6 rounded-lg bg-panel-light shadow-2xl">
               <div className="flex items-center justify-between mb-4 border-b border-white/10 pb-3">
-                <h3 className="text-lg font-heading font-bold text-[#ff2d85] drop-shadow-[0_0_8px_rgba(255,45,133,0.4)]">
+                <h3 className="text-lg font-heading font-bold text-primary drop-shadow-glow-primary">
                   Delete Template
                 </h3>
                 <Button variant="ghost" size="icon" onClick={() => setTemplateToDelete(null)} className="h-8 w-8">
                   <X size={16} />
                 </Button>
               </div>
-              <p className="text-sm text-[#a69db6] mb-6">
+              <p className="text-sm text-muted mb-6">
                 Are you sure you want to delete <strong className="text-white">"{templateToDelete.name}"</strong>? This node will be purged from the neural network.
               </p>
               <div className="flex justify-end gap-3">
@@ -1090,12 +1013,12 @@ export function TemplatesPage() {
       )}
 
       {presetModalOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#07070f]/80 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-2xl rounded-lg border border-[#00f5d4]/30 bg-[#151421] p-6 shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-2xl rounded-lg border border-secondary/30 bg-panel-light p-6 shadow-2xl">
             <div className="flex items-center justify-between border-b border-white/10 pb-4">
               <div>
-                <h3 className="text-xl font-black text-[#f3edff]">Add Preset</h3>
-                <p className="mt-1 text-sm text-[#a69db6]">
+                <h3 className="text-xl font-black text-light">Add Preset</h3>
+                <p className="mt-1 text-sm text-muted">
                   Save a reusable widget configuration now and assign it to a template later.
                 </p>
               </div>
@@ -1115,7 +1038,7 @@ export function TemplatesPage() {
                     placeholder="Critical router alarms"
                   />
                 </Field>
-                <p className="mt-1 text-xs text-[#a69db6]">
+                <p className="mt-1 text-xs text-muted">
                   This name becomes the widget heading when the preset is used.
                 </p>
               </div>

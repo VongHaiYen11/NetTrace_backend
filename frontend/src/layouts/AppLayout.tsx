@@ -50,11 +50,11 @@ export function AppLayout() {
   }, []);
 
   return (
-    <div className="min-h-screen text-[#f3edff]">
+    <div className="min-h-screen text-light">
       <div className="flex">
         <aside
           className={cn(
-            'sticky top-0 z-40 h-screen shrink-0 border-r border-white/10 bg-[#090911] py-6 transition-[width] duration-200',
+            'sticky top-0 z-40 h-screen shrink-0 border-r border-white/10 bg-background-alt py-6 transition-[width] duration-200',
             sidebarOpen ? 'w-64 px-4' : 'w-20 px-3',
           )}
         >
@@ -65,12 +65,12 @@ export function AppLayout() {
             )}
           >
             <div className={cn('flex items-center gap-3', !sidebarOpen && 'justify-center')}>
-              <span className="flex h-10 w-10 items-center justify-center rounded border border-[#ff2d85] bg-[#ff2d85]/10 text-[#ff2d85]">
+              <span className="flex h-10 w-10 items-center justify-center rounded border border-primary bg-primary/10 text-primary">
                 <Activity size={20} />
               </span>
               <div className={cn(!sidebarOpen && 'hidden')}>
                 <p className="text-base font-semibold leading-tight">NetTrace</p>
-                <p className="text-xs font-semibold text-[#00f5d4]">v1.0</p>
+                <p className="text-xs font-semibold text-secondary">v1.0</p>
               </div>
             </div>
             <Button
@@ -96,11 +96,11 @@ export function AppLayout() {
                   title={!sidebarOpen ? item.label : undefined}
                   className={({ isActive }) =>
                     cn(
-                      'flex h-11 items-center rounded text-sm font-medium outline-none transition focus-visible:ring-2 focus-visible:ring-[#00f5d4]',
+                      'flex h-11 items-center rounded text-sm font-medium outline-none transition focus-visible:ring-2 focus-visible:ring-secondary',
                       sidebarOpen ? 'gap-3 px-3' : 'justify-center px-0',
                       isActive
-                        ? 'border border-[#ff2d85] bg-[#ff2d85]/20 text-[#ff2d85]'
-                        : 'text-[#a69db6] hover:bg-white/5 hover:text-white',
+                        ? 'border border-primary bg-primary/20 text-primary'
+                        : 'text-muted hover:bg-white/5 hover:text-white',
                     )
                   }
                 >
@@ -119,10 +119,10 @@ export function AppLayout() {
               )}
               title={!sidebarOpen ? 'API source' : undefined}
             >
-              <Settings2 className="mt-0.5 text-[#a69db6]" size={17} />
+              <Settings2 className="mt-0.5 text-muted" size={17} />
               <div className={cn(!sidebarOpen && 'hidden')}>
                 <p className="text-sm font-medium">API source</p>
-                <p className="mt-1 text-xs leading-5 text-[#a69db6]">Backend OpenAPI routes at /api/v1.</p>
+                <p className="mt-1 text-xs leading-5 text-muted">Backend OpenAPI routes at /api/v1.</p>
               </div>
             </div>
           </div>

@@ -8,18 +8,71 @@ declare const _default: {
                 mono: string;
             };
             colors: {
-                surface: string;
-                ink: string;
+                background: {
+                    DEFAULT: string;
+                    alt: string;
+                };
+                panel: {
+                    DEFAULT: string;
+                    light: string;
+                    dark: string;
+                };
+                input: {
+                    DEFAULT: string;
+                    dark: string;
+                    focus: string;
+                };
+                border: {
+                    DEFAULT: string;
+                    muted: string;
+                };
+                primary: {
+                    DEFAULT: string;
+                    dark: string;
+                    darker: string;
+                    darkest: string;
+                    light: string;
+                    lighter: string;
+                    muted: string;
+                };
+                secondary: {
+                    DEFAULT: string;
+                    light: string;
+                    dark: string;
+                };
+                light: string;
+                bright: string;
+                medium: string;
                 muted: string;
-                line: string;
-                panel: string;
-                signal: string;
-                success: string;
+                placeholder: string;
+                danger: {
+                    DEFAULT: string;
+                    light: string;
+                };
                 warning: string;
-                danger: string;
+                orange: {
+                    DEFAULT: string;
+                    light: string;
+                };
+            };
+            dropShadow: {
+                'glow-primary': string;
+                'glow-secondary': string;
+                'glow-warning': string;
             };
             boxShadow: {
-                panel: string;
+                'glow-primary': string;
+                'glow-primary-soft': string;
+                'glow-secondary': string;
+                'glow-secondary-soft': string;
+                'glow-danger': string;
+                'glow-warning': string;
+                'glow-orange': string;
+                'glow-primary-inset': string;
+                card: string;
+                'input-date': string;
+                'input-date-hover': string;
+                'export-panel': string;
             };
         };
     };

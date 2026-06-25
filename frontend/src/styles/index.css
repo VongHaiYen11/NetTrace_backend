@@ -5,11 +5,18 @@
 @tailwind utilities;
 
 :root {
-  color: #f3edff;
-  background: #07070f;
+  color: theme('colors.light');
+  background-color: theme('colors.background.DEFAULT');
   font-family: var(--font-body);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
+
+  --chart-primary-45: color-mix(in srgb, theme('colors.primary.DEFAULT') 45%, transparent);
+  --chart-primary-28: color-mix(in srgb, theme('colors.primary.DEFAULT') 28%, transparent);
+  --chart-primary-08: color-mix(in srgb, theme('colors.primary.DEFAULT') 8%, transparent);
+  --chart-secondary-35: color-mix(in srgb, theme('colors.secondary.DEFAULT') 35%, transparent);
+  --chart-grid: color-mix(in srgb, theme('colors.bright') 6%, transparent);
+  --chart-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
 }
 
 * {
@@ -21,9 +28,9 @@ body {
   min-width: 320px;
   font-family: var(--font-body);
   background:
-    radial-gradient(circle at top right, rgba(0, 245, 212, 0.08), transparent 28rem),
-    radial-gradient(circle at 45% 0, rgba(255, 45, 133, 0.08), transparent 22rem),
-    #07070f;
+    radial-gradient(circle at top right, color-mix(in srgb, theme('colors.secondary.DEFAULT') 8%, transparent), transparent 28rem),
+    radial-gradient(circle at 45% 0, color-mix(in srgb, theme('colors.primary.DEFAULT') 8%, transparent), transparent 22rem),
+    theme('colors.background.DEFAULT');
 }
 
 h1,
@@ -43,16 +50,16 @@ select {
 
 input[type="date"] {
   appearance: none;
-  accent-color: #00f5d4;
+  accent-color: theme('colors.secondary.DEFAULT');
 }
 
 input[type="date"]::-webkit-calendar-picker-indicator {
-  background-color: rgba(0, 245, 212, 0.12);
-  border: 1px solid rgba(0, 245, 212, 0.72);
+  background-color: color-mix(in srgb, theme('colors.secondary.DEFAULT') 12%, transparent);
+  border: 1px solid color-mix(in srgb, theme('colors.secondary.DEFAULT') 72%, transparent);
   border-radius: 6px;
   box-shadow:
-    0 0 0 1px rgba(0, 245, 212, 0.08),
-    0 0 12px rgba(0, 245, 212, 0.24);
+    0 0 0 1px color-mix(in srgb, theme('colors.secondary.DEFAULT') 8%, transparent),
+    0 0 12px color-mix(in srgb, theme('colors.secondary.DEFAULT') 24%, transparent);
   cursor: pointer;
   width: 20px;
   height: 20px;
@@ -74,11 +81,11 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 
 input[type="date"]:hover::-webkit-calendar-picker-indicator,
 input[type="date"]:focus::-webkit-calendar-picker-indicator {
-  background-color: rgba(255, 45, 133, 0.16);
-  border-color: rgba(255, 45, 133, 0.82);
+  background-color: color-mix(in srgb, theme('colors.primary.DEFAULT') 16%, transparent);
+  border-color: color-mix(in srgb, theme('colors.primary.DEFAULT') 82%, transparent);
   box-shadow:
-    0 0 0 1px rgba(255, 45, 133, 0.1),
-    0 0 14px rgba(255, 45, 133, 0.34);
+    0 0 0 1px color-mix(in srgb, theme('colors.primary.DEFAULT') 10%, transparent),
+    0 0 14px color-mix(in srgb, theme('colors.primary.DEFAULT') 34%, transparent);
   filter:
     invert(46%)
     sepia(98%)
@@ -90,6 +97,6 @@ input[type="date"]:focus::-webkit-calendar-picker-indicator {
 
 .recharts-cartesian-axis-tick text,
 .recharts-legend-item-text {
-  fill: #a69db6;
+  @apply fill-muted;
   font-size: 12px;
 }

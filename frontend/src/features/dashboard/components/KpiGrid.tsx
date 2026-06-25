@@ -40,25 +40,25 @@ function getKpiStatusTone(ratio: number, inverse = false) {
   const score = inverse ? 1 - ratio : ratio;
   if (score >= 0.8) {
     return {
-      border: 'border-[#ff2d85]/80',
-      iconBg: 'bg-[#ff2d85]/18',
-      tone: 'text-[#ff5a9d]',
-      valueClass: 'text-[#ff5a9d] drop-shadow-[0_0_10px_rgba(255,45,133,0.45)]',
+      border: 'border-primary/80',
+      iconBg: 'bg-primary/18',
+      tone: 'text-primary-light',
+      valueClass: 'text-primary-light drop-shadow-glow-primary',
     };
   }
   if (score >= 0.5) {
     return {
-      border: 'border-[#f8e231]/75',
-      iconBg: 'bg-[#f8e231]/15',
-      tone: 'text-[#f8e231]',
-      valueClass: 'text-[#f8e231] drop-shadow-[0_0_10px_rgba(248,226,49,0.35)]',
+      border: 'border-warning/75',
+      iconBg: 'bg-warning/15',
+      tone: 'text-warning',
+      valueClass: 'text-warning drop-shadow-glow-warning',
     };
   }
   return {
-    border: 'border-[#00f5d4]/70',
-    iconBg: 'bg-[#00f5d4]/15',
-    tone: 'text-[#00f5d4]',
-    valueClass: 'text-[#00f5d4] drop-shadow-[0_0_10px_rgba(0,245,212,0.28)]',
+    border: 'border-secondary/70',
+    iconBg: 'bg-secondary/15',
+    tone: 'text-secondary',
+    valueClass: 'text-secondary drop-shadow-glow-secondary',
   };
 }
 
@@ -98,16 +98,16 @@ export function KpiGrid({ data, isLoading, isError }: KpiGridProps) {
             <CardContent className="min-h-[136px] pt-5">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="font-mono text-sm text-[#a69db6]">{card.label}</p>
+                  <p className="font-mono text-sm text-muted">{card.label}</p>
                   <p className={cn('mt-3 text-3xl font-black tabular-nums', tone.valueClass)}>
                     {value}
                   </p>
-                  <p className="mt-4 text-sm text-[#a69db6]">
+                  <p className="mt-4 text-sm text-muted">
                     {card.subtitle(data)}
                   </p>
                 </div>
                 <div className="flex flex-col items-end gap-2">
-                  <MoreHorizontal className="text-[#a69db6]" size={20} />
+                  <MoreHorizontal className="text-muted" size={20} />
                   <span className={cn('flex h-10 w-10 items-center justify-center rounded', tone.iconBg)}>
                     <Icon className={tone.tone} size={20} />
                   </span>

@@ -10,10 +10,10 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const variants: Record<ButtonVariant, string> = {
-  primary: 'border border-[#ff2d85] bg-[#ff2d85]/15 text-[#ff2d85] hover:bg-[#ff2d85]/25',
-  secondary: 'border border-[#ff2d85]/70 bg-transparent text-[#ff2d85] hover:bg-[#ff2d85]/10',
-  ghost: 'text-[#a69db6] hover:bg-white/5 hover:text-white',
-  danger: 'bg-[#ff2d85] text-white hover:bg-[#e11d72]',
+  primary: 'border border-primary bg-primary/15 text-primary hover:bg-primary/25',
+  secondary: 'border border-primary/70 bg-transparent text-primary hover:bg-primary/10',
+  ghost: 'text-muted hover:bg-light/5 hover:text-bright',
+  danger: 'bg-danger text-bright hover:bg-danger-light',
 };
 
 const sizes: Record<ButtonSize, string> = {
@@ -33,7 +33,7 @@ export function Button({
     <button
       type={type}
       className={cn(
-        'inline-flex items-center justify-center gap-2 rounded font-medium outline-none transition focus-visible:ring-2 focus-visible:ring-signal disabled:cursor-not-allowed disabled:opacity-60',
+        'inline-flex items-center justify-center gap-2 rounded font-medium outline-none transition focus-visible:ring-2 focus-visible:ring-secondary disabled:cursor-not-allowed disabled:opacity-60',
         variants[variant],
         sizes[size],
         className,

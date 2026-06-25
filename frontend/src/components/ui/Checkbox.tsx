@@ -38,20 +38,20 @@ export function Checkbox({
       className={cn(
         'flex h-4 w-4 shrink-0 items-center justify-center rounded transition-all duration-150 outline-none',
         // unchecked
-        'border border-[#2b2740] bg-[#0c0b14]',
+        'border border-border bg-input-dark',
         // hover
-        'hover:border-[#00f5d4]/60 hover:bg-[#00f5d4]/8',
+        'hover:border-secondary/60 hover:bg-secondary/8',
         // focus
-        'focus-visible:ring-2 focus-visible:ring-[#00f5d4]/40 focus-visible:border-[#00f5d4]',
+        'focus-visible:ring-2 focus-visible:ring-secondary/40 focus-visible:border-secondary',
         // checked / indeterminate
-        (checked || indeterminate) && 'border-[#00f5d4] bg-[#00f5d4] shadow-[0_0_10px_rgba(0,245,212,0.35)]',
+        (checked || indeterminate) && 'border-secondary bg-secondary shadow-glow-secondary',
         className,
       )}
     >
       {indeterminate ? (
-        <Minus size={10} strokeWidth={3} className="text-[#0c0b14]" />
+        <Minus size={10} strokeWidth={3} className="text-input-dark" />
       ) : checked ? (
-        <Check size={10} strokeWidth={3} className="text-[#0c0b14]" />
+        <Check size={10} strokeWidth={3} className="text-input-dark" />
       ) : null}
     </button>
   );

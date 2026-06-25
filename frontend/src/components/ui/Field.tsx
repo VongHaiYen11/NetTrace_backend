@@ -30,14 +30,14 @@ export function Field({ label, children, hint, labelVariant = 'section' }: Field
         className={cn(
           'block font-mono tracking-normal',
           labelVariant === 'section'
-            ? 'mb-3 text-base font-black text-[#c9bfd8]'
-            : 'mb-2 text-sm font-bold text-[#7f8ca3]',
+            ? 'mb-3 text-base font-black text-medium'
+            : 'mb-2 text-sm font-bold text-placeholder',
         )}
       >
         {label}
       </span>
       {children}
-      {hint ? <span className="mt-1 block text-xs text-muted">{hint}</span> : null}
+      {hint ? <span className="mt-2 block text-sm text-muted">{hint}</span> : null}
     </label>
   );
 }
@@ -48,10 +48,10 @@ export function Input({ className, ...props }: InputHTMLAttributes<HTMLInputElem
   return (
     <input
       className={cn(
-        'h-10 w-full rounded border border-line bg-panel px-3 text-sm outline-none transition placeholder:text-slate-400 focus:border-signal focus:ring-2 focus:ring-sky-100',
-        'border-[#2b2740] bg-[#191727] text-[#f3edff] placeholder:text-[#777086] hover:border-[#ff2d85]/60 focus:border-[#00f5d4] focus:ring-[#00f5d4]/15',
+        'h-10 w-full rounded border px-3 text-sm outline-none transition',
+        'border-border bg-input text-light placeholder:text-placeholder hover:border-primary/60 focus:border-secondary focus:ring-2 focus:ring-secondary/15',
         isDateInput &&
-          'h-12 rounded-md border-[#00f5d4]/45 bg-[#0b0a14] px-4 font-mono text-base font-semibold text-[#f7f3ff] shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_0_0_1px_rgba(0,245,212,0.06),0_10px_28px_rgba(0,0,0,0.22)] hover:border-[#ff2d85]/70 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_0_18px_rgba(255,45,133,0.14)] focus:border-[#00f5d4] focus:bg-[#0e0d18] focus:ring-[#00f5d4]/25',
+          'h-12 rounded-md border-secondary/45 bg-input-dark px-4 font-mono text-base font-semibold text-bright shadow-input-date hover:border-primary/70 hover:shadow-input-date-hover focus:border-secondary focus:bg-input-focus focus:ring-secondary/25',
         className,
       )}
       {...props}
@@ -182,18 +182,18 @@ function Select(
         onClick={() => setOpen((current) => !current)}
         onBlur={(event) => onBlur?.(event as unknown as FocusEvent<HTMLSelectElement>)}
         className={cn(
-          'flex h-10 w-full items-center justify-between gap-3 rounded border border-[#2b2740] bg-[#191727] px-3 text-left text-sm text-[#f3edff] outline-none transition hover:border-[#ff2d85]/60 focus-visible:border-[#00f5d4] focus-visible:ring-2 focus-visible:ring-[#00f5d4]/15 disabled:cursor-not-allowed disabled:opacity-60',
+          'flex h-10 w-full items-center justify-between gap-3 rounded border border-border bg-input px-3 text-left text-sm text-light outline-none transition hover:border-primary/60 focus-visible:border-secondary focus-visible:ring-2 focus-visible:ring-secondary/15 disabled:cursor-not-allowed disabled:opacity-60',
         )}
       >
         <span className="truncate">{selectedLabel}</span>
         <ChevronDown
           size={14}
-          className={cn('shrink-0 text-[#00f5d4] transition', open && 'rotate-180')}
+          className={cn('shrink-0 text-secondary transition', open && 'rotate-180')}
         />
       </button>
 
       {open ? (
-        <div className="absolute left-0 right-0 top-full z-50 mt-2 max-h-64 overflow-y-auto rounded-lg border border-[#2b2740] bg-[#11101b] p-2 shadow-2xl">
+        <div className="absolute left-0 right-0 top-full z-50 mt-2 max-h-64 overflow-y-auto rounded-lg border border-border bg-panel p-2 shadow-2xl">
           {options.map((option) => {
             const optionValue = String(option.props.value ?? '');
             const selected = optionValue === selectedValue;
@@ -206,8 +206,8 @@ function Select(
                 className={cn(
                   'flex w-full items-center justify-between rounded px-3 py-2.5 text-left text-sm transition disabled:cursor-not-allowed disabled:opacity-50',
                   selected
-                    ? 'bg-[#00f5d4]/10 text-[#f7f3ff]'
-                    : 'text-[#a69db6] hover:bg-white/[0.04] hover:text-[#f7f3ff]',
+                    ? 'bg-secondary/10 text-bright'
+                    : 'text-muted hover:bg-white/[0.04] hover:text-bright',
                 )}
               >
                 <span>{getOptionLabel(option)}</span>

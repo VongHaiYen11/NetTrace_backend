@@ -64,10 +64,10 @@ interface DashboardWidgetProps {
 const darkTooltipProps = {
   contentStyle: {
     backgroundColor: '#0c0b14',
-    border: '1px solid rgba(255, 45, 133, 0.45)',
+    border: '1px solid var(--chart-primary-45)',
     borderRadius: '6px',
     color: '#f3edff',
-    boxShadow: '0 16px 40px rgba(0, 0, 0, 0.45)',
+    boxShadow: 'var(--chart-shadow)',
   },
   labelStyle: {
     color: '#00f5d4',
@@ -77,8 +77,8 @@ const darkTooltipProps = {
     color: '#f3edff',
   },
   cursor: {
-    fill: 'rgba(255, 45, 133, 0.08)',
-    stroke: 'rgba(255, 45, 133, 0.28)',
+    fill: 'var(--chart-primary-08)',
+    stroke: 'var(--chart-primary-28)',
   },
 };
 
@@ -92,25 +92,25 @@ function getKpiStatusTone(ratio: number, inverse = false) {
   const score = inverse ? 1 - ratio : ratio;
   if (score >= 0.8) {
     return {
-      border: 'border-[#ff2d85]/80',
-      iconBg: 'bg-[#ff2d85]/18',
-      tone: 'text-[#ff5a9d]',
-      valueClass: 'text-[#ff5a9d] drop-shadow-[0_0_10px_rgba(255,45,133,0.45)]',
+      border: 'border-primary/80',
+      iconBg: 'bg-primary/18',
+      tone: 'text-primary-light',
+      valueClass: 'text-primary-light drop-shadow-glow-primary',
     };
   }
   if (score >= 0.5) {
     return {
-      border: 'border-[#f8e231]/75',
-      iconBg: 'bg-[#f8e231]/15',
-      tone: 'text-[#f8e231]',
-      valueClass: 'text-[#f8e231] drop-shadow-[0_0_10px_rgba(248,226,49,0.35)]',
+      border: 'border-warning/75',
+      iconBg: 'bg-warning/15',
+      tone: 'text-warning',
+      valueClass: 'text-warning drop-shadow-glow-warning',
     };
   }
   return {
-    border: 'border-[#00f5d4]/70',
-    iconBg: 'bg-[#00f5d4]/15',
-    tone: 'text-[#00f5d4]',
-    valueClass: 'text-[#00f5d4] drop-shadow-[0_0_10px_rgba(0,245,212,0.28)]',
+    border: 'border-secondary/70',
+    iconBg: 'bg-secondary/15',
+    tone: 'text-secondary',
+    valueClass: 'text-secondary drop-shadow-glow-secondary',
   };
 }
 
@@ -314,10 +314,10 @@ const defaultTableColumns: ExportColumn[] = [
 
 function renderAlarmTableCell(alarm: Alarm, column: ExportColumn) {
   if (column === 'time_created') {
-    return <span className="font-mono text-xs text-[#a69db6]">{format(parseISO(alarm.time_created), 'dd/MM/yyyy HH:mm:ss')}</span>;
+    return <span className="font-mono text-xs text-muted">{format(parseISO(alarm.time_created), 'dd/MM/yyyy HH:mm:ss')}</span>;
   }
   if (column === 'time_solved') {
-    return alarm.time_solved ? <span className="font-mono text-xs text-[#a69db6]">{format(parseISO(alarm.time_solved), 'dd/MM/yyyy HH:mm:ss')}</span> : 'N/A';
+    return alarm.time_solved ? <span className="font-mono text-xs text-muted">{format(parseISO(alarm.time_solved), 'dd/MM/yyyy HH:mm:ss')}</span> : 'N/A';
   }
   if (column === 'status') {
     return (
@@ -525,12 +525,12 @@ export function DashboardWidget({ id, config, layoutContext, onSettingsClick }: 
           <CardContent className="min-h-[136px] pt-5">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="font-mono text-sm text-[#a69db6]">{config.title}</p>
+                <p className="font-mono text-sm text-muted">{config.title}</p>
                 <p className={cn('mt-3 text-3xl font-black tabular-nums', kpiConfig.valueClass)}>
                   {kpiConfig.value}
                 </p>
                 {config.info1 && (
-                  <p className="mt-4 text-sm text-[#a69db6]">{kpiConfig.subtitle}</p>
+                  <p className="mt-4 text-sm text-muted">{kpiConfig.subtitle}</p>
                 )}
               </div>
               <div className="flex flex-col items-end">
@@ -582,7 +582,7 @@ export function DashboardWidget({ id, config, layoutContext, onSettingsClick }: 
                   <stop offset="95%" stopColor="#ff2d85" stopOpacity={0.02} />
                 </linearGradient>
               </defs>
-              {config.info1 && <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />}
+              {config.info1 && <CartesianGrid stroke="var(--chart-grid)" vertical={false} />}
               <XAxis dataKey="name" tickLine={false} axisLine={false} minTickGap={24} />
               <YAxis tickLine={false} axisLine={false} width={44} tickFormatter={formatNumberWithSuffix} />
               {config.info3 && (
@@ -602,7 +602,7 @@ export function DashboardWidget({ id, config, layoutContext, onSettingsClick }: 
         <div className="h-72">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={trendData} margin={{ left: 0, right: 8, top: 12, bottom: 0 }}>
-              {config.info1 && <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />}
+              {config.info1 && <CartesianGrid stroke="var(--chart-grid)" vertical={false} />}
               <XAxis dataKey="name" tickLine={false} axisLine={false} />
               <YAxis tickLine={false} axisLine={false} width={44} tickFormatter={formatNumberWithSuffix} />
               {config.info3 && (
@@ -660,7 +660,7 @@ export function DashboardWidget({ id, config, layoutContext, onSettingsClick }: 
                   verticalAlign="bottom"
                   height={36}
                   iconType="circle"
-                  formatter={(value) => <span className="text-xs font-mono text-[#a69db6]">{value}</span>}
+                  formatter={(value) => <span className="text-xs font-mono text-muted">{value}</span>}
                 />
               )}
             </PieChart>
@@ -683,7 +683,7 @@ export function DashboardWidget({ id, config, layoutContext, onSettingsClick }: 
           show: config.info1,
           position: 'top',
           backgroundColor: '#0c0b14',
-          borderColor: 'rgba(255, 45, 133, 0.45)',
+          borderColor: 'var(--chart-primary-45)',
           borderWidth: 1,
           textStyle: { color: '#f3edff' },
           formatter: (params: unknown) => {
@@ -747,7 +747,7 @@ export function DashboardWidget({ id, config, layoutContext, onSettingsClick }: 
           show: config.info1,
           position: 'top',
           backgroundColor: '#0c0b14',
-          borderColor: 'rgba(255, 45, 133, 0.45)',
+          borderColor: 'var(--chart-primary-45)',
           borderWidth: 1,
           textStyle: { color: '#f3edff' },
           formatter: (params: unknown) => {
@@ -810,7 +810,7 @@ export function DashboardWidget({ id, config, layoutContext, onSettingsClick }: 
                 {visibleTableColumns.map((column) => (
                   <th
                     key={column}
-                    className="sticky top-0 z-10 border-b border-white/10 bg-[#151421] px-3 py-3 font-mono text-xs font-semibold uppercase text-[#a69db6]"
+                    className="sticky top-0 z-10 border-b border-white/10 bg-panel-light px-3 py-3 font-mono text-xs font-semibold uppercase text-muted"
                   >
                     {tableColumnLabels[column]}
                   </th>
@@ -823,7 +823,7 @@ export function DashboardWidget({ id, config, layoutContext, onSettingsClick }: 
                   {visibleTableColumns.map((column) => (
                     <td
                       key={column}
-                      className="max-w-[18rem] truncate border-b border-white/10 px-3 py-3 text-[#cfc7dc]"
+                      className="max-w-[18rem] truncate border-b border-white/10 px-3 py-3 text-medium"
                     >
                       {renderAlarmTableCell(alarm, column)}
                     </td>
@@ -845,7 +845,7 @@ export function DashboardWidget({ id, config, layoutContext, onSettingsClick }: 
           <button
             type="button"
             onClick={onSettingsClick}
-            className="p-1 rounded hover:bg-white/10 text-[#a69db6]"
+            className="p-1 rounded hover:bg-white/10 text-muted"
           >
             <MoreHorizontal size={20} />
           </button>

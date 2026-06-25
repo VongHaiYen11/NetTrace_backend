@@ -9,13 +9,13 @@ import type { ExportColumn, GroupBy, Metric, TimeBucket } from '../../../service
 type HeatmapMode = 'weekday' | 'calendar';
 
 const drawerIconButtonClass =
-  'flex h-10 w-10 shrink-0 items-center justify-center rounded bg-transparent text-[#00f5d4] transition hover:text-[#9ef7ee] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00f5d4]/30';
+  'flex h-10 w-10 shrink-0 items-center justify-center rounded bg-transparent text-secondary transition hover:text-secondary-light focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-secondary/30';
 
 const drawerMutedIconButtonClass =
-  'flex h-10 w-10 shrink-0 items-center justify-center rounded bg-transparent text-[#a69db6] transition hover:text-[#f3edff] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00f5d4]/30';
+  'flex h-10 w-10 shrink-0 items-center justify-center rounded bg-transparent text-muted transition hover:text-light focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-secondary/30';
 
 const drawerDangerIconButtonClass =
-  'flex h-10 w-10 shrink-0 items-center justify-center rounded bg-transparent text-[#ff5a9d] transition hover:text-[#ff8fbd] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff2d85]/30';
+  'flex h-10 w-10 shrink-0 items-center justify-center rounded bg-transparent text-primary-light transition hover:text-primary-lighter focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30';
 
 export type WidgetKind =
   | 'kpi-count'
@@ -338,18 +338,18 @@ export function WidgetSettingsDrawer({
         onClick={onClose}
       />
 
-      <aside className="fixed bottom-0 right-0 top-0 z-50 flex w-[480px] max-w-[calc(100vw-1rem)] flex-col border-l border-white/10 bg-[#151421] text-[#f3edff] shadow-2xl">
+      <aside className="fixed bottom-0 right-0 top-0 z-50 flex w-[480px] max-w-[calc(100vw-1rem)] flex-col border-l border-white/10 bg-panel-light text-light shadow-2xl">
         <form onSubmit={handleSubmit(onSubmit)} className="flex min-h-0 flex-1 flex-col">
-        <div className="relative overflow-hidden border-b border-[#ff2d85]/30 px-6 py-5">
-          <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#ff2d85] to-transparent opacity-80" />
+        <div className="relative overflow-hidden border-b border-primary/30 px-6 py-5">
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary to-transparent opacity-80" />
           <div>
-            <p className="font-mono text-[10px] font-black uppercase tracking-[0.22em] text-[#00f5d4]">
+            <p className="font-mono text-[10px] font-black uppercase tracking-[0.22em] text-secondary">
               Preset console
             </p>
-            <h2 className="mt-1 text-2xl font-black text-[#f3edff] drop-shadow-[0_0_14px_rgba(255,45,133,0.7)]">
+            <h2 className="mt-1 text-2xl font-black text-light drop-shadow-glow-primary">
               Preset settings
             </h2>
-            <div className="mt-2 flex max-w-[330px] items-center gap-1 border border-[#00f5d4]/25 bg-[#00f5d4]/5 px-2.5 py-1">
+            <div className="mt-2 flex max-w-[330px] items-center gap-1 border border-secondary/25 bg-secondary/5 px-2.5 py-1">
               {editingWidgetName ? (
                 <input
                   autoFocus
@@ -361,10 +361,10 @@ export function WidgetSettingsDrawer({
                     if (event.key === 'Enter') event.currentTarget.blur();
                   }}
                   placeholder={getDefaultWidgetTitle(watch())}
-                  className="min-w-0 flex-1 bg-transparent font-mono text-xs font-black text-[#00f5d4] outline-none placeholder:text-[#777086]"
+                  className="min-w-0 flex-1 bg-transparent font-mono text-xs font-black text-secondary outline-none placeholder:text-placeholder"
                 />
               ) : (
-                <span className="min-w-0 flex-1 truncate font-mono text-xs font-black text-[#00f5d4]">
+                <span className="min-w-0 flex-1 truncate font-mono text-xs font-black text-secondary">
                   {title?.trim() || widgetTitle || getDefaultWidgetTitle(watch())}
                 </span>
               )}
@@ -417,7 +417,7 @@ export function WidgetSettingsDrawer({
               aria-label="Close widget settings"
               title="Close widget settings"
               onClick={onClose}
-              className="rounded p-1.5 text-[#ff2d85] transition hover:bg-[#ff2d85]/10"
+              className="rounded p-1.5 text-primary transition hover:bg-primary/10"
             >
               <X size={20} />
             </button>
@@ -441,7 +441,7 @@ export function WidgetSettingsDrawer({
 
             {!isKpiWidget ? (
               <div className="flex flex-col gap-3">
-                <span className="text-sm font-semibold tracking-normal text-[#00f5d4]">
+                <span className="text-sm font-semibold tracking-normal text-secondary">
                   Display
                 </span>
                 <div className="grid grid-cols-2 gap-3">
@@ -457,8 +457,8 @@ export function WidgetSettingsDrawer({
                         onClick={() => selectChartType(type.id)}
                         className={`flex min-h-[86px] flex-col items-center justify-center border p-3 transition ${
                           isSelected
-                            ? 'border-[#ff2d85] bg-[#ff2d85]/10 text-[#ff2d85] shadow-[0_0_18px_rgba(255,45,133,0.24)]'
-                            : 'border-[#2b2740] bg-[#151421] text-[#a69db6] hover:border-[#ff2d85]/60 hover:text-[#f3edff]'
+                            ? 'border-primary bg-primary/10 text-primary shadow-glow-primary'
+                            : 'border-border bg-panel-light text-muted hover:border-primary/60 hover:text-light'
                         }`}
                       >
                         <Icon size={20} />
@@ -521,14 +521,14 @@ export function WidgetSettingsDrawer({
                     <option value="calendar">Year heatmap</option>
                   </Select>
                 </Field>
-                <p className="font-mono text-xs text-[#a69db6]">
+                <p className="font-mono text-xs text-muted">
                   {heatmapModeLabel} uses the matching aggregation view.
                 </p>
               </div>
             ) : null}
 
             <div className="flex flex-col gap-3">
-              <span className="font-mono text-base font-black tracking-normal text-[#c9bfd8]">
+              <span className="font-mono text-base font-black tracking-normal text-medium">
                 {!isKpiWidget && selectedChartType === 'table' ? 'Table columns' : isKpiWidget ? 'Display details' : 'Display options'}
               </span>
               {!isKpiWidget && selectedChartType === 'table' ? (
@@ -558,14 +558,14 @@ export function WidgetSettingsDrawer({
                           onClick={() => toggleTableColumn(item.value)}
                           className={`flex items-center justify-between border p-3 text-left transition ${
                             checked
-                              ? 'border-[#00f5d4]/40 bg-[#00f5d4]/5 text-[#f3edff]'
-                              : 'border-[#2b2740] bg-[#151421] text-[#a69db6]'
+                              ? 'border-secondary/40 bg-secondary/5 text-light'
+                              : 'border-border bg-panel-light text-muted'
                           }`}
                         >
                           <span className="font-mono text-sm">{item.label}</span>
                           <div
                             className={`flex h-5 w-5 items-center justify-center rounded transition ${
-                              checked ? 'bg-[#00f5d4] text-[#0c0b14]' : 'border border-white/20 bg-transparent'
+                              checked ? 'bg-secondary text-input-dark' : 'border border-white/20 bg-transparent'
                             }`}
                           >
                             {checked && <Check size={14} strokeWidth={3} />}
@@ -584,15 +584,15 @@ export function WidgetSettingsDrawer({
                       onClick={() => setValue(item.name, !item.checked)}
                       className={`flex items-center justify-between border p-3 transition ${
                         item.checked
-                          ? 'border-[#00f5d4]/40 bg-[#00f5d4]/5 text-[#f3edff]'
-                          : 'border-[#2b2740] bg-[#151421] text-[#a69db6]'
+                          ? 'border-secondary/40 bg-secondary/5 text-light'
+                          : 'border-border bg-panel-light text-muted'
                       }`}
                     >
                       <span className="text-sm font-mono">{item.label}</span>
                       <div
                         className={`flex h-5 w-5 items-center justify-center rounded transition ${
                           item.checked
-                            ? 'bg-[#00f5d4] text-[#0c0b14]'
+                            ? 'bg-secondary text-input-dark'
                             : 'border border-white/20 bg-transparent'
                         }`}
                       >
@@ -607,10 +607,10 @@ export function WidgetSettingsDrawer({
             <div className="flex flex-col gap-3">
               {selectedChartType === 'heatmap' && selectedHeatmapMode === 'calendar' ? (
                 <>
-                  <span className="font-mono text-base font-black tracking-normal text-[#c9bfd8]">
+                  <span className="font-mono text-base font-black tracking-normal text-medium">
                     Year
                   </span>
-                  <p className="border border-[#2b2740] bg-[#151421] px-3 py-2 font-mono text-xs text-[#f3edff]">
+                  <p className="border border-border bg-panel-light px-3 py-2 font-mono text-xs text-light">
                     {selectedYear === String(new Date().getFullYear())
                       ? `${selectedYear} · Jan 1 to today`
                       : `${selectedYear} · Jan 1 to Dec 31`}
@@ -629,7 +629,7 @@ export function WidgetSettingsDrawer({
                 </>
               ) : (
                 <>
-                  <span className="font-mono text-base font-black tracking-normal text-[#c9bfd8]">
+                  <span className="font-mono text-base font-black tracking-normal text-medium">
                     Time range
                   </span>
                   <div className="space-y-3">
@@ -657,7 +657,7 @@ export function WidgetSettingsDrawer({
         <div className="border-t border-white/10 px-6 py-5">
           <Button
             type="submit"
-            className="h-14 w-full rounded-full border-none bg-gradient-to-r from-[#ff2d85] to-[#9f0645] text-white shadow-[0_0_28px_rgba(255,45,133,0.46)]"
+            className="h-14 w-full rounded-full border-none bg-gradient-to-r from-primary to-primary-darker text-white shadow-glow-primary"
           >
             Save settings
           </Button>

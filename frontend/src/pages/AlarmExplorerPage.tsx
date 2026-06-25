@@ -125,18 +125,18 @@ function getAlarmCellValue(alarm: Alarm, key: AlarmColumnKey) {
 function severityClass(severity: string) {
   const normalized = severity.toLowerCase();
   if (normalized === 'critical') {
-    return 'border-[#ff2222] bg-[#ff2222]/12 text-[#ff4444] shadow-[0_0_16px_rgba(255,34,34,0.28)]';
+    return 'border-danger bg-danger/12 text-danger-light shadow-glow-danger';
   }
   if (normalized === 'major') {
-    return 'border-[#ff2d85] bg-[#ff2d85]/12 text-[#ff5a9d] shadow-[0_0_16px_rgba(255,45,133,0.22)]';
+    return 'border-primary bg-primary/12 text-primary-light shadow-glow-primary';
   }
   if (normalized === 'warning') {
-    return 'border-[#f8e231] bg-[#f8e231]/12 text-[#f8e231] shadow-[0_0_16px_rgba(248,226,49,0.2)]';
+    return 'border-warning bg-warning/12 text-warning shadow-glow-warning';
   }
   if (normalized === 'minor') {
-    return 'border-[#00f5d4] bg-[#00f5d4]/12 text-[#00f5d4] shadow-[0_0_16px_rgba(0,245,212,0.2)]';
+    return 'border-secondary bg-secondary/12 text-secondary shadow-glow-secondary';
   }
-  return 'border-[#00f5d4]/60 bg-[#00f5d4]/10 text-[#00f5d4] shadow-[0_0_16px_rgba(0,245,212,0.16)]';
+  return 'border-secondary/60 bg-secondary/10 text-secondary shadow-glow-secondary';
 }
 
 export function AlarmExplorerPage() {
@@ -269,8 +269,8 @@ export function AlarmExplorerPage() {
         <div className={cn('grid gap-5', selectedAlarm && 'xl:grid-cols-[minmax(0,1fr)_24rem]')}>
           <section className="min-w-0 space-y-4">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-              <label className="flex h-11 min-w-0 flex-1 items-center gap-3 rounded border border-[#2b2740] bg-[#191727] px-3 shadow-[0_0_22px_rgba(255,45,133,0.08)] transition focus-within:border-[#ff2d85]/70">
-                <Search size={18} className="text-[#ff2d85]" />
+              <label className="flex h-11 min-w-0 flex-1 items-center gap-3 rounded border border-border bg-input px-3 shadow-glow-primary-soft transition focus-within:border-primary/70">
+                <Search size={18} className="text-primary" />
                 <input
                   value={search}
                   onChange={(event) => {
@@ -281,7 +281,7 @@ export function AlarmExplorerPage() {
                     SEARCH_FIELD_OPTIONS.find((option) => option.value === searchField)?.label.toLowerCase() ??
                     'field'
                   }`}
-                  className="h-full min-w-0 flex-1 bg-transparent text-sm text-[#f3edff] outline-none placeholder:text-[#777086]"
+                  className="h-full min-w-0 flex-1 bg-transparent text-sm text-light outline-none placeholder:text-placeholder"
                 />
                 <span className="h-6 w-px bg-white/10" />
                 <select
@@ -290,7 +290,7 @@ export function AlarmExplorerPage() {
                     setSearchField(event.target.value as AlarmSearchField);
                     resetPaging();
                   }}
-                  className="h-8 max-w-[9rem] rounded border border-white/10 bg-[#11101b] px-2 text-xs font-semibold text-[#cfc7dc] outline-none transition hover:border-[#ff2d85]/50 focus:border-[#00f5d4]"
+                  className="h-8 max-w-[9rem] rounded border border-white/10 bg-panel px-2 text-xs font-semibold text-medium outline-none transition hover:border-primary/50 focus:border-secondary"
                   aria-label="Search field"
                 >
                   {SEARCH_FIELD_OPTIONS.map((option) => (
@@ -307,7 +307,7 @@ export function AlarmExplorerPage() {
                     variant="ghost"
                     className={cn(
                       filtersActive &&
-                        'border border-[#00f5d4]/70 bg-[#00f5d4]/10 text-[#00f5d4] hover:bg-[#00f5d4]/15 hover:text-[#7fffee]',
+                        'border border-secondary/70 bg-secondary/10 text-secondary hover:bg-secondary/15 hover:text-secondary-light',
                     )}
                     onClick={() => {
                       setFiltersOpen((value) => !value);
@@ -319,7 +319,7 @@ export function AlarmExplorerPage() {
                     Filter
                   </Button>
                   {filtersOpen ? (
-                    <div className="absolute right-0 top-full z-30 mt-2 w-[min(42rem,calc(100vw-3rem))] rounded-lg border border-[#2b2740] bg-[#11101b] p-4 shadow-2xl">
+                    <div className="absolute right-0 top-full z-30 mt-2 w-[min(42rem,calc(100vw-3rem))] rounded-lg border border-border bg-panel p-4 shadow-2xl">
                       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                         <Field label="From date" labelVariant="nested">
                           <Input type="date" value={fromDate} onChange={(event) => { setFromDate(event.target.value); resetPaging(); }} />
@@ -366,7 +366,7 @@ export function AlarmExplorerPage() {
                         <button
                           type="button"
                           onClick={clearFilters}
-                          className="text-xs font-semibold text-[#a69db6] transition hover:text-[#00f5d4]"
+                          className="text-xs font-semibold text-muted transition hover:text-secondary"
                         >
                           Clear filters
                         </button>
@@ -379,7 +379,7 @@ export function AlarmExplorerPage() {
                     variant="ghost"
                     className={cn(
                       sortActive &&
-                        'border border-[#ff2d85]/70 bg-[#ff2d85]/10 text-[#ff2d85] hover:bg-[#ff2d85]/15 hover:text-[#ff7ab0]',
+                        'border border-primary/70 bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary-lighter',
                     )}
                     onClick={() => {
                       setSortOpen((value) => !value);
@@ -391,7 +391,7 @@ export function AlarmExplorerPage() {
                     Sort
                   </Button>
                   {sortOpen ? (
-                    <div className="absolute right-0 top-full z-30 mt-2 w-72 rounded-lg border border-[#2b2740] bg-[#11101b] p-4 shadow-2xl">
+                    <div className="absolute right-0 top-full z-30 mt-2 w-72 rounded-lg border border-border bg-panel p-4 shadow-2xl">
                       <div className="grid gap-3">
                         <Field label="Sort by" labelVariant="nested">
                           <Select
@@ -437,7 +437,7 @@ export function AlarmExplorerPage() {
                     Fields
                   </Button>
                   {columnsOpen ? (
-                    <div className="absolute right-0 top-full z-30 mt-2 w-64 rounded-lg border border-[#2b2740] bg-[#11101b] p-2 shadow-2xl">
+                    <div className="absolute right-0 top-full z-30 mt-2 w-64 rounded-lg border border-border bg-panel p-2 shadow-2xl">
                       {COLUMN_OPTIONS.map((column) => {
                         const checked = columns.includes(column.key);
                         return (
@@ -448,15 +448,15 @@ export function AlarmExplorerPage() {
                             className={cn(
                               'flex w-full items-center justify-between rounded px-3 py-2.5 text-left text-sm transition',
                               checked
-                                ? 'bg-[#00f5d4]/10 text-[#f7f3ff]'
-                                : 'text-[#a69db6] hover:bg-white/[0.04] hover:text-[#f7f3ff]',
+                                ? 'bg-secondary/10 text-bright'
+                                : 'text-muted hover:bg-white/[0.04] hover:text-bright',
                             )}
                           >
                             {column.label}
                             <span
                               className={cn(
                                 'flex h-5 w-5 items-center justify-center rounded',
-                                checked ? 'bg-[#00f5d4] text-[#0c0b14]' : 'border border-white/20',
+                                checked ? 'bg-secondary text-input-dark' : 'border border-white/20',
                               )}
                             >
                               {checked ? <Check size={13} strokeWidth={3} /> : null}
@@ -470,7 +470,7 @@ export function AlarmExplorerPage() {
               </div>
             </div>
 
-            <div className="overflow-hidden rounded-lg border border-[#00f5d4]/20 bg-[#151421]/85 shadow-[0_0_34px_rgba(0,245,212,0.08)]">
+            <div className="overflow-hidden rounded-lg border border-secondary/20 bg-panel-light/85 shadow-glow-secondary-soft">
               <div className="overflow-auto">
                 <table className="w-full min-w-[960px] border-separate border-spacing-0 text-left text-sm">
                   <thead>
@@ -480,7 +480,7 @@ export function AlarmExplorerPage() {
                         return (
                           <th
                             key={key}
-                            className="sticky top-0 z-10 border-b border-white/10 bg-[#151421] px-4 py-3 font-mono text-xs font-semibold uppercase text-[#ff2d85]"
+                            className="sticky top-0 z-10 border-b border-white/10 bg-panel-light px-4 py-3 font-mono text-xs font-semibold uppercase text-primary"
                           >
                             {column.label}
                           </th>
@@ -491,13 +491,13 @@ export function AlarmExplorerPage() {
                   <tbody>
                     {alarmsQuery.isLoading ? (
                       <tr>
-                        <td colSpan={columns.length} className="px-4 py-12 text-center text-[#a69db6]">
+                        <td colSpan={columns.length} className="px-4 py-12 text-center text-muted">
                           Loading alarms...
                         </td>
                       </tr>
                     ) : filteredRows.length === 0 ? (
                       <tr>
-                        <td colSpan={columns.length} className="px-4 py-12 text-center text-[#a69db6]">
+                        <td colSpan={columns.length} className="px-4 py-12 text-center text-muted">
                           No alarms found.
                         </td>
                       </tr>
@@ -510,20 +510,20 @@ export function AlarmExplorerPage() {
                             onClick={() => setSelectedAlarmId(alarm.alarm_id)}
                             className={cn(
                               'cursor-pointer transition hover:bg-white/[0.04]',
-                              selectedForDetails && 'bg-[#ff2d85]/12',
+                              selectedForDetails && 'bg-primary/12',
                             )}
                           >
                             {columns.map((key) => (
                               <td
                                 key={key}
-                                className="max-w-[16rem] truncate border-b border-white/10 px-4 py-3 text-[#cfc7dc]"
+                                className="max-w-[16rem] truncate border-b border-white/10 px-4 py-3 text-medium"
                               >
                                 {key === 'severity' ? (
                                   <span className={cn('rounded border px-2 py-1 font-mono text-[11px] font-bold uppercase', severityClass(alarm.severity))}>
                                     {alarm.severity}
                                   </span>
                                 ) : key === 'status' ? (
-                                  <span className="font-semibold text-[#f7f3ff]">{String(getAlarmCellValue(alarm, key))}</span>
+                                  <span className="font-semibold text-bright">{String(getAlarmCellValue(alarm, key))}</span>
                                 ) : (
                                   getAlarmCellValue(alarm, key)
                                 )}
@@ -536,7 +536,7 @@ export function AlarmExplorerPage() {
                   </tbody>
                 </table>
               </div>
-              <div className="flex items-center justify-between border-t border-white/10 px-4 py-3 text-xs text-[#a69db6]">
+              <div className="flex items-center justify-between border-t border-white/10 px-4 py-3 text-xs text-muted">
                 <span>
                   Showing {total === 0 ? 0 : page * pageSize + 1}-{Math.min((page + 1) * pageSize, total)} of {total}
                 </span>
@@ -545,7 +545,7 @@ export function AlarmExplorerPage() {
                     type="button"
                     disabled={page === 0}
                     onClick={() => setPage((current) => Math.max(0, current - 1))}
-                    className="rounded p-1 text-[#a69db6] transition hover:bg-white/5 hover:text-white disabled:opacity-40"
+                    className="rounded p-1 text-muted transition hover:bg-white/5 hover:text-white disabled:opacity-40"
                   >
                     <ChevronLeft size={16} />
                   </button>
@@ -554,7 +554,7 @@ export function AlarmExplorerPage() {
                     type="button"
                     disabled={page + 1 >= totalPages}
                     onClick={() => setPage((current) => current + 1)}
-                    className="rounded p-1 text-[#a69db6] transition hover:bg-white/5 hover:text-white disabled:opacity-40"
+                    className="rounded p-1 text-muted transition hover:bg-white/5 hover:text-white disabled:opacity-40"
                   >
                     <ChevronRight size={16} />
                   </button>
@@ -564,13 +564,13 @@ export function AlarmExplorerPage() {
           </section>
 
           {selectedAlarm ? (
-            <aside className="h-fit overflow-hidden rounded-lg border border-[#ff2d85]/45 bg-[#151421]/90 xl:sticky xl:top-8">
-              <div className="flex items-center justify-between border-b border-[#ff2d85]/25 px-5 py-4">
-                <h2 className="text-xl font-bold text-[#ff2d85]">Alarm Details</h2>
+            <aside className="h-fit overflow-hidden rounded-lg border border-primary/45 bg-panel-light/90 xl:sticky xl:top-8">
+              <div className="flex items-center justify-between border-b border-primary/25 px-5 py-4">
+                <h2 className="text-xl font-bold text-primary">Alarm Details</h2>
                 <button
                   type="button"
                   onClick={() => setSelectedAlarmId(null)}
-                  className="rounded p-1 text-[#a69db6] hover:bg-white/5 hover:text-white"
+                  className="rounded p-1 text-muted hover:bg-white/5 hover:text-white"
                 >
                   <X size={16} />
                 </button>
@@ -578,12 +578,12 @@ export function AlarmExplorerPage() {
               <div className="space-y-5 p-5">
                 <div>
                   <div className="flex items-start justify-between gap-3">
-                    <p className="font-mono text-base font-black text-[#00f5d4]">{selectedAlarm.alarm_id}</p>
+                    <p className="font-mono text-base font-black text-secondary">{selectedAlarm.alarm_id}</p>
                     <span className={cn('rounded border px-2 py-1 font-mono text-[11px] font-bold uppercase', severityClass(selectedAlarm.severity))}>
                       {selectedAlarm.severity}
                     </span>
                   </div>
-                  <p className="mt-3 text-sm leading-6 text-[#c9bfd8]">
+                  <p className="mt-3 text-sm leading-6 text-medium">
                     {selectedAlarm.description ?? selectedAlarm.error_details?.description ?? 'No description.'}
                   </p>
                 </div>
@@ -602,25 +602,25 @@ export function AlarmExplorerPage() {
                     ['Domain', selectedAlarm.error_details?.domain ?? 'N/A'],
                   ].map(([label, value]) => (
                     <div key={label}>
-                      <p className="font-mono text-[11px] uppercase text-[#7f8ca3]">{label}</p>
-                      <p className="mt-1 break-words font-semibold text-[#f7f3ff]">{value}</p>
+                      <p className="font-mono text-[11px] uppercase text-placeholder">{label}</p>
+                      <p className="mt-1 break-words font-semibold text-bright">{value}</p>
                     </div>
                   ))}
                 </div>
 
                 <div>
                   <div className="mb-2 flex items-center justify-between">
-                    <p className="font-mono text-xs font-bold uppercase text-[#a69db6]">Raw system log</p>
+                    <p className="font-mono text-xs font-bold uppercase text-muted">Raw system log</p>
                     <button
                       type="button"
                       onClick={copyRawLog}
-                      className="inline-flex items-center gap-1 text-xs font-semibold text-[#00f5d4] hover:text-[#7fffee]"
+                      className="inline-flex items-center gap-1 text-xs font-semibold text-secondary hover:text-secondary-light"
                     >
                       <Copy size={13} />
                       Copy
                     </button>
                   </div>
-                  <pre className="max-h-72 overflow-auto rounded border border-[#00f5d4]/15 bg-[#061717] p-4 font-mono text-xs leading-5 text-[#00f5d4]">
+                  <pre className="max-h-72 overflow-auto rounded border border-secondary/15 bg-panel p-4 font-mono text-xs leading-5 text-secondary">
                     {selectedAlarm.raw_log || 'No raw log available.'}
                   </pre>
                 </div>

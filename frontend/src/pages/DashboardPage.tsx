@@ -222,9 +222,9 @@ export function DashboardPage() {
       />
 
       {!activeTemplate ? (
-        <div className="rounded border border-dashed border-[#2b2740] bg-[#151421] px-6 py-16 text-center">
-          <p className="font-mono text-lg font-black text-[#f3edff]">No template selected</p>
-          <p className="mt-2 text-sm text-[#a69db6]">Choose a template to begin.</p>
+        <div className="rounded border border-dashed border-border bg-panel-light px-6 py-16 text-center">
+          <p className="font-mono text-lg font-black text-light">No template selected</p>
+          <p className="mt-2 text-sm text-muted">Choose a template to begin.</p>
         </div>
       ) : null}
 

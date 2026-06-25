@@ -43,7 +43,7 @@ export function WeekdayHeatmap({ data, isLoading, isError }: WeekdayHeatmapProps
     tooltip: {
       position: 'top',
       backgroundColor: '#0c0b14',
-      borderColor: 'rgba(255, 45, 133, 0.45)',
+      borderColor: 'var(--chart-primary-45)',
       borderWidth: 1,
       textStyle: {
         color: '#f3edff',
@@ -115,7 +115,7 @@ export function WeekdayHeatmap({ data, isLoading, isError }: WeekdayHeatmapProps
             borderColor: '#00f5d4',
             borderWidth: 1,
             shadowBlur: 12,
-            shadowColor: 'rgba(0, 245, 212, 0.35)',
+            shadowColor: 'var(--chart-secondary-35)',
           },
         },
         itemStyle: {
