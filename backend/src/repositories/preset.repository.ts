@@ -44,6 +44,30 @@ export class PresetRepository {
     return res.rows[0];
   }
 
+  async updatePreset(id: number, preset: Omit<Preset, 'preset_id'>, client?: pg.PoolClient): Promise<Preset | null> {
+    const executor = this.getQueryExecutor(client);
+    const query = `
+      UPDATE preset
+      SET preset_name = $2, position = $3, chart_type = $4, start_date = $5, end_date = $6, status = $7, severity = $8, error_code = $9, vendor = $10, device_type = $11
+      WHERE preset_id = $1
+      RETURNING preset_id, preset_name, position, chart_type, start_date, end_date, status, severity, error_code, vendor, device_type
+    `;
+    const res = await executor.query(query, [
+      id,
+      preset.preset_name,
+      preset.position,
+      preset.chart_type,
+      preset.start_date ? new Date(preset.start_date) : null,
+      preset.end_date ? new Date(preset.end_date) : null,
+      preset.status,
+      preset.severity,
+      preset.error_code,
+      preset.vendor,
+      preset.device_type,
+    ]);
+    return res.rows[0] || null;
+  }
+
   async getPresetById(id: number, client?: pg.PoolClient): Promise<Preset | null> {
     const executor = this.getQueryExecutor(client);
     const query = `

@@ -613,7 +613,7 @@ export function DashboardWidget({ id, config, layoutContext, onSettingsClick }: 
               )}
               <Bar dataKey="value" fill="#0f766e" radius={[3, 3, 0, 0]}>
                 {trendData.map((entry, index) => (
-                  <Cell key={entry.name} fill={index === trendData.length - 2 ? '#ff2d85' : '#0f766e'} />
+                  <Cell key={entry.name} fill={config.groupBy === 'none' && index === trendData.length - 2 ? '#ff2d85' : '#0f766e'} />
                 ))}
               </Bar>
             </BarChart>

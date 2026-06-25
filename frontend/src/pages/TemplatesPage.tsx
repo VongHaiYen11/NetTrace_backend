@@ -36,7 +36,7 @@ import type { AppOutletContext } from '../layouts/AppLayout';
 
 type TemplateSort = 'date' | 'name' | 'widgets';
 type TemplateSortDir = 'asc' | 'desc';
-type TemplateWidgetFilter = 'all' | 'with-widgets' | 'empty';
+type TemplateWidgetFilter = 'all' | 'with-widgets' | 'with-kpis';
 
 type PresetSortKey = 'chart_type' | 'severity' | 'status' | 'vendor' | 'device_type';
 type PresetSortDir = 'asc' | 'desc';
@@ -48,6 +48,7 @@ interface PresetFilter {
 }
 
 interface PresetDraft {
+  id?: number;
   presetName: string;
   chartType: DashboardWidgetConfig['chartType'];
   startDate: string;
@@ -342,9 +343,11 @@ function Toolbar({ children }: { children: React.ReactNode }) {
 
 function TemplateFilterMenu({
   value,
+  counts,
   onChange,
 }: {
   value: TemplateWidgetFilter;
+  counts: { all: number; widgets: number; kpis: number };
   onChange: (value: TemplateWidgetFilter) => void;
 }) {
   const accentColor = '#ff2d85';
@@ -359,9 +362,9 @@ function TemplateFilterMenu({
     >
       <MenuSection label="Widgets">
         <div className="grid gap-1">
-          <FilterChip label="All" active={value === 'all'} accentColor={accentColor} onClick={() => onChange('all')} />
-          <FilterChip label="Has widgets" active={value === 'with-widgets'} accentColor={accentColor} onClick={() => onChange('with-widgets')} />
-          <FilterChip label="Empty" active={value === 'empty'} accentColor={accentColor} onClick={() => onChange('empty')} />
+          <FilterChip label={`All (${counts.all})`} active={value === 'all'} accentColor={accentColor} onClick={() => onChange('all')} />
+          <FilterChip label={`Has widgets (${counts.widgets})`} active={value === 'with-widgets'} accentColor={accentColor} onClick={() => onChange('with-widgets')} />
+          <FilterChip label={`Has KPI cards (${counts.kpis})`} active={value === 'with-kpis'} accentColor={accentColor} onClick={() => onChange('with-kpis')} />
         </div>
       </MenuSection>
     </ControlMenu>
@@ -469,6 +472,19 @@ export function TemplatesPage() {
   const [templateModal, setTemplateModal] = useState<TemplateModalState | null>(null);
   const [templateToDelete, setTemplateToDelete] = useState<{ id: number; name: string } | null>(null);
 
+  const templateCounts = useMemo(() => {
+    const data = templates.data?.data || [];
+    let widgets = 0;
+    let kpis = 0;
+    data.forEach(t => {
+      const widgetCount = t.number_of_widgets || 0;
+      if (widgetCount > 0) widgets++;
+      const parsedWidgets = getTemplateWidgets(t);
+      if (parsedWidgets.filter(w => w.type && w.type.startsWith('kpi')).length > 0) kpis++;
+    });
+    return { all: data.length, widgets, kpis };
+  }, [templates.data?.data]);
+
   // ── Preset local states ─────────────────────────────────────────────────────
   const [presetSearch, setPresetSearch] = useState('');
   const [presetSortKey, setPresetSortKey] = useState<PresetSortKey>('chart_type');
@@ -501,7 +517,10 @@ export function TemplatesPage() {
         const widgetCount = t.number_of_widgets || 0;
         if (!t.name.toLowerCase().includes(templateSearch.toLowerCase())) return false;
         if (templateWidgetFilter === 'with-widgets') return widgetCount > 0;
-        if (templateWidgetFilter === 'empty') return widgetCount === 0;
+        if (templateWidgetFilter === 'with-kpis') {
+          const parsedWidgets = getTemplateWidgets(t);
+          return parsedWidgets.filter(w => w.type && w.type.startsWith('kpi')).length > 0;
+        }
         return true;
       })
       .sort((a, b) => {
@@ -597,14 +616,40 @@ export function TemplatesPage() {
     });
   };
 
-  const openPresetModal = () => {
+  const openPresetModal = (preset?: typeof allPresets[0]) => {
+    if (preset) {
+      setPresetDraft({
+        id: preset.preset_id,
+        presetName: preset.preset_name || '',
+        chartType: preset.chart_type as any,
+        startDate: preset.start_date ? new Date(preset.start_date).toISOString().slice(0, 10) : '',
+        endDate: preset.end_date ? new Date(preset.end_date).toISOString().slice(0, 10) : '',
+        status: preset.status || '',
+        severity: preset.severity || '',
+        errorCode: preset.error_code || '',
+        vendor: preset.vendor || '',
+        deviceType: preset.device_type || '',
+      });
+    } else {
+      setPresetDraft({
+        presetName: '',
+        chartType: 'line',
+        startDate: new Date().toISOString().slice(0, 10),
+        endDate: new Date().toISOString().slice(0, 10),
+        status: '',
+        severity: '',
+        errorCode: '',
+        vendor: '',
+        deviceType: '',
+      });
+    }
     setPresetModalOpen(true);
   };
 
-  const handleCreatePreset = async () => {
+  const handleSavePreset = async () => {
     setCreatingPreset(true);
     try {
-      await nettraceApi.createPreset({
+      const payload = {
         preset_name: presetDraft.presetName.trim(),
         position: 0,
         chart_type: presetDraft.chartType,
@@ -615,18 +660,42 @@ export function TemplatesPage() {
         error_code: presetDraft.errorCode || null,
         vendor: presetDraft.vendor || null,
         device_type: presetDraft.deviceType || null,
-      });
+      };
+
+      if (presetDraft.id) {
+        await nettraceApi.updatePreset(presetDraft.id, payload);
+      } else {
+        await nettraceApi.createPreset(payload);
+      }
+
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['template-presets'] }),
         queryClient.invalidateQueries({ queryKey: ['dashboard-widget-presets'] }),
       ]);
       setPresetModalOpen(false);
-      setPresetDraft((current) => ({ ...current, presetName: '' }));
-      toast.success('Reusable preset created');
+      setPresetDraft((current) => ({ ...current, presetName: '', id: undefined }));
+      toast.success(`Reusable preset ${presetDraft.id ? 'updated' : 'created'}`);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Could not create preset.');
+      toast.error(error instanceof Error ? error.message : `Could not ${presetDraft.id ? 'update' : 'create'} preset.`);
     } finally {
       setCreatingPreset(false);
+    }
+  };
+
+  const handleDeletePresets = async () => {
+    if (selectedPresetIds.size === 0) return;
+    if (!confirm('Are you sure you want to delete the selected presets?')) return;
+    
+    try {
+      await nettraceApi.deletePresets(Array.from(selectedPresetIds));
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['template-presets'] }),
+        queryClient.invalidateQueries({ queryKey: ['dashboard-widget-presets'] }),
+      ]);
+      setSelectedPresetIds(new Set());
+      toast.success('Presets deleted successfully');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not delete presets.');
     }
   };
 
@@ -686,7 +755,7 @@ export function TemplatesPage() {
             Templates
           </h2>
           <Toolbar>
-            <TemplateFilterMenu value={templateWidgetFilter} onChange={setTemplateWidgetFilter} />
+            <TemplateFilterMenu value={templateWidgetFilter} counts={templateCounts} onChange={setTemplateWidgetFilter} />
             <SortMenu
               options={templateSortOptions}
               value={templateSort}
@@ -734,12 +803,22 @@ export function TemplatesPage() {
             {/* Render List */}
             {filteredTemplates.map((template) => {
               const widgetCount = template.number_of_widgets || 0;
-              const hasWidgets = widgetCount > 0;
               const isActive = activeTemplate?.id === `db:${template.template_id}`;
               const formattedDate = formatDistanceToNow(parseISO(template.time_updated), {
                 addSuffix: true,
-                locale: enUS,
-              });
+              })
+                .replace('less than a minute', '< 1 m')
+                .replace('about ', '')
+                .replace('almost ', '')
+                .replace('over ', '')
+                .replace(/ months?/, ' mo')
+                .replace(/ years?/, ' y')
+                .replace(/ days?/, ' d')
+                .replace(/ hours?/, ' h')
+                .replace(/ minutes?/, ' min')
+                .replace(/ seconds?/, ' s');
+              const parsedWidgets = getTemplateWidgets(template);
+              const kpiCount = parsedWidgets.filter((w) => w.type && w.type.startsWith('kpi')).length;
 
               return (
                 <div
@@ -765,7 +844,7 @@ export function TemplatesPage() {
 
                   {/* Content Area */}
                   <div className="flex flex-1 flex-col p-4">
-                    <div className="mb-2 flex items-start justify-between gap-3">
+                    <div className="mb-2 flex items-center justify-between gap-3">
                       <h4 className="truncate pr-2 font-heading text-xl font-bold text-white transition-colors group-hover:text-secondary">
                         {template.name}
                       </h4>
@@ -786,9 +865,14 @@ export function TemplatesPage() {
                     {/* Footer */}
                     <div className="mt-auto flex items-end justify-between gap-3">
                       <div className="flex flex-wrap gap-2">
-                        <span className="rounded border border-white/10 bg-input-dark/60 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-muted">
+                        <span className="rounded border border-primary/20 bg-primary/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-primary">
                           {widgetCount} Widgets
                         </span>
+                        {kpiCount > 0 ? (
+                          <span className="rounded border border-secondary/20 bg-secondary/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-secondary">
+                            {kpiCount} KPIs
+                          </span>
+                        ) : null}
                       </div>
                       <span className="shrink-0 text-[10px] font-mono text-muted/50">
                         Mod: {formattedDate}
@@ -861,13 +945,22 @@ export function TemplatesPage() {
             {selectedPresetIds.size > 0 ? (
               <div className="flex items-center justify-between border-b border-white/10 px-4 py-3 text-xs text-muted">
                 <span>{selectedPresetIds.size} selected</span>
-                <button
-                  type="button"
-                  onClick={() => setSelectedPresetIds(new Set())}
-                  className="font-semibold text-secondary transition hover:text-secondary-light"
-                >
-                  Clear selection
-                </button>
+                <div className="flex items-center gap-4">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedPresetIds(new Set())}
+                    className="font-semibold text-secondary transition hover:text-secondary-light"
+                  >
+                    Clear selection
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDeletePresets}
+                    className="font-semibold text-red-400 transition hover:text-red-300"
+                  >
+                    Delete selected
+                  </button>
+                </div>
               </div>
             ) : null}
             <div className="overflow-x-auto">
@@ -930,9 +1023,10 @@ export function TemplatesPage() {
                       return (
                         <tr
                           key={preset.preset_id}
-                          className="group transition-colors hover:bg-white/[0.02]"
+                          className="group transition-colors hover:bg-white/[0.02] cursor-pointer"
+                          onClick={() => openPresetModal(preset)}
                         >
-                          <td className="px-4 py-4">
+                          <td className="px-4 py-4" onClick={(e) => e.stopPropagation()}>
                             <Checkbox
                               aria-label={`Select preset ${preset.preset_id}`}
                               checked={selectedPresetIds.has(preset.preset_id)}
@@ -1017,7 +1111,7 @@ export function TemplatesPage() {
           <div className="w-full max-w-2xl rounded-lg border border-secondary/30 bg-panel-light p-6 shadow-2xl">
             <div className="flex items-center justify-between border-b border-white/10 pb-4">
               <div>
-                <h3 className="text-xl font-black text-light">Add Preset</h3>
+                <h3 className="text-xl font-black text-light">{presetDraft.id ? 'Edit Preset' : 'Add Preset'}</h3>
                 <p className="mt-1 text-sm text-muted">
                   Save a reusable widget configuration now and assign it to a template later.
                 </p>
@@ -1121,10 +1215,10 @@ export function TemplatesPage() {
                 Cancel
               </Button>
               <Button
-                onClick={handleCreatePreset}
+                onClick={handleSavePreset}
                 disabled={creatingPreset || !presetDraft.presetName.trim()}
               >
-                {creatingPreset ? 'Adding...' : 'Add preset'}
+                {creatingPreset ? 'Saving...' : presetDraft.id ? 'Save changes' : 'Add preset'}
               </Button>
             </div>
           </div>

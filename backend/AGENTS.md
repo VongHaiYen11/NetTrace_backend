@@ -693,11 +693,10 @@ Manage custom dashboard layouts (Template, Widget, Preset) for users.
 ```
 
 #### 2.6. Standalone Preset APIs
-* **Endpoints:** `GET /api/v1/presets`, `POST /api/v1/presets`
+* **Endpoints:** `GET /api/v1/presets`, `POST /api/v1/presets`, `PUT /api/v1/presets/:id`, `DELETE /api/v1/presets`
 * **Purpose:** List reusable presets and create presets that are not yet assigned to a template.
-* **Behavior:** Creating a preset inserts only into `preset`. A `widget` row is created later when the preset is assigned to a template.
-* **List Query Parameters:** `limit` defaults to 50 (max 1000), `offset` defaults to 0.
-* **Create Request:** Requires `preset_name` and uses the remaining `WidgetInput` fields; `position` defaults to `0` while unassigned.
+* **Behavior:** Creating a preset inserts only into `preset`. A `widget` row is created later when the preset is assigned to a template. Editing a preset (`PUT`) updates its metadata. Deleting a preset (`DELETE` with `{"ids": [...]}`) removes the preset completely.
+* **Create/Update Request:** Requires `preset_name` and uses the remaining `WidgetInput` fields; `position` defaults to `0` while unassigned.
 * **List Response:** Includes `preset_name` plus assignment metadata (`template_id`, `template_name`) when the preset is in use.
 * **Create Response:** HTTP 201 with a `PresetResponse`, including `preset_name`.
 

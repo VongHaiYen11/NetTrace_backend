@@ -10,4 +10,12 @@ export class PresetService {
   createPreset(preset: Omit<Preset, 'preset_id'>) {
     return this.presetRepo.createPreset(preset);
   }
+
+  updatePreset(id: number, preset: Omit<Preset, 'preset_id'>) {
+    return this.presetRepo.updatePreset(id, preset);
+  }
+
+  deletePresets(ids: number[]) {
+    return this.presetRepo.deletePresetsByIds(ids);
+  }
 }

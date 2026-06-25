@@ -3,7 +3,7 @@ import { PresetController } from '../controllers/preset.controller.js';
 import { validateBodyGeneric, validateQueryGeneric } from '../middlewares/validator.middleware.js';
 import { PresetRepository } from '../repositories/preset.repository.js';
 import { PresetService } from '../services/preset.service.js';
-import { createPresetSchema, listPresetsQuerySchema } from '../validators/preset.validator.js';
+import { createPresetSchema, listPresetsQuerySchema, updatePresetSchema, deletePresetsSchema } from '../validators/preset.validator.js';
 
 const presetRepo = new PresetRepository();
 const presetService = new PresetService(presetRepo);
@@ -68,8 +68,74 @@ const router = Router();
  *                 nullable: true
  *     responses:
  *       201: { description: Preset created successfully }
+ *   put:
+ *     summary: Update an existing preset
+ *     tags: [Presets]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [preset_name, chart_type]
+ *             properties:
+ *               preset_name:
+ *                 type: string
+ *               position:
+ *                 type: integer
+ *               chart_type:
+ *                 type: string
+ *               start_date:
+ *                 type: string
+ *                 nullable: true
+ *               end_date:
+ *                 type: string
+ *                 nullable: true
+ *               status:
+ *                 type: string
+ *                 nullable: true
+ *               severity:
+ *                 type: string
+ *                 nullable: true
+ *               error_code:
+ *                 type: string
+ *                 nullable: true
+ *               vendor:
+ *                 type: string
+ *                 nullable: true
+ *               device_type:
+ *                 type: string
+ *                 nullable: true
+ *     responses:
+ *       200: { description: Preset updated successfully }
+ *       404: { description: Preset not found }
+ *   delete:
+ *     summary: Bulk delete presets
+ *     tags: [Presets]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [ids]
+ *             properties:
+ *               ids:
+ *                 type: array
+ *                 items:
+ *                   type: integer
+ *     responses:
+ *       200: { description: Presets deleted successfully }
  */
 router.get('/', validateQueryGeneric(listPresetsQuerySchema), presetController.listPresets);
 router.post('/', validateBodyGeneric(createPresetSchema), presetController.createPreset);
+router.put('/:id', validateBodyGeneric(updatePresetSchema), presetController.updatePreset);
+router.delete('/', validateBodyGeneric(deletePresetsSchema), presetController.deletePresets);
 
 export default router;

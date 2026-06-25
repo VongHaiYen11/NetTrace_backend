@@ -362,6 +362,20 @@ export const nettraceApi = {
     });
   },
 
+  async updatePreset(id: number, request: CreatePresetRequest) {
+    return requestJson<PresetSummary>(`/api/v1/presets/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(request),
+    });
+  },
+
+  async deletePresets(ids: number[]) {
+    return requestJson<{ deletedCount: number }>('/api/v1/presets', {
+      method: 'DELETE',
+      body: JSON.stringify({ ids }),
+    });
+  },
+
   async createTemplate(request: CreateTemplateRequest) {
     return requestJson<TemplateSummary>('/api/v1/templates', {
       method: 'POST',
