@@ -10,6 +10,7 @@ import {
   LayoutGrid,
   Maximize2,
   Minimize2,
+  PenLine,
   PieChart,
   Plus,
   RadioTower,
@@ -60,8 +61,10 @@ interface GeneralSettingsDrawerProps {
   variant?: 'drawer' | 'modal';
   templateId?: number;
   templateName?: string;
+  dashboardName?: string;
   onClose: () => void;
   onSave: (widgets: DashboardWidgetConfig[]) => void;
+  onDashboardNameChange?: (name: string) => void;
   onTemplateChange: (template: { id: string; name: string } | null) => void;
   onTemplateSaved?: () => void;
 }
@@ -548,8 +551,10 @@ export function GeneralSettingsDrawer({
   variant = 'drawer',
   templateId,
   templateName,
+  dashboardName,
   onClose,
   onSave,
+  onDashboardNameChange,
   onTemplateChange,
   onTemplateSaved,
 }: GeneralSettingsDrawerProps) {
@@ -558,6 +563,10 @@ export function GeneralSettingsDrawer({
   const [draftWidgets, setDraftWidgets] = useState(widgets);
   const [detailDraftWidgets, setDetailDraftWidgets] = useState(widgets);
   const [draftLayoutCount, setDraftLayoutCount] = useState<LayoutCount>(getLayoutCapacity(widgets));
+  const [draftDashboardName, setDraftDashboardName] = useState(
+    dashboardName ?? activeTemplate?.name ?? getDraftTemplateName(),
+  );
+  const [editingDashboardName, setEditingDashboardName] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState('none');
   const [savedTemplates, setSavedTemplates] = useState<DashboardTemplate[]>([]);
   const [templateSearch, setTemplateSearch] = useState('');
@@ -578,6 +587,8 @@ export function GeneralSettingsDrawer({
       setDraftWidgets(widgets);
       setDetailDraftWidgets(widgets);
       setDraftLayoutCount(getLayoutCapacity(widgets));
+      setDraftDashboardName(dashboardName ?? activeTemplate?.name ?? getDraftTemplateName());
+      setEditingDashboardName(false);
       setSelectedTemplateId(activeTemplate?.id ?? 'none');
       setTemplateSearch('');
       setDraftTemplateName(getDraftTemplateName());
@@ -591,7 +602,7 @@ export function GeneralSettingsDrawer({
       setDetailLayoutCount(getLayoutCapacity(widgets));
       setRestoreWidgetId(null);
     }
-  }, [activeTemplate?.id, isOpen, widgets]);
+  }, [activeTemplate?.id, dashboardName, isOpen, widgets]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -654,7 +665,7 @@ export function GeneralSettingsDrawer({
     : visibleChartWidgets.find((widget) => widget.id === selectedSlotId) ?? visibleChartWidgets[0] ?? null;
   const allTemplates = savedTemplates;
   const selectedTemplate = allTemplates.find((template) => template.id === selectedTemplateId);
-  const headerTemplateName = selectedTemplate?.name ?? activeTemplate?.name ?? draftTemplateName;
+  const headerTemplateName = draftDashboardName.trim() || draftTemplateName;
   const filteredTemplates = allTemplates.filter((template) =>
     `${template.name} ${template.description}`.toLowerCase().includes(templateSearch.toLowerCase()),
   );
@@ -698,6 +709,7 @@ export function GeneralSettingsDrawer({
     }
     setDraftWidgets(template.apply(widgets));
     setDraftLayoutCount(template.layoutCount);
+    setDraftDashboardName(template.name);
   }
 
   function applyLayoutCount(count: LayoutCount) {
@@ -747,6 +759,12 @@ export function GeneralSettingsDrawer({
   function startRestoreSidebarWidget(widgetId: string) {
     setSelectedTemplateId('none');
     setRestoreWidgetId(widgetId);
+  }
+
+  function removeSidebarWidget(widgetId: string) {
+    setSelectedTemplateId('none');
+    setRestoreWidgetId(null);
+    setDraftWidgets((current) => hideChartWidget(current, widgetId));
   }
 
   function restoreSidebarWidget(widgetId: string, slot?: number) {
@@ -802,6 +820,7 @@ export function GeneralSettingsDrawer({
   function saveAndClose() {
     const normalizedWidgets = draftWidgets.map(normalizeWidgetTitle);
     onSave(normalizedWidgets);
+    onDashboardNameChange?.(headerTemplateName);
     onTemplateChange(
       selectedTemplate ? { id: selectedTemplate.id, name: selectedTemplate.name } : null,
     );
@@ -980,18 +999,44 @@ export function GeneralSettingsDrawer({
         <>
       <div className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm" onClick={onClose} />
       <aside className="fixed bottom-0 right-0 top-0 z-50 flex w-[480px] max-w-[calc(100vw-1rem)] flex-col border-l border-white/10 bg-[#151421] text-[#f3edff] shadow-2xl">
-        <div className="relative flex items-center justify-between overflow-hidden border-b border-[#ff2d85]/30 px-6 py-5">
+        <div className="relative flex items-start justify-between overflow-hidden border-b border-[#ff2d85]/30 px-6 py-5">
           <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#ff2d85] to-transparent opacity-80" />
           <div>
-            <p className="font-mono text-[10px] font-black uppercase tracking-[0.22em] text-[#00f5d4]">
-              Dashboard console
-            </p>
-            <h2 className="mt-1 text-2xl font-black text-[#f3edff] drop-shadow-[0_0_14px_rgba(255,45,133,0.7)]">
+            <h2 className="mt-1 text-3xl font-black text-[#f3edff] drop-shadow-[0_0_14px_rgba(255,45,133,0.7)]">
               Customize dashboard
             </h2>
-            <p className="mt-3 inline-flex max-w-full border border-[#00f5d4]/25 bg-[#00f5d4]/5 px-2.5 py-1 font-mono text-xs font-black text-[#00f5d4]">
-              <span className="truncate">{headerTemplateName}</span>
-            </p>
+            <div className="mt-3 flex max-w-[360px] items-center gap-1 border border-[#00f5d4]/25 bg-[#00f5d4]/5 px-2.5 py-1">
+              {editingDashboardName ? (
+                <input
+                  autoFocus
+                  value={draftDashboardName}
+                  aria-label="Dashboard name"
+                  onChange={(event) => setDraftDashboardName(event.target.value)}
+                  onBlur={() => setEditingDashboardName(false)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      event.currentTarget.blur();
+                    }
+                  }}
+                  className="min-w-0 flex-1 bg-transparent font-mono text-xs font-black text-[#00f5d4] outline-none placeholder:text-[#777086]"
+                  placeholder="Untitled dashboard"
+                />
+              ) : (
+                <span className="min-w-0 flex-1 truncate font-mono text-xs font-black text-[#00f5d4]">
+                  {headerTemplateName}
+                </span>
+              )}
+              <button
+                type="button"
+                aria-label="Rename dashboard"
+                title="Rename dashboard"
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => setEditingDashboardName(true)}
+                className={cn('h-6 w-6', drawerIconButtonClass)}
+              >
+                <PenLine size={13} />
+              </button>
+            </div>
           </div>
           <button
             type="button"
@@ -1153,6 +1198,15 @@ export function GeneralSettingsDrawer({
                               <Maximize2 size={15} />
                             )}
                           </button>
+                          <button
+                            type="button"
+                            aria-label={`Remove ${widget.title || getDefaultWidgetTitle(widget)} from dashboard`}
+                            title="Remove widget"
+                            onClick={() => removeSidebarWidget(widget.id)}
+                            className={cn('h-9 w-9', drawerDangerIconButtonClass)}
+                          >
+                            <X size={17} />
+                          </button>
                         </div>
                       </div>
                     ))}
@@ -1250,11 +1304,6 @@ export function GeneralSettingsDrawer({
 
             {templateDropdownOpen ? (
               <div className="space-y-4 px-1 pb-2">
-                <div className="rounded border border-[#2b2740] bg-[#191727] px-3 py-2">
-                  <p className="font-mono text-xs leading-relaxed text-[#a69db6]">
-                    Templates save the dashboard shell, KPI choices, widget slots, and each widget preset snapshot.
-                  </p>
-                </div>
                 <label className="flex h-11 items-center gap-2 rounded border border-[#2b2740] bg-[#191727] px-3 shadow-[0_0_20px_rgba(255,45,133,0.08)] transition hover:border-[#ff2d85]/60">
                   <Search size={20} className="text-[#ff2d85]" />
                   <input

@@ -25,8 +25,11 @@ nettrace/
 │   ├── package.json    # Backend dependencies
 │   ├── tsconfig.json   # TypeScript configuration
 │   └── AGENTS.md       # Backend-specific technical specifications and schemas
-├── frontend/           # Placeholders for future frontend web application
-│   └── (Intentionally empty placeholder directory)
+├── frontend/           # Frontend web application (React, Vite, TailwindCSS)
+│   ├── src/            # Core frontend source files
+│   ├── package.json    # Frontend dependencies
+│   ├── tsconfig.json   # TypeScript configuration
+│   └── AGENTS.md       # Frontend-specific UI/UX guidelines and rules
 ├── docs/               # Monorepo level architecture, workflows, and database documentation
 ├── docker/             # Container configuration assets (currently empty placeholder)
 ├── .github/            # GitHub Actions CI/CD workflows (currently empty placeholder)
@@ -72,6 +75,5 @@ You must strictly adhere to the following rules under all circumstances:
 2. **Preserve existing architecture:** Do not replace the layered pattern with other structures (e.g. active record, controllers doing repository jobs).
 3. **Follow established project patterns:** Duplicate existing patterns for SQL construction, Zod validation, and Pino logging when adding features.
 4. **Prefer documentation changes over implementation assumptions:** If you encounter ambiguous instructions, prioritize documenting the design proposal in `docs/` and ask the user for approval.
-5. **Do not create frontend implementation:** The `frontend/` directory is an empty placeholder. Do not generate React components, Vue boilerplate, Vite configurations, or package configurations here until explicitly commanded.
-6. **Existing backend code is production-critical:** The existing tests must pass at all times. Do not break existing API routing, middleware chaining, or database connections.
-7. **Do not reorganize backend source code:** Do not rename, move, delete, or reformat files under `backend/src/` unless explicitly instructed to do so.
+5. **Existing backend code is production-critical:** The existing tests must pass at all times. Do not break existing API routing, middleware chaining, or database connections.
+6. **Do not reorganize backend source code:** Do not rename, move, delete, or reformat files under `backend/src/` unless explicitly instructed to do so.

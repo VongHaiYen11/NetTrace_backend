@@ -13,7 +13,7 @@ export function PageHeader({ title, accent, description, action, className }: Pa
   return (
     <header
       className={cn(
-        'flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between',
+        'flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between',
         className,
       )}
     >

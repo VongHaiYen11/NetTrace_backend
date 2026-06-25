@@ -734,10 +734,7 @@ export function TemplatesPage() {
               <div className="w-14 h-14 rounded-full border border-[#ff2d85] flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300 shadow-[0_0_12px_rgba(255,45,133,0.2)] bg-[#ff2d85]/5">
                 <Plus className="text-[#ff2d85]" size={32} />
               </div>
-              <span className="font-heading font-bold text-white text-base">Create Template</span>
-              <span className="font-mono text-[10px] text-[#a69db6]/60 mt-1.5 tracking-wider uppercase">
-                Initialize new node
-              </span>
+              <span className="font-heading font-bold text-white text-base">New Template</span>
             </button>
 
             {/* Render List */}

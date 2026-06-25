@@ -212,6 +212,7 @@ export function DashboardPage() {
 
   const [activeWidgetId, setActiveWidgetId] = useState<string | null>(null);
   const [generalSettingsOpen, setGeneralSettingsOpen] = useState(false);
+  const [dashboardName, setDashboardName] = useState('Alarm dashboard');
   const [activeTemplate, setActiveTemplate] = useState<{ id: string; name: string } | null>(null);
 
   const activeWidget = useMemo(() => {
@@ -309,9 +310,11 @@ export function DashboardPage() {
       <GeneralSettingsDrawer
         isOpen={generalSettingsOpen}
         widgets={widgets}
+        dashboardName={dashboardName}
         activeTemplate={activeTemplate}
         onClose={() => setGeneralSettingsOpen(false)}
         onSave={setWidgets}
+        onDashboardNameChange={setDashboardName}
         onTemplateChange={setActiveTemplate}
       />
 
