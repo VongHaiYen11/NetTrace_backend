@@ -359,6 +359,54 @@ describe('Dashboard Template System Tests', () => {
       expect(result!.name).toBe('New Name');
     });
 
+    it('should set number_of_widgets to zero when all widgets are hidden in the saved UI state', async () => {
+      const originalTemplate = {
+        template_id: 1,
+        name: 'Dashboard',
+        selected_cards: '{}',
+        number_of_widgets: 2,
+        time_created: new Date(),
+        time_updated: new Date(),
+      };
+      templateRepo.getTemplateById.mockResolvedValue(originalTemplate);
+      widgetRepo.getWidgetsWithPresetsByTemplateId.mockResolvedValue([
+        {
+          widget_id: 10,
+          template_id: 1,
+          preset_id: 20,
+          time_created: new Date(),
+          time_updated: new Date(),
+          preset: {
+            preset_id: 20,
+            position: 1,
+            chart_type: 'line',
+            status: null,
+            severity: null,
+            error_code: null,
+            vendor: null,
+            device_type: null,
+            start_date: null,
+            end_date: null,
+          },
+        },
+      ]);
+      templateRepo.updateTemplate.mockResolvedValue({
+        ...originalTemplate,
+        number_of_widgets: 0,
+      });
+
+      await service.updateTemplate(1, undefined, '{"widgets":[]}', []);
+
+      expect(presetRepo.deletePresetsByIds).toHaveBeenCalledWith([20], mockClient);
+      expect(presetRepo.createPreset).not.toHaveBeenCalled();
+      expect(widgetRepo.createWidget).not.toHaveBeenCalled();
+      expect(templateRepo.updateTemplate).toHaveBeenCalledWith(
+        1,
+        { selected_cards: '{"widgets":[]}', number_of_widgets: 0 },
+        mockClient,
+      );
+    });
+
     it('should return null when updating a non-existent template', async () => {
       templateRepo.getTemplateById.mockResolvedValue(null);
 

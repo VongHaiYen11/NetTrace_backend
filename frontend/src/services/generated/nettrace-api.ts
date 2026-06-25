@@ -158,6 +158,7 @@ export interface TemplateSummary {
 
 export interface PresetSummary {
   preset_id: number;
+  preset_name: string | null;
   position: number;
   chart_type: string;
   start_date: string | null;
@@ -167,6 +168,8 @@ export interface PresetSummary {
   error_code: string | null;
   vendor: string | null;
   device_type: string | null;
+  template_id?: number | null;
+  template_name?: string | null;
 }
 
 export interface TemplateWidgetDetail {
@@ -182,6 +185,7 @@ export interface TemplateDetail extends TemplateSummary {
 }
 
 export interface TemplateWidgetInput {
+  preset_name?: string | null;
   position: number;
   chart_type: string;
   start_date?: string | null;
@@ -204,6 +208,10 @@ export interface UpdateTemplateRequest {
   selected_cards?: string | null;
   widgets?: TemplateWidgetInput[];
 }
+
+export type CreatePresetRequest = Omit<TemplateWidgetInput, 'preset_name'> & {
+  preset_name: string;
+};
 
 export interface MetadataFilterOptions {
   deviceTypes: string[];
@@ -338,6 +346,20 @@ export const nettraceApi = {
     if (params.limit) query.set('limit', String(params.limit));
     if (params.offset) query.set('offset', String(params.offset));
     return requestJson<TemplateSummary[]>(`/api/v1/templates${query.size ? `?${query}` : ''}`);
+  },
+
+  async listPresets(params: { limit?: number; offset?: number } = {}) {
+    const query = new URLSearchParams();
+    if (params.limit) query.set('limit', String(params.limit));
+    if (params.offset) query.set('offset', String(params.offset));
+    return requestJson<PresetSummary[]>(`/api/v1/presets${query.size ? `?${query}` : ''}`);
+  },
+
+  async createPreset(request: CreatePresetRequest) {
+    return requestJson<PresetSummary>('/api/v1/presets', {
+      method: 'POST',
+      body: JSON.stringify(request),
+    });
   },
 
   async createTemplate(request: CreateTemplateRequest) {

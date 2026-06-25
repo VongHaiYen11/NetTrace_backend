@@ -56,6 +56,7 @@ export class WidgetRepository {
         w.preset_id,
         w.time_created,
         w.time_updated,
+        p.preset_name,
         p.position,
         p.chart_type,
         p.start_date,
@@ -79,6 +80,7 @@ export class WidgetRepository {
       time_updated: row.time_updated,
       preset: {
         preset_id: row.preset_id,
+        preset_name: row.preset_name,
         position: row.position,
         chart_type: row.chart_type,
         start_date: row.start_date,

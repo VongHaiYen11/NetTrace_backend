@@ -37,6 +37,7 @@ export class TemplateService {
         // Insert Preset
         const preset = await this.presetRepo.createPreset(
           {
+            preset_name: wData.preset_name || null,
             position: wData.position,
             chart_type: wData.chart_type,
             start_date: wData.start_date || null,
@@ -113,10 +114,13 @@ export class TemplateService {
           await this.presetRepo.deletePresetsByIds(oldPresetIds, client);
         }
 
-        // Insert new presets and widgets
+        // Insert new presets and widgets. The persisted counter must reflect
+        // the widget links actually recreated by this transaction.
+        let persistedWidgetCount = 0;
         for (const wData of widgetsData) {
           const preset = await this.presetRepo.createPreset(
             {
+              preset_name: wData.preset_name || null,
               position: wData.position,
               chart_type: wData.chart_type,
               start_date: wData.start_date || null,
@@ -131,9 +135,10 @@ export class TemplateService {
           );
 
           await this.widgetRepo.createWidget(id, preset.preset_id!, client);
+          persistedWidgetCount += 1;
         }
 
-        updates.number_of_widgets = widgetsData.length;
+        updates.number_of_widgets = persistedWidgetCount;
       }
 
       const updated = await this.templateRepo.updateTemplate(id, updates, client);

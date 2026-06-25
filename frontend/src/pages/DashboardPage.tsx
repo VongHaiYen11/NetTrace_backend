@@ -1,14 +1,25 @@
-import { useMemo, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useEffect, useMemo, useState } from 'react';
 import { PenLine } from 'lucide-react';
+import { useOutletContext } from 'react-router-dom';
+import { toast } from 'sonner';
 import { PageHeader } from '../components/shared/PageHeader';
 import { PageShell } from '../components/shared/PageShell';
 import { Button } from '../components/ui/Button';
 import { DashboardWidget } from '../features/dashboard/components/DashboardWidget';
-import { GeneralSettingsDrawer } from '../features/dashboard/components/GeneralSettingsDrawer';
+import {
+  buildTemplateSnapshot,
+  buildTemplateWidgetInputs,
+  GeneralSettingsDrawer,
+  getLayoutCapacity,
+} from '../features/dashboard/components/GeneralSettingsDrawer';
 import {
   WidgetSettingsDrawer,
+  type WidgetPresetOption,
   type WidgetSettingsValues,
 } from '../features/dashboard/components/WidgetSettingsDrawer';
+import { nettraceApi } from '../services/generated/nettrace-api';
+import type { AppOutletContext } from '../layouts/AppLayout';
 
 type WidgetType =
   | 'kpi-count'
@@ -36,184 +47,72 @@ interface WidgetConfig extends WidgetSettingsValues {
 type TableHeightMode = 'paired' | 'middle' | 'roomy';
 
 export function DashboardPage() {
-  const [widgets, setWidgets] = useState<WidgetConfig[]>([
-    {
-      id: 'kpi-1',
-      type: 'kpi-count',
-      title: 'Alarm count',
-      layoutOrder: 0,
-      layoutSpan: 1,
-      visible: true,
-      chartType: 'line',
-      metric: 'count',
-      groupBy: 'none',
-      timeBucket: 'day',
-      heatmapMode: 'weekday',
-      info1: true,
-      info2: true,
-      info3: true,
-      preset: 'Active Connections',
-      startDate: '2026-06-01',
-      endDate: '2026-06-30',
-    },
-    {
-      id: 'kpi-2',
-      type: 'kpi-devices',
-      title: 'Affected devices',
-      layoutOrder: 0,
-      layoutSpan: 1,
-      visible: true,
-      chartType: 'bar',
-      metric: 'affected_devices',
-      groupBy: 'none',
-      timeBucket: 'day',
-      heatmapMode: 'weekday',
-      info1: true,
-      info2: true,
-      info3: true,
-      preset: 'Active Connections',
-      startDate: '2026-06-01',
-      endDate: '2026-06-30',
-    },
-    {
-      id: 'kpi-3',
-      type: 'kpi-status',
-      title: 'Current status',
-      layoutOrder: 0,
-      layoutSpan: 1,
-      visible: true,
-      chartType: 'pie',
-      metric: 'count',
-      groupBy: 'severity',
-      timeBucket: 'day',
-      heatmapMode: 'weekday',
-      info1: true,
-      info2: true,
-      info3: true,
-      preset: 'Active Connections',
-      startDate: '2026-06-01',
-      endDate: '2026-06-30',
-    },
-    {
-      id: 'chart-1',
-      type: 'chart-trend',
-      title: 'Daily alarms',
-      layoutOrder: 1,
-      layoutSpan: 2,
-      visible: true,
-      chartType: 'line',
-      metric: 'count',
-      groupBy: 'none',
-      timeBucket: 'day',
-      heatmapMode: 'weekday',
-      info1: true,
-      info2: true,
-      info3: true,
-      preset: 'Active Connections',
-      startDate: '2026-06-01',
-      endDate: '2026-06-30',
-    },
-    {
-      id: 'chart-2',
-      type: 'chart-severity',
-      title: 'Severity split',
-      layoutOrder: 2,
-      layoutSpan: 1,
-      visible: true,
-      chartType: 'pie',
-      metric: 'count',
-      groupBy: 'severity',
-      timeBucket: 'day',
-      heatmapMode: 'weekday',
-      info1: true,
-      info2: true,
-      info3: true,
-      preset: 'Active Connections',
-      startDate: '2026-06-01',
-      endDate: '2026-06-30',
-    },
-    {
-      id: 'chart-3',
-      type: 'chart-weekly',
-      title: 'Weekly alarms',
-      layoutOrder: 3,
-      layoutSpan: 1,
-      visible: true,
-      chartType: 'bar',
-      metric: 'count',
-      groupBy: 'none',
-      timeBucket: 'week',
-      heatmapMode: 'weekday',
-      info1: true,
-      info2: true,
-      info3: true,
-      preset: 'Active Connections',
-      startDate: '2026-06-01',
-      endDate: '2026-06-30',
-    },
-    {
-      id: 'chart-4',
-      type: 'chart-heatmap',
-      title: 'Alarm heatmap',
-      layoutOrder: 4,
-      layoutSpan: 2,
-      visible: true,
-      chartType: 'heatmap',
-      metric: 'count',
-      groupBy: 'none',
-      timeBucket: 'day',
-      heatmapMode: 'weekday',
-      info1: true,
-      info2: true,
-      info3: false,
-      preset: 'Active Connections',
-      startDate: '2026-06-01',
-      endDate: '2026-06-30',
-    },
-    {
-      id: 'table-1',
-      type: 'table-alarms',
-      title: 'Alarm list',
-      layoutOrder: 5,
-      layoutSpan: 2,
-      visible: true,
-      chartType: 'table',
-      metric: 'count',
-      groupBy: 'none',
-      timeBucket: 'day',
-      heatmapMode: 'weekday',
-      info1: true,
-      info2: true,
-      info3: true,
-      preset: 'Active Connections',
-      startDate: '2026-06-01',
-      endDate: '2026-06-30',
-    },
-    {
-      id: 'chart-5',
-      type: 'chart-extra',
-      title: 'Devices by region',
-      layoutOrder: 6,
-      layoutSpan: 1,
-      visible: false,
-      chartType: 'bar',
-      metric: 'affected_devices',
-      groupBy: 'province',
-      timeBucket: 'day',
-      heatmapMode: 'weekday',
-      info1: true,
-      info2: true,
-      info3: true,
-      preset: 'Active Connections',
-      startDate: '2026-06-01',
-      endDate: '2026-06-30',
-    },
-  ]);
+  const queryClient = useQueryClient();
+  const {
+    dashboardWidgets,
+    setDashboardWidgets,
+    activeTemplate,
+    setActiveTemplate,
+  } = useOutletContext<AppOutletContext>();
+  const widgets = dashboardWidgets as WidgetConfig[];
+  const setWidgets = setDashboardWidgets;
 
   const [activeWidgetId, setActiveWidgetId] = useState<string | null>(null);
   const [generalSettingsOpen, setGeneralSettingsOpen] = useState(false);
-  const [dashboardName, setDashboardName] = useState('Alarm dashboard');
-  const [activeTemplate, setActiveTemplate] = useState<{ id: string; name: string } | null>(null);
+
+  const widgetPresets = useQuery({
+    queryKey: ['dashboard-widget-presets'],
+    queryFn: async () => {
+      const templates = await nettraceApi.listTemplates({ limit: 50, offset: 0 });
+      const presets = await nettraceApi.listPresets({ limit: 1000, offset: 0 });
+      const options: WidgetPresetOption[] = presets.data.map((preset) => ({
+        id: `preset:${preset.preset_id}`,
+        label: `${preset.preset_name ?? `Preset ${preset.preset_id}`} · ${preset.template_name ?? 'Unassigned'}`,
+        values: {
+          title: preset.preset_name || `Preset ${preset.preset_id}`,
+          visible: true,
+          chartType:
+            preset.chart_type === 'bar' ||
+            preset.chart_type === 'pie' ||
+            preset.chart_type === 'table' ||
+            preset.chart_type === 'heatmap'
+              ? preset.chart_type
+              : 'line',
+          metric: 'count',
+          groupBy: preset.chart_type === 'pie' ? 'severity' : 'none',
+          timeBucket: 'day',
+          heatmapMode: 'weekday',
+          info1: true,
+          info2: true,
+          info3: true,
+          preset: `preset:${preset.preset_id}`,
+          startDate: preset.start_date?.slice(0, 10) ?? '',
+          endDate: preset.end_date?.slice(0, 10) ?? '',
+        },
+      }));
+
+      return {
+        options,
+        templateIds: templates.data.map((template) => template.template_id),
+      };
+    },
+    refetchOnWindowFocus: true,
+    refetchInterval: activeTemplate ? 10_000 : false,
+  });
+
+  useEffect(() => {
+    if (!activeTemplate || !widgetPresets.data) return;
+    const templateId = activeTemplate.id.startsWith('db:')
+      ? Number(activeTemplate.id.replace('db:', ''))
+      : null;
+    if (templateId && !widgetPresets.data.templateIds.includes(templateId)) {
+      setActiveTemplate(null);
+      setWidgets([]);
+      setActiveWidgetId(null);
+      setGeneralSettingsOpen(false);
+      toast.info('The selected template no longer exists.');
+    }
+  }, [activeTemplate, widgetPresets.data]);
 
   const activeWidget = useMemo(() => {
     return widgets.find((w) => w.id === activeWidgetId);
@@ -232,12 +131,52 @@ export function DashboardPage() {
     [widgets],
   );
 
-  function handleApplySettings(newValues: WidgetSettingsValues) {
+  async function handleApplySettings(newValues: WidgetSettingsValues) {
     if (!activeWidgetId) return;
-    setActiveTemplate(null);
-    setWidgets((prev) =>
-      prev.map((w) => (w.id === activeWidgetId ? { ...w, ...newValues } : w))
+    const currentTemplate = activeTemplate;
+    const templateId = currentTemplate?.id.startsWith('db:')
+      ? Number(currentTemplate.id.replace('db:', ''))
+      : null;
+    if (!templateId || !currentTemplate) return;
+
+    const nextWidgets = widgets.map((widget) =>
+      widget.id === activeWidgetId ? { ...widget, ...newValues } : widget,
     );
+
+    try {
+      await nettraceApi.updateTemplate(templateId, {
+        name: currentTemplate.name,
+        selected_cards: buildTemplateSnapshot(nextWidgets, getLayoutCapacity(nextWidgets)),
+        widgets: buildTemplateWidgetInputs(nextWidgets),
+      });
+      setWidgets(nextWidgets);
+      toast.success('Widget and template updated');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not update the template.');
+    }
+  }
+
+  function handleTemplateChange(template: { id: string; name: string } | null) {
+    if (template?.id.startsWith('db:')) {
+      const templateId = Number(template.id.replace('db:', ''));
+      if (Number.isFinite(templateId)) {
+        queryClient.setQueryData<{
+          options: WidgetPresetOption[];
+          templateIds: number[];
+        }>(['dashboard-widget-presets'], (current) =>
+          current
+            ? {
+                ...current,
+                templateIds: current.templateIds.includes(templateId)
+                  ? current.templateIds
+                  : [...current.templateIds, templateId],
+              }
+            : current,
+        );
+      }
+    }
+    setActiveTemplate(template);
+    void queryClient.invalidateQueries({ queryKey: ['dashboard-widget-presets'] });
   }
 
   function getLayoutContext(widget: WidgetConfig, index: number) {
@@ -282,6 +221,13 @@ export function DashboardPage() {
         }
       />
 
+      {!activeTemplate ? (
+        <div className="rounded border border-dashed border-[#2b2740] bg-[#151421] px-6 py-16 text-center">
+          <p className="font-mono text-lg font-black text-[#f3edff]">No template selected</p>
+          <p className="mt-2 text-sm text-[#a69db6]">Choose a template to begin.</p>
+        </div>
+      ) : null}
+
       {/* KPI Cards Grid */}
       <div className="grid gap-6 lg:grid-cols-3">
         {kpiWidgets.map((w) => (
@@ -310,12 +256,10 @@ export function DashboardPage() {
       <GeneralSettingsDrawer
         isOpen={generalSettingsOpen}
         widgets={widgets}
-        dashboardName={dashboardName}
         activeTemplate={activeTemplate}
         onClose={() => setGeneralSettingsOpen(false)}
         onSave={setWidgets}
-        onDashboardNameChange={setDashboardName}
-        onTemplateChange={setActiveTemplate}
+        onTemplateChange={handleTemplateChange}
       />
 
       {/* Settings Drawer */}
@@ -327,6 +271,7 @@ export function DashboardPage() {
           initialValues={activeWidget}
           widgetTitle={activeWidget.title}
           widgetKind={activeWidget.type}
+          presets={widgetPresets.data?.options ?? []}
         />
       )}
     </PageShell>

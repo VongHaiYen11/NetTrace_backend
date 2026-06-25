@@ -5,6 +5,7 @@ import { AnalyticsQuerySchema } from '../validators/analytics-query.validator.js
 import { HeatmapSchema } from '../validators/heatmap.validator.js';
 import { ExportSchema } from '../validators/export.validator.js';
 import { MetadataOptionsSchema } from '../validators/metadata-options.validator.js';
+import { createPresetSchema, listPresetsQuerySchema } from '../validators/preset.validator.js';
 
 describe('Validation Layer Tests', () => {
   describe('Time Range Custom Validator', () => {
@@ -197,6 +198,28 @@ describe('Validation Layer Tests', () => {
 
     it('should default metadata option limit', () => {
       expect(MetadataOptionsSchema.parse({}).limit).toBe(20);
+    });
+  });
+
+  describe('Preset schemas', () => {
+    it('creates an unassigned preset with position zero by default', () => {
+      const parsed = createPresetSchema.parse({
+        preset_name: 'Critical alarms',
+        chart_type: 'line',
+        start_date: '2026-06-01',
+      });
+      expect(parsed.position).toBe(0);
+      expect(parsed.preset_name).toBe('Critical alarms');
+      expect(parsed.chart_type).toBe('line');
+    });
+
+    it('validates preset pagination defaults and limits', () => {
+      expect(listPresetsQuerySchema.parse({})).toEqual({ limit: 50, offset: 0 });
+      expect(listPresetsQuerySchema.safeParse({ limit: 1001 }).success).toBe(false);
+    });
+
+    it('requires a preset name for standalone preset creation', () => {
+      expect(createPresetSchema.safeParse({ chart_type: 'line' }).success).toBe(false);
     });
   });
 });

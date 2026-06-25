@@ -35,6 +35,7 @@ A modern, dark-themed dashboard application built to visualize NOC alarms.
 * **Stack**: React, TypeScript, Vite, TailwindCSS, React Router, Recharts, React Hook Form.
 * **Features**:
   * Customizable Dashboard Templates and Widget layouts.
+  * Named reusable presets that can be created independently and assigned to templates later.
   * Alarm Explorer with multi-field filtering, sorting, and pagination.
   * Export Data capabilities (CSV, XLSX, JSON, PDF).
   * Implements a custom neon-accented design system.

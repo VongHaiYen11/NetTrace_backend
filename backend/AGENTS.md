@@ -156,6 +156,7 @@ CREATE TABLE template (
 
 CREATE TABLE preset (
     preset_id SERIAL PRIMARY KEY,
+    preset_name VARCHAR(255),
     position INT,
     chart_type VARCHAR(100),
     start_date TIMESTAMP,
@@ -548,6 +549,7 @@ Manage custom dashboard layouts (Template, Widget, Preset) for users.
     "selected_cards": "string (optional, JSON string array of KPI cards chosen by the user)",
     "widgets": [
       {
+        "preset_name": "Critical router alarms",
         "position": "number (widget grid position index)",
         "chart_type": "string (rendering chart type)",
         "start_date": "string (optional, ISO-8601 date-time)",
@@ -621,6 +623,7 @@ Manage custom dashboard layouts (Template, Widget, Preset) for users.
           "time_updated": "2026-06-21T10:15:00.000Z",
           "preset": {
             "preset_id": 42,
+            "preset_name": "Critical router alarms",
             "position": 1,
             "chart_type": "line",
             "start_date": "2026-06-01T00:00:00.000Z",
@@ -647,6 +650,7 @@ Manage custom dashboard layouts (Template, Widget, Preset) for users.
     "selected_cards": "string",
     "widgets": [
       {
+        "preset_name": "Critical router alarms",
         "position": "number",
         "chart_type": "string",
         "start_date": "string",
@@ -686,7 +690,16 @@ Manage custom dashboard layouts (Template, Widget, Preset) for users.
       "message": "Template and associated widgets deleted successfully"
     }
   }
-  ```
+```
+
+#### 2.6. Standalone Preset APIs
+* **Endpoints:** `GET /api/v1/presets`, `POST /api/v1/presets`
+* **Purpose:** List reusable presets and create presets that are not yet assigned to a template.
+* **Behavior:** Creating a preset inserts only into `preset`. A `widget` row is created later when the preset is assigned to a template.
+* **List Query Parameters:** `limit` defaults to 50 (max 1000), `offset` defaults to 0.
+* **Create Request:** Requires `preset_name` and uses the remaining `WidgetInput` fields; `position` defaults to `0` while unassigned.
+* **List Response:** Includes `preset_name` plus assignment metadata (`template_id`, `template_name`) when the preset is in use.
+* **Create Response:** HTTP 201 with a `PresetResponse`, including `preset_name`.
 
 ---
 

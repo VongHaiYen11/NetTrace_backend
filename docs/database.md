@@ -41,6 +41,9 @@ ORDER BY (alarm_id);
 
 PostgreSQL stores metadata configurations (stations, devices, vendors, and error code definitions) as well as dashboard layout configurations (templates, widgets, and filters).
 
+Presets are reusable records and may exist without a template. A preset becomes part of a dashboard template only when a `widget` row links its `preset_id` to a `template_id`.
+`preset_name` is the user-facing reusable configuration name returned by preset and template-detail APIs.
+
 ### Relational Metadata Tables
 ```sql
 CREATE TABLE vendor (
@@ -105,39 +108,37 @@ CREATE TABLE Template (
 );
 
 CREATE TABLE Preset (
-    device_id VARCHAR(20) PRIMARY KEY,
+    preset_id SERIAL PRIMARY KEY,
+    preset_name VARCHAR(255),
     position INT,
     chart_type VARCHAR(100),
+    start_date TIMESTAMP,
+    end_date TIMESTAMP,
     status VARCHAR(50),
     severity VARCHAR(50),
     error_code VARCHAR(50),
-    vendor_id VARCHAR(20),
-    device_type VARCHAR(50), 
-    CONSTRAINT fk_preset_device FOREIGN KEY (device_id) 
-        REFERENCES device(device_id) ON DELETE CASCADE,
-    CONSTRAINT fk_preset_error FOREIGN KEY (error_code) 
-        REFERENCES error(error_code) ON DELETE SET NULL,
-    CONSTRAINT fk_preset_vendor FOREIGN KEY (vendor_id) 
-        REFERENCES vendor(vendor_id) ON DELETE SET NULL
+    vendor VARCHAR(100),
+    device_type VARCHAR(50)
 );
 
 CREATE TABLE Widget (
     widget_id SERIAL PRIMARY KEY,
     template_id INT NOT NULL,
-    device_id VARCHAR(20) NOT NULL,
+    preset_id INT NOT NULL,
     time_created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     time_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_widget_template FOREIGN KEY (template_id) 
         REFERENCES Template(template_id) ON DELETE CASCADE,
-    CONSTRAINT fk_widget_preset FOREIGN KEY (device_id) 
-        REFERENCES Preset(device_id) ON DELETE CASCADE
+    CONSTRAINT fk_widget_preset FOREIGN KEY (preset_id)
+        REFERENCES Preset(preset_id) ON DELETE CASCADE
 );
 
 -- Performance Indexes
-CREATE INDEX idx_preset_error ON Preset(error_code);
-CREATE INDEX idx_preset_vendor ON Preset(vendor_id);
+CREATE INDEX idx_preset_error_code ON Preset(error_code);
+CREATE INDEX idx_preset_status ON Preset(status);
+CREATE INDEX idx_preset_severity ON Preset(severity);
 CREATE INDEX idx_widget_template ON Widget(template_id);
-CREATE INDEX idx_widget_device ON Widget(device_id);
+CREATE INDEX idx_widget_preset ON Widget(preset_id);
 ```
 
 ---

@@ -34,6 +34,10 @@ const router = Router();
  *         - position
  *         - chart_type
  *       properties:
+ *         preset_name:
+ *           type: string
+ *           nullable: true
+ *           example: "Critical router alarms"
  *         position:
  *           type: integer
  *           example: 1
@@ -76,6 +80,10 @@ const router = Router();
  *         preset_id:
  *           type: integer
  *           example: 42
+ *         preset_name:
+ *           type: string
+ *           nullable: true
+ *           example: "Critical router alarms"
  *         position:
  *           type: integer
  *           example: 1

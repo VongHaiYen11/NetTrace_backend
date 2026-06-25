@@ -3,6 +3,7 @@ import { pgPool } from '../database/postgres/connection.js';
 
 export interface Preset {
   preset_id?: number;
+  preset_name?: string | null;
   position: number;
   chart_type: string;
   start_date: Date | string | null;
@@ -12,6 +13,8 @@ export interface Preset {
   error_code: string | null;
   vendor: string | null;
   device_type: string | null;
+  template_id?: number | null;
+  template_name?: string | null;
 }
 
 export class PresetRepository {
@@ -22,11 +25,12 @@ export class PresetRepository {
   async createPreset(preset: Omit<Preset, 'preset_id'>, client?: pg.PoolClient): Promise<Preset> {
     const executor = this.getQueryExecutor(client);
     const query = `
-      INSERT INTO preset (position, chart_type, start_date, end_date, status, severity, error_code, vendor, device_type)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-      RETURNING preset_id, position, chart_type, start_date, end_date, status, severity, error_code, vendor, device_type
+      INSERT INTO preset (preset_name, position, chart_type, start_date, end_date, status, severity, error_code, vendor, device_type)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      RETURNING preset_id, preset_name, position, chart_type, start_date, end_date, status, severity, error_code, vendor, device_type
     `;
     const res = await executor.query(query, [
+      preset.preset_name,
       preset.position,
       preset.chart_type,
       preset.start_date ? new Date(preset.start_date) : null,
@@ -43,12 +47,41 @@ export class PresetRepository {
   async getPresetById(id: number, client?: pg.PoolClient): Promise<Preset | null> {
     const executor = this.getQueryExecutor(client);
     const query = `
-      SELECT preset_id, position, chart_type, start_date, end_date, status, severity, error_code, vendor, device_type
+      SELECT preset_id, preset_name, position, chart_type, start_date, end_date, status, severity, error_code, vendor, device_type
       FROM preset
       WHERE preset_id = $1
     `;
     const res = await executor.query(query, [id]);
     return res.rows[0] || null;
+  }
+
+  async listPresets(limit: number, offset: number): Promise<Preset[]> {
+    const query = `
+      SELECT
+        p.preset_id, p.preset_name, p.position, p.chart_type, p.start_date, p.end_date,
+        p.status, p.severity, p.error_code, p.vendor, p.device_type,
+        (
+          SELECT t.template_id
+          FROM widget w
+          INNER JOIN template t ON t.template_id = w.template_id
+          WHERE w.preset_id = p.preset_id
+          ORDER BY t.template_id
+          LIMIT 1
+        ) AS template_id,
+        (
+          SELECT t.name
+          FROM widget w
+          INNER JOIN template t ON t.template_id = w.template_id
+          WHERE w.preset_id = p.preset_id
+          ORDER BY t.template_id
+          LIMIT 1
+        ) AS template_name
+      FROM preset p
+      ORDER BY p.preset_id DESC
+      LIMIT $1 OFFSET $2
+    `;
+    const res = await pgPool.query(query, [limit, offset]);
+    return res.rows;
   }
 
   async deletePresetsByIds(ids: number[], client?: pg.PoolClient): Promise<number> {

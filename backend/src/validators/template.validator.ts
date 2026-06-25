@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 export const WidgetSchema = z.object({
+  preset_name: z.string().trim().min(1).max(255).optional().nullable(),
   position: z.number().int().min(0),
   chart_type: z.string().min(1, 'chart_type is required').max(100),
   start_date: z.string().optional().nullable(),

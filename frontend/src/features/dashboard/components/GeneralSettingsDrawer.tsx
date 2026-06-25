@@ -27,6 +27,7 @@ import { Field, Input, Select } from '../../../components/ui/Field';
 import {
   nettraceApi,
   type ExportColumn,
+  type PresetSummary,
   type TemplateDetail,
   type TemplateSummary,
   type TemplateWidgetDetail,
@@ -61,10 +62,8 @@ interface GeneralSettingsDrawerProps {
   variant?: 'drawer' | 'modal';
   templateId?: number;
   templateName?: string;
-  dashboardName?: string;
   onClose: () => void;
   onSave: (widgets: DashboardWidgetConfig[]) => void;
-  onDashboardNameChange?: (name: string) => void;
   onTemplateChange: (template: { id: string; name: string } | null) => void;
   onTemplateSaved?: () => void;
 }
@@ -284,7 +283,30 @@ function applyKpiSelection(widgets: DashboardWidgetConfig[], kind: KpiWidgetKind
   if (existingWidget || selectedKinds.length >= 3) return widgets;
 
   const availableSlot = widgets.find((widget) => widget.type.startsWith('kpi') && !widget.visible);
-  if (!availableSlot) return widgets;
+  if (!availableSlot) {
+    const sourceWidget = widgets.find((widget) => widget.type.startsWith('kpi')) ?? widgets[0];
+    const option = summaryOptions.find((item) => item.key === kind);
+    const newWidget: DashboardWidgetConfig = {
+      id: `kpi-${kind}-${Date.now()}`,
+      type: kind,
+      title: option?.title ?? 'KPI Card',
+      layoutOrder: 0,
+      layoutSpan: 1,
+      visible: true,
+      chartType: 'line',
+      metric: 'count',
+      groupBy: 'none',
+      timeBucket: 'day',
+      heatmapMode: 'weekday',
+      info1: true,
+      info2: true,
+      info3: true,
+      preset: sourceWidget?.preset ?? 'Active Connections',
+      startDate: sourceWidget?.startDate ?? '2026-06-01',
+      endDate: sourceWidget?.endDate ?? '2026-06-30',
+    };
+    return [...widgets, newWidget];
+  }
 
   return updateKpiContent(
     updateWidget(widgets, availableSlot.id, { visible: true }),
@@ -345,7 +367,7 @@ function compactVisibleChartOrder(widgets: DashboardWidgetConfig[]) {
   });
 }
 
-function getLayoutCapacity(widgets: DashboardWidgetConfig[]) {
+export function getLayoutCapacity(widgets: DashboardWidgetConfig[]) {
   const visibleCount = getVisibleChartWidgets(widgets).length;
   return Math.min(6, Math.max(2, visibleCount)) as LayoutCount;
 }
@@ -419,7 +441,7 @@ function normalizeWidgetTitle(widget: DashboardWidgetConfig) {
   };
 }
 
-function buildTemplateSnapshot(widgets: DashboardWidgetConfig[], layoutCount: LayoutCount) {
+export function buildTemplateSnapshot(widgets: DashboardWidgetConfig[], layoutCount: LayoutCount) {
   return JSON.stringify({
     version: 1,
     layoutCount,
@@ -427,8 +449,9 @@ function buildTemplateSnapshot(widgets: DashboardWidgetConfig[], layoutCount: La
   });
 }
 
-function buildTemplateWidgetInputs(widgets: DashboardWidgetConfig[]): TemplateWidgetInput[] {
+export function buildTemplateWidgetInputs(widgets: DashboardWidgetConfig[]): TemplateWidgetInput[] {
   return getVisibleChartWidgets(widgets).map((widget) => ({
+    preset_name: widget.title || getDefaultWidgetTitle(widget),
     position: widget.layoutOrder,
     chart_type: widget.chartType,
     start_date: widget.startDate || null,
@@ -483,6 +506,26 @@ function normalizeTemplateDate(value: string | null | undefined, fallback: strin
   return value ? value.slice(0, 10) : fallback;
 }
 
+function applyPresetToWidget(
+  widget: DashboardWidgetConfig,
+  preset: PresetSummary,
+): DashboardWidgetConfig {
+  const chartType = normalizeTemplateChartType(preset.chart_type);
+  return {
+    ...widget,
+    title: preset.preset_name || `Preset ${preset.preset_id}`,
+    preset: `preset:${preset.preset_id}`,
+    chartType,
+    groupBy: chartType === 'pie' ? 'severity' : 'none',
+    metric: 'count',
+    timeBucket: 'day',
+    heatmapMode: chartType === 'heatmap' ? 'weekday' : widget.heatmapMode,
+    layoutSpan: chartType === 'table' || chartType === 'heatmap' ? 2 : 1,
+    startDate: normalizeTemplateDate(preset.start_date, widget.startDate),
+    endDate: normalizeTemplateDate(preset.end_date, widget.endDate),
+  };
+}
+
 function applyTemplateWidgetsFromDb(
   sourceWidgets: DashboardWidgetConfig[],
   templateWidgets: TemplateWidgetDetail[],
@@ -498,6 +541,7 @@ function applyTemplateWidgetsFromDb(
     const slot = chartSlots[index];
     const chartType = normalizeTemplateChartType(templateWidget.preset.chart_type);
     updatesById.set(slot.id, {
+      title: templateWidget.preset.preset_name || `Preset ${templateWidget.preset.preset_id}`,
       visible: true,
       layoutOrder: templateWidget.preset.position || index + 1,
       chartType,
@@ -525,7 +569,26 @@ function applyTemplateWidgetsFromDb(
 
 function createDashboardTemplateFromDetail(template: TemplateDetail): DashboardTemplate {
   const snapshotTemplate = createDashboardTemplateFromSaved(template);
-  if (snapshotTemplate) return snapshotTemplate;
+  if (snapshotTemplate) {
+    return {
+      ...snapshotTemplate,
+      apply: () => {
+        const snapshot = readTemplateSnapshot(template.selected_cards);
+        if (!snapshot) return [];
+        const presetNamesByPosition = new Map(
+          template.widgets.map((widget) => [
+            widget.preset.position,
+            widget.preset.preset_name || `Preset ${widget.preset.preset_id}`,
+          ]),
+        );
+        return snapshot.widgets.map((widget) => {
+          if (widget.type.startsWith('kpi')) return widget;
+          const presetName = presetNamesByPosition.get(widget.layoutOrder);
+          return presetName ? { ...widget, title: presetName } : widget;
+        });
+      },
+    };
+  }
 
   const layoutCount = Math.min(Math.max(template.widgets.length, 2), 6) as LayoutCount;
   return {
@@ -551,10 +614,8 @@ export function GeneralSettingsDrawer({
   variant = 'drawer',
   templateId,
   templateName,
-  dashboardName,
   onClose,
   onSave,
-  onDashboardNameChange,
   onTemplateChange,
   onTemplateSaved,
 }: GeneralSettingsDrawerProps) {
@@ -564,16 +625,19 @@ export function GeneralSettingsDrawer({
   const [detailDraftWidgets, setDetailDraftWidgets] = useState(widgets);
   const [draftLayoutCount, setDraftLayoutCount] = useState<LayoutCount>(getLayoutCapacity(widgets));
   const [draftDashboardName, setDraftDashboardName] = useState(
-    dashboardName ?? activeTemplate?.name ?? getDraftTemplateName(),
+    activeTemplate?.name ?? '',
   );
   const [editingDashboardName, setEditingDashboardName] = useState(false);
+  const [templateDirty, setTemplateDirty] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState('none');
   const [savedTemplates, setSavedTemplates] = useState<DashboardTemplate[]>([]);
+  const [savedPresets, setSavedPresets] = useState<PresetSummary[]>([]);
   const [templateSearch, setTemplateSearch] = useState('');
   const [draftTemplateName, setDraftTemplateName] = useState(getDraftTemplateName);
   const [detailTemplateName, setDetailTemplateName] = useState('');
   const [creatingTemplate, setCreatingTemplate] = useState(false);
   const [dashboardStatusOpen, setDashboardStatusOpen] = useState(false);
+  const [sidebarLayoutDropdownOpen, setSidebarLayoutDropdownOpen] = useState(false);
   const [templateDropdownOpen, setTemplateDropdownOpen] = useState(false);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [detailMode, setDetailMode] = useState<'edit' | 'create'>('edit');
@@ -587,13 +651,15 @@ export function GeneralSettingsDrawer({
       setDraftWidgets(widgets);
       setDetailDraftWidgets(widgets);
       setDraftLayoutCount(getLayoutCapacity(widgets));
-      setDraftDashboardName(dashboardName ?? activeTemplate?.name ?? getDraftTemplateName());
+      setDraftDashboardName(activeTemplate?.name ?? '');
       setEditingDashboardName(false);
+      setTemplateDirty(false);
       setSelectedTemplateId(activeTemplate?.id ?? 'none');
       setTemplateSearch('');
       setDraftTemplateName(getDraftTemplateName());
       setDetailTemplateName('');
       setDashboardStatusOpen(false);
+      setSidebarLayoutDropdownOpen(false);
       setTemplateDropdownOpen(false);
       setDetailModalOpen(false);
       setDetailMode('edit');
@@ -602,7 +668,7 @@ export function GeneralSettingsDrawer({
       setDetailLayoutCount(getLayoutCapacity(widgets));
       setRestoreWidgetId(null);
     }
-  }, [activeTemplate?.id, dashboardName, isOpen, widgets]);
+  }, [activeTemplate?.id, activeTemplate?.name, isOpen, widgets]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -614,13 +680,12 @@ export function GeneralSettingsDrawer({
         if (cancelled) return;
         const parsedTemplates = await Promise.all(
           response.data.map(async (template) => {
-            const snapshotTemplate = createDashboardTemplateFromSaved(template);
-            if (snapshotTemplate) return snapshotTemplate;
-
             try {
               const detail = await nettraceApi.getTemplateDetail(template.template_id);
               return createDashboardTemplateFromDetail(detail.data);
             } catch {
+              const snapshotTemplate = createDashboardTemplateFromSaved(template);
+              if (snapshotTemplate) return snapshotTemplate;
               return {
                 id: `db:${template.template_id}`,
                 name: getSavedTemplateName(template),
@@ -645,11 +710,31 @@ export function GeneralSettingsDrawer({
     };
   }, [isOpen]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    let cancelled = false;
+
+    async function loadSavedPresets() {
+      try {
+        const response = await nettraceApi.listPresets({ limit: 1000, offset: 0 });
+        if (!cancelled) setSavedPresets(response.data);
+      } catch {
+        if (!cancelled) setSavedPresets([]);
+      }
+    }
+
+    void loadSavedPresets();
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen]);
+
   const layoutCount = detailLayoutCount;
   const sidebarKpiWidgets = draftWidgets.filter((widget) => widget.type.startsWith('kpi'));
   const chartWidgets = getChartWidgets(detailDraftWidgets);
   const visibleChartWidgets = getVisibleChartWidgets(detailDraftWidgets);
   const availableChartWidgets = getHiddenChartWidgets(detailDraftWidgets);
+  const allDetailWidgetSlotsComplete = visibleChartWidgets.length === detailLayoutCount;
   const sidebarVisibleCharts = getVisibleChartWidgets(draftWidgets);
   const sidebarHiddenCharts = getHiddenChartWidgets(draftWidgets);
   const sidebarLayoutCount = draftLayoutCount;
@@ -665,7 +750,8 @@ export function GeneralSettingsDrawer({
     : visibleChartWidgets.find((widget) => widget.id === selectedSlotId) ?? visibleChartWidgets[0] ?? null;
   const allTemplates = savedTemplates;
   const selectedTemplate = allTemplates.find((template) => template.id === selectedTemplateId);
-  const headerTemplateName = draftDashboardName.trim() || draftTemplateName;
+  const hasSelectedTemplate = selectedTemplateId !== 'none';
+  const headerTemplateName = draftDashboardName.trim() || selectedTemplate?.name || activeTemplate?.name || 'Untitled';
   const filteredTemplates = allTemplates.filter((template) =>
     `${template.name} ${template.description}`.toLowerCase().includes(templateSearch.toLowerCase()),
   );
@@ -701,10 +787,12 @@ export function GeneralSettingsDrawer({
   function applyTemplate(templateId: string) {
     setSelectedTemplateId(templateId);
     setRestoreWidgetId(null);
+    setTemplateDirty(false);
     const template = allTemplates.find((item) => item.id === templateId);
     if (!template) {
-      setDraftWidgets(widgets);
-      setDraftLayoutCount(getLayoutCapacity(widgets));
+      setDraftWidgets([]);
+      setDraftLayoutCount(2);
+      setDraftDashboardName('');
       return;
     }
     setDraftWidgets(template.apply(widgets));
@@ -713,7 +801,6 @@ export function GeneralSettingsDrawer({
   }
 
   function applyLayoutCount(count: LayoutCount) {
-    setSelectedTemplateId('none');
     setDetailLayoutCount(count);
     setDetailDraftWidgets((current) => {
       const visibleCharts = getVisibleChartWidgets(current);
@@ -739,7 +826,7 @@ export function GeneralSettingsDrawer({
   }
 
   function applySidebarLayoutCount(count: LayoutCount) {
-    setSelectedTemplateId('none');
+    setTemplateDirty(true);
     setDraftLayoutCount(count);
     setRestoreWidgetId(null);
     setDraftWidgets((current) => {
@@ -757,30 +844,27 @@ export function GeneralSettingsDrawer({
   }
 
   function startRestoreSidebarWidget(widgetId: string) {
-    setSelectedTemplateId('none');
     setRestoreWidgetId(widgetId);
   }
 
   function removeSidebarWidget(widgetId: string) {
-    setSelectedTemplateId('none');
+    setTemplateDirty(true);
     setRestoreWidgetId(null);
     setDraftWidgets((current) => hideChartWidget(current, widgetId));
   }
 
   function restoreSidebarWidget(widgetId: string, slot?: number) {
-    setSelectedTemplateId('none');
+    setTemplateDirty(true);
     setDraftWidgets((current) => restoreChartWidget(current, widgetId, slot));
     setRestoreWidgetId(null);
   }
 
   function restoreDetailWidget(widgetId: string, slot?: number) {
-    setSelectedTemplateId('none');
     setDetailDraftWidgets((current) => restoreChartWidget(current, widgetId, slot));
     setSelectedSlotId(widgetId);
   }
 
   function clearDetailSlot(widgetId: string) {
-    setSelectedTemplateId('none');
     setDetailDraftWidgets((current) => {
       const nextWidgets = hideChartWidget(current, widgetId);
       const nextEmptySlot = Math.min(detailLayoutCount, getVisibleChartWidgets(nextWidgets).length + 1);
@@ -812,18 +896,69 @@ export function GeneralSettingsDrawer({
       startDate: sourceWidget?.startDate ?? '2026-06-01',
       endDate: sourceWidget?.endDate ?? '2026-06-30',
     };
-    setSelectedTemplateId('none');
     setDetailDraftWidgets((current) => insertChartWidget(current, nextWidget, slot));
     setSelectedSlotId(widgetId);
   }
 
-  function saveAndClose() {
-    const normalizedWidgets = draftWidgets.map(normalizeWidgetTitle);
-    onSave(normalizedWidgets);
-    onDashboardNameChange?.(headerTemplateName);
-    onTemplateChange(
-      selectedTemplate ? { id: selectedTemplate.id, name: selectedTemplate.name } : null,
+  function createDetailWidgetFromPreset(slot: number, preset: PresetSummary) {
+    const sourceWidget = visibleChartWidgets[0] ?? chartWidgets[0] ?? detailDraftWidgets[0];
+    const baseWidget: DashboardWidgetConfig = {
+      id: `preset-widget-${preset.preset_id}-${Date.now()}`,
+      type: 'chart-extra',
+      title: preset.preset_name || `Preset ${preset.preset_id}`,
+      layoutOrder: slot,
+      layoutSpan: 1,
+      visible: true,
+      chartType: 'line',
+      metric: 'count',
+      groupBy: 'none',
+      timeBucket: 'day',
+      heatmapMode: 'weekday',
+      info1: true,
+      info2: true,
+      info3: true,
+      tableColumns: defaultTableColumns,
+      preset: `preset:${preset.preset_id}`,
+      startDate: sourceWidget?.startDate ?? '2026-06-01',
+      endDate: sourceWidget?.endDate ?? '2026-06-30',
+    };
+    const nextWidget = applyPresetToWidget(baseWidget, preset);
+    setDetailDraftWidgets((current) => insertChartWidget(current, nextWidget, slot));
+    setSelectedSlotId(nextWidget.id);
+  }
+
+  function applyDetailPreset(widgetId: string, presetId: number) {
+    const preset = savedPresets.find((item) => item.preset_id === presetId);
+    if (!preset) return;
+    setDetailDraftWidgets((current) =>
+      current.map((widget) =>
+        widget.id === widgetId ? applyPresetToWidget(widget, preset) : widget,
+      ),
     );
+  }
+
+  async function saveAndClose() {
+    const savedTemplateId = getSavedTemplateId(selectedTemplate?.id ?? activeTemplate?.id);
+    if (!savedTemplateId) {
+      onSave([]);
+      onTemplateChange(null);
+      onClose();
+      return;
+    }
+
+    const normalizedWidgets = draftWidgets.map(normalizeWidgetTitle);
+    if (templateDirty) {
+      const saved = await updateTemplateFromDraft(
+        normalizedWidgets,
+        draftLayoutCount,
+        savedTemplateId,
+        selectedTemplate?.name ?? activeTemplate?.name,
+        headerTemplateName,
+      );
+      if (!saved) return;
+    }
+    onSave(normalizedWidgets);
+    onTemplateChange({ id: `db:${savedTemplateId}`, name: headerTemplateName });
     onClose();
   }
 
@@ -880,11 +1015,15 @@ export function GeneralSettingsDrawer({
       }
       toast.success('Template saved');
       onTemplateSaved?.();
-      return true;
+      return {
+        id: `db:${created.data.template_id}`,
+        name: normalizedTemplateName,
+        widgets: normalizedWidgets,
+      };
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Could not save template.';
       toast.error(message);
-      return false;
+      return null;
     } finally {
       setCreatingTemplate(false);
     }
@@ -895,13 +1034,14 @@ export function GeneralSettingsDrawer({
     sourceLayoutCount = detailLayoutCount,
     targetTemplateId = templateId,
     fallbackTemplateName = templateName,
+    requestedTemplateName = detailTemplateName,
   ) {
     if (!targetTemplateId) return false;
 
     setCreatingTemplate(true);
     try {
       const normalizedWidgets = sourceWidgets.map(normalizeWidgetTitle);
-      const normalizedTemplateName = detailTemplateName.trim() || fallbackTemplateName || 'Untitled';
+      const normalizedTemplateName = requestedTemplateName.trim() || fallbackTemplateName || 'Untitled';
       const updated = await nettraceApi.updateTemplate(targetTemplateId, {
         name: normalizedTemplateName,
         selected_cards: buildTemplateSnapshot(normalizedWidgets, sourceLayoutCount),
@@ -915,6 +1055,7 @@ export function GeneralSettingsDrawer({
         setSelectedTemplateId(savedTemplate.id);
         setDraftWidgets(savedTemplate.apply(normalizedWidgets));
         setDraftLayoutCount(savedTemplate.layoutCount);
+        setDraftDashboardName(normalizedTemplateName);
       }
       toast.success('Template updated');
       onTemplateSaved?.();
@@ -951,11 +1092,19 @@ export function GeneralSettingsDrawer({
 
   async function saveDetailModal() {
     if (detailMode === 'create') {
-      const saved = await createTemplateFromDraft(detailDraftWidgets, detailLayoutCount);
-      if (!saved) return;
+      if (!allDetailWidgetSlotsComplete) return;
+      const createdTemplate = await createTemplateFromDraft(detailDraftWidgets, detailLayoutCount);
+      if (!createdTemplate) return;
       setDetailModalOpen(false);
       setDetailMode('edit');
       if (modalOnly) {
+        onClose();
+      } else {
+        onSave(createdTemplate.widgets);
+        onTemplateChange({
+          id: createdTemplate.id,
+          name: createdTemplate.name,
+        });
         onClose();
       }
       return;
@@ -978,6 +1127,12 @@ export function GeneralSettingsDrawer({
         selectedTemplate?.name,
       );
       if (!saved) return;
+      const normalizedWidgets = detailDraftWidgets.map(normalizeWidgetTitle);
+      setDraftWidgets(normalizedWidgets);
+      setDraftLayoutCount(detailLayoutCount);
+      setDraftDashboardName(detailTemplateName.trim() || selectedTemplate?.name || 'Untitled');
+      setTemplateDirty(false);
+      onSave(normalizedWidgets);
       setDetailModalOpen(false);
       onTemplateChange({
         id: `db:${savedTemplateId}`,
@@ -1005,13 +1160,17 @@ export function GeneralSettingsDrawer({
             <h2 className="mt-1 text-3xl font-black text-[#f3edff] drop-shadow-[0_0_14px_rgba(255,45,133,0.7)]">
               Customize dashboard
             </h2>
+            {hasSelectedTemplate ? (
             <div className="mt-3 flex max-w-[360px] items-center gap-1 border border-[#00f5d4]/25 bg-[#00f5d4]/5 px-2.5 py-1">
               {editingDashboardName ? (
                 <input
                   autoFocus
                   value={draftDashboardName}
                   aria-label="Dashboard name"
-                  onChange={(event) => setDraftDashboardName(event.target.value)}
+                  onChange={(event) => {
+                    setDraftDashboardName(event.target.value);
+                    setTemplateDirty(true);
+                  }}
                   onBlur={() => setEditingDashboardName(false)}
                   onKeyDown={(event) => {
                     if (event.key === 'Enter') {
@@ -1037,6 +1196,7 @@ export function GeneralSettingsDrawer({
                 <PenLine size={13} />
               </button>
             </div>
+            ) : null}
           </div>
           <button
             type="button"
@@ -1054,7 +1214,10 @@ export function GeneralSettingsDrawer({
             <button
               type="button"
               className="flex w-full items-start justify-between gap-3 text-left border border-[#00f5d4]/35 bg-[#101923] p-4 shadow-[0_0_18px_rgba(0,245,212,0.08)]"
-              onClick={() => setDashboardStatusOpen((value) => !value)}
+              onClick={() => {
+                setDashboardStatusOpen((value) => !value);
+                setSidebarLayoutDropdownOpen(false);
+              }}
             >
               <span>
                 <span className="block font-mono text-lg font-black text-[#00f5d4] drop-shadow-[0_0_8px_rgba(0,245,212,0.45)]">
@@ -1073,32 +1236,81 @@ export function GeneralSettingsDrawer({
 
             {dashboardStatusOpen ? (
               <div className="space-y-5 px-1 pb-2">
-                <div>
-                  <p className="font-mono text-base font-black text-[#00f5d4]">
-                    Current state
+                {!hasSelectedTemplate ? (
+                  <p className="rounded border border-[#2b2740] bg-[#191727] px-3 py-4 font-mono text-xs leading-relaxed text-[#a69db6]">
+                    No template is selected. Choose a template below to populate the dashboard.
                   </p>
-                  <div className="mt-3 grid grid-cols-2 gap-3">
-                    <div className="flex flex-col items-center gap-3 rounded bg-[#191727] p-3">
-                      <p className="font-mono text-[11px] text-[#a69db6]">Layout</p>
-                      <Select
-                        value={String(sidebarLayoutCount)}
-                        onChange={(event) => applySidebarLayoutCount(Number(event.target.value) as LayoutCount)}
-                        className="h-9 w-auto min-w-[132px] px-2 py-0 font-mono text-sm font-black"
-                        aria-label="Dashboard layout"
-                      >
-                        {[2, 3, 4, 5, 6].map((count) => (
-                          <option key={count} value={count}>
-                            {count}-widget layout
-                          </option>
-                        ))}
-                      </Select>
-                    </div>
-                    <div className="flex flex-col items-center gap-3 rounded bg-[#191727] p-3">
-                      <p className="font-mono text-[11px] text-[#a69db6]">Visible</p>
-                      <p className="font-mono text-sm font-black text-[#f3edff]">
-                        {sidebarVisibleCharts.length}/{getChartWidgets(draftWidgets).length} widget
-                      </p>
-                    </div>
+                ) : (
+                <>
+                <div className="space-y-3">
+                  <div>
+                    <p className="font-mono text-base font-black text-[#00f5d4]">Layout</p>
+                    <p className="mt-1 text-xs leading-relaxed text-[#a69db6]">
+                      Choose how many chart and table slots this template uses.
+                    </p>
+                  </div>
+                  <div className="relative">
+                    <button
+                      type="button"
+                      aria-expanded={sidebarLayoutDropdownOpen}
+                      onClick={() => setSidebarLayoutDropdownOpen((value) => !value)}
+                      className={cn(
+                        'flex w-full items-center justify-between gap-4 rounded-md border bg-[#191727] px-4 py-3 text-left transition',
+                        sidebarLayoutDropdownOpen
+                          ? 'border-[#00f5d4]/70 shadow-[0_0_20px_rgba(0,245,212,0.12)]'
+                          : 'border-[#2b2740] hover:border-[#00f5d4]/40',
+                      )}
+                    >
+                      <span className="flex items-center gap-3">
+                        <span className="grid h-10 w-10 grid-cols-2 gap-1 rounded border border-[#00f5d4]/25 bg-[#00f5d4]/5 p-2">
+                          {Array.from({ length: Math.min(sidebarLayoutCount, 4) }, (_, index) => (
+                            <span key={index} className="rounded-sm bg-[#00f5d4]/70" />
+                          ))}
+                        </span>
+                        <span>
+                          <span className="block font-mono text-sm font-black text-[#f3edff]">
+                            {getLayoutCountLabel(sidebarLayoutCount)}
+                          </span>
+                          <span className="mt-1 block font-mono text-[11px] text-[#a69db6]">
+                            {sidebarVisibleCharts.length} configured
+                          </span>
+                        </span>
+                      </span>
+                      <ChevronDown
+                        size={18}
+                        className={cn(
+                          'shrink-0 text-[#00f5d4] transition-transform',
+                          sidebarLayoutDropdownOpen && 'rotate-180',
+                        )}
+                      />
+                    </button>
+
+                    {sidebarLayoutDropdownOpen ? (
+                      <div className="absolute left-0 right-0 top-full z-20 mt-2 space-y-1 rounded-md border border-[#2b2740] bg-[#0f0e19] p-2 shadow-2xl">
+                        {([2, 3, 4, 5, 6] as LayoutCount[]).map((count) => {
+                          const selected = count === sidebarLayoutCount;
+                          return (
+                            <button
+                              key={count}
+                              type="button"
+                              onClick={() => {
+                                applySidebarLayoutCount(count);
+                                setSidebarLayoutDropdownOpen(false);
+                              }}
+                              className={cn(
+                                'flex w-full items-center justify-between rounded border px-3 py-2.5 font-mono transition',
+                                selected
+                                  ? 'border-[#00f5d4] bg-[#00f5d4]/10 text-[#00f5d4]'
+                                  : 'border-white/10 bg-[#151421] text-[#a69db6] hover:border-[#00f5d4]/45 hover:text-[#f3edff]',
+                              )}
+                            >
+                              <span className="font-bold">{count}-widget layout</span>
+                              {selected ? <Check size={15} /> : <span className="text-[10px] uppercase">{count} slots</span>}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : null}
                   </div>
                 </div>
 
@@ -1138,7 +1350,7 @@ export function GeneralSettingsDrawer({
                             title={checked ? 'Remove KPI card' : disabled ? 'Remove another KPI first' : 'Select KPI card'}
                             disabled={disabled}
                             onClick={() => {
-                              setSelectedTemplateId('none');
+                              setTemplateDirty(true);
                               setDraftWidgets((current) => applyKpiSelection(current, option.key, !checked));
                             }}
                             className={cn(
@@ -1178,7 +1390,7 @@ export function GeneralSettingsDrawer({
                             aria-label={widget.layoutSpan === 2 ? `Make ${widget.title || getDefaultWidgetTitle(widget)} half width` : `Make ${widget.title || getDefaultWidgetTitle(widget)} full width`}
                             title={widget.layoutSpan === 2 ? 'Full width. Click for half width.' : 'Half width. Click for full width.'}
                             onClick={() => {
-                              setSelectedTemplateId('none');
+                              setTemplateDirty(true);
                               setDraftWidgets((current) =>
                                 updateWidget(current, widget.id, {
                                   layoutSpan: widget.layoutSpan === 2 ? 1 : 2,
@@ -1275,6 +1487,8 @@ export function GeneralSettingsDrawer({
                     </p>
                   )}
                 </div>
+                </>
+                )}
               </div>
             ) : null}
           </div>
@@ -1317,7 +1531,7 @@ export function GeneralSettingsDrawer({
                 <div className="max-h-[360px] space-y-4 overflow-y-auto pr-1">
                   {filteredTemplates.length === 0 ? (
                     <p className="rounded border border-[#2b2740] bg-[#191727] px-3 py-4 font-mono text-xs leading-relaxed text-[#a69db6]">
-                      No saved templates in the database.
+                      No templates found.
                     </p>
                   ) : null}
 
@@ -1372,8 +1586,9 @@ export function GeneralSettingsDrawer({
 
           <Button
             variant="secondary"
-            className="h-12 w-full border-[#00f5d4] text-[#00f5d4] hover:bg-[#00f5d4]/10"
+            className="h-12 w-full border-[#00f5d4] text-[#00f5d4] hover:bg-[#00f5d4]/10 disabled:cursor-not-allowed disabled:border-[#3b3748] disabled:bg-[#24212f] disabled:text-[#777086] disabled:opacity-100 disabled:hover:bg-[#24212f]"
             onClick={openDetailModal}
+            disabled={!hasSelectedTemplate}
           >
             Advanced settings
           </Button>
@@ -1383,6 +1598,7 @@ export function GeneralSettingsDrawer({
           <Button
             className="h-14 w-full rounded-full border-none bg-gradient-to-r from-[#ff2d85] to-[#9f0645] text-white shadow-[0_0_28px_rgba(255,45,133,0.46)]"
             onClick={saveAndClose}
+            disabled={creatingTemplate}
           >
             Save
           </Button>
@@ -1448,7 +1664,7 @@ export function GeneralSettingsDrawer({
                     </div>
                     <div className="rounded bg-[#191727] p-3">
                       <p className="font-mono text-[10px] uppercase text-[#777086]">Widgets</p>
-                      <p className="mt-1 font-mono text-sm font-black">{visibleChartWidgets.length}/{chartWidgets.length}</p>
+                      <p className="mt-1 font-mono text-sm font-black">{visibleChartWidgets.length}/{layoutCount}</p>
                     </div>
                   </div>
                   <p className="mt-5 text-sm leading-6 text-[#a69db6]">
@@ -1569,9 +1785,11 @@ export function GeneralSettingsDrawer({
                     <Button variant="secondary" className="h-11 px-6 border-[#00f5d4] text-[#00f5d4]" onClick={goToWidgetStep}>
                       Widgets
                     </Button>
-                    <Button className="h-11 px-6" onClick={saveDetailModal} disabled={creatingTemplate}>
-                      {detailMode === 'create' ? (creatingTemplate ? 'Creating...' : 'Create template') : 'Save changes'}
-                    </Button>
+                    {detailMode === 'edit' ? (
+                      <Button className="h-11 px-6" onClick={saveDetailModal} disabled={creatingTemplate}>
+                        Save changes
+                      </Button>
+                    ) : null}
                   </div>
                 </div>
               </div>
@@ -1656,6 +1874,35 @@ export function GeneralSettingsDrawer({
                         </div>
 
                         <div className="mt-4 space-y-2">
+                          {savedPresets.length > 0 ? (
+                            <>
+                              <p className="font-mono text-xs font-black text-[#00f5d4]">
+                                Create from preset
+                              </p>
+                              {savedPresets.map((preset) => (
+                                <button
+                                  key={preset.preset_id}
+                                  type="button"
+                                  onClick={() => createDetailWidgetFromPreset(selectedEmptySlot, preset)}
+                                  className="flex w-full items-center justify-between gap-4 rounded-md border border-[#00f5d4]/25 bg-[#00f5d4]/5 px-4 py-3 text-left transition hover:border-[#00f5d4]/60 hover:bg-[#00f5d4]/10"
+                                >
+                                  <span className="min-w-0">
+                                    <span className="block truncate font-mono text-sm font-black text-[#f3edff]">
+                                      {preset.preset_name || `Preset ${preset.preset_id}`}
+                                    </span>
+                                    <span className="mt-1 block font-mono text-xs text-[#a69db6]">
+                                      {preset.chart_type} · reusable preset
+                                    </span>
+                                  </span>
+                                  <Plus size={18} className="shrink-0 text-[#00f5d4]" />
+                                </button>
+                              ))}
+                            </>
+                          ) : null}
+
+                          <p className="pt-2 font-mono text-xs font-black text-[#ff5a9d]">
+                            Create custom preset
+                          </p>
                           <button
                             type="button"
                             title="Create widget"
@@ -1665,7 +1912,7 @@ export function GeneralSettingsDrawer({
                           >
                             <span className="min-w-0">
                               <span className="block truncate font-mono text-sm font-black text-[#f3edff]">
-                                New widget
+                                New preset
                               </span>
                               <span className="mt-1 block font-mono text-xs text-[#a69db6]">
                                 Line chart · 1 cell
@@ -1707,7 +1954,26 @@ export function GeneralSettingsDrawer({
                     ) : selectedSlot ? (
                       <div className="mt-4 rounded border border-[#ff2d85]/70 bg-[#0c0b14] p-6">
                         <div className="grid gap-4">
-                          <Field label="Widget name" hint="Leave blank to use data + time range.">
+                          {savedPresets.length > 0 ? (
+                            <Field label="Start from preset" hint="Selecting a preset fills this widget's saved configuration.">
+                              <Select
+                                value={selectedSlot.preset.startsWith('preset:') ? selectedSlot.preset.replace('preset:', '') : ''}
+                                onChange={(event) => {
+                                  const presetId = Number(event.target.value);
+                                  if (presetId) applyDetailPreset(selectedSlot.id, presetId);
+                                }}
+                              >
+                                <option value="">Custom configuration</option>
+                                {savedPresets.map((preset) => (
+                                  <option key={preset.preset_id} value={preset.preset_id}>
+                                    {preset.preset_name || `Preset ${preset.preset_id}`}
+                                  </option>
+                                ))}
+                              </Select>
+                            </Field>
+                          ) : null}
+
+                          <Field label="Preset name" hint="Saving changes updates the preset name shown on this widget.">
                             <Input
                               value={selectedSlot.title}
                               placeholder={getDefaultWidgetTitle(selectedSlot)}
@@ -1719,7 +1985,7 @@ export function GeneralSettingsDrawer({
                             />
                           </Field>
 
-                          <Field label="Widget type">
+                          <Field label="Preset chart type">
                             <Select
                               value={selectedSlot.chartType}
                               onChange={(event) =>
@@ -2030,7 +2296,16 @@ export function GeneralSettingsDrawer({
                   <Button variant="ghost" className="h-11 px-5" onClick={() => setDetailStep('template')}>Back</Button>
                   <div className="flex items-center gap-3">
                     <Button variant="ghost" className="h-11 px-5" onClick={closeDetailModal}>Cancel</Button>
-                    <Button className="h-11 px-6" onClick={saveDetailModal} disabled={creatingTemplate}>
+                    <Button
+                      className="h-11 px-6 disabled:cursor-not-allowed disabled:border-[#3b3748] disabled:bg-[#24212f] disabled:text-[#777086] disabled:opacity-100"
+                      onClick={saveDetailModal}
+                      disabled={creatingTemplate || (detailMode === 'create' && !allDetailWidgetSlotsComplete)}
+                      title={
+                        detailMode === 'create' && !allDetailWidgetSlotsComplete
+                          ? `Complete all ${detailLayoutCount} widget slots before creating the template.`
+                          : undefined
+                      }
+                    >
                       {detailMode === 'create' ? (creatingTemplate ? 'Creating...' : 'Create template') : 'Save changes'}
                     </Button>
                   </div>

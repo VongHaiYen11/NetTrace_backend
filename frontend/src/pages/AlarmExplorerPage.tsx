@@ -15,7 +15,6 @@ import { toast } from 'sonner';
 import { PageHeader } from '../components/shared/PageHeader';
 import { PageShell } from '../components/shared/PageShell';
 import { Button } from '../components/ui/Button';
-import { Checkbox } from '../components/ui/Checkbox';
 import { Field, Input, Select } from '../components/ui/Field';
 import {
   nettraceApi,
@@ -146,7 +145,6 @@ export function AlarmExplorerPage() {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [sortOpen, setSortOpen] = useState(false);
   const [selectedAlarmId, setSelectedAlarmId] = useState<string | null>(null);
-  const [selectedRecordIds, setSelectedRecordIds] = useState<Set<string>>(() => new Set());
   const [search, setSearch] = useState('');
   const [searchField, setSearchField] = useState<AlarmSearchField>('alarm_id');
   const [fromDate, setFromDate] = useState('');
@@ -209,10 +207,6 @@ export function AlarmExplorerPage() {
   const filteredRows = rows;
   const selectedAlarm = filteredRows.find((alarm) => alarm.alarm_id === selectedAlarmId) ?? null;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
-  const visibleAlarmIds = useMemo(() => filteredRows.map((alarm) => alarm.alarm_id), [filteredRows]);
-  const allVisibleSelected =
-    visibleAlarmIds.length > 0 && visibleAlarmIds.every((id) => selectedRecordIds.has(id));
-  const someVisibleSelected = visibleAlarmIds.some((id) => selectedRecordIds.has(id));
   const filtersActive = Boolean(
     fromDate || toDate || severity || status || deviceId || deviceType || errorCode,
   );
@@ -256,30 +250,6 @@ export function AlarmExplorerPage() {
     setDeviceType('');
     setErrorCode('');
     resetPaging();
-  }
-
-  function toggleRecordSelection(alarmId: string) {
-    setSelectedRecordIds((current) => {
-      const next = new Set(current);
-      if (next.has(alarmId)) {
-        next.delete(alarmId);
-      } else {
-        next.add(alarmId);
-      }
-      return next;
-    });
-  }
-
-  function toggleVisibleRecords() {
-    setSelectedRecordIds((current) => {
-      const next = new Set(current);
-      if (allVisibleSelected) {
-        visibleAlarmIds.forEach((id) => next.delete(id));
-      } else {
-        visibleAlarmIds.forEach((id) => next.add(id));
-      }
-      return next;
-    });
   }
 
   async function copyRawLog() {
@@ -501,30 +471,10 @@ export function AlarmExplorerPage() {
             </div>
 
             <div className="overflow-hidden rounded-lg border border-[#00f5d4]/20 bg-[#151421]/85 shadow-[0_0_34px_rgba(0,245,212,0.08)]">
-              {selectedRecordIds.size > 0 ? (
-                <div className="flex items-center justify-between border-b border-white/10 px-4 py-3 text-xs text-[#a69db6]">
-                  <span>{selectedRecordIds.size} selected for record action</span>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedRecordIds(new Set())}
-                    className="font-semibold text-[#00f5d4] hover:text-[#7fffee]"
-                  >
-                    Clear selection
-                  </button>
-                </div>
-              ) : null}
               <div className="overflow-auto">
                 <table className="w-full min-w-[960px] border-separate border-spacing-0 text-left text-sm">
                   <thead>
                     <tr>
-                      <th className="sticky top-0 z-10 w-12 border-b border-white/10 bg-[#151421] px-4 py-3">
-                        <Checkbox
-                          aria-label="Select all visible alarms"
-                          checked={allVisibleSelected}
-                          indeterminate={someVisibleSelected && !allVisibleSelected}
-                          onChange={toggleVisibleRecords}
-                        />
-                      </th>
                       {columns.map((key) => {
                         const column = COLUMN_OPTIONS.find((item) => item.key === key)!;
                         return (
@@ -541,20 +491,19 @@ export function AlarmExplorerPage() {
                   <tbody>
                     {alarmsQuery.isLoading ? (
                       <tr>
-                        <td colSpan={columns.length + 1} className="px-4 py-12 text-center text-[#a69db6]">
+                        <td colSpan={columns.length} className="px-4 py-12 text-center text-[#a69db6]">
                           Loading alarms...
                         </td>
                       </tr>
                     ) : filteredRows.length === 0 ? (
                       <tr>
-                        <td colSpan={columns.length + 1} className="px-4 py-12 text-center text-[#a69db6]">
+                        <td colSpan={columns.length} className="px-4 py-12 text-center text-[#a69db6]">
                           No alarms found.
                         </td>
                       </tr>
                     ) : (
                       filteredRows.map((alarm) => {
                         const selectedForDetails = selectedAlarmId === alarm.alarm_id;
-                        const selectedForAction = selectedRecordIds.has(alarm.alarm_id);
                         return (
                           <tr
                             key={alarm.alarm_id}
@@ -564,14 +513,6 @@ export function AlarmExplorerPage() {
                               selectedForDetails && 'bg-[#ff2d85]/12',
                             )}
                           >
-                            <td className="border-b border-white/10 px-4 py-3">
-                              <Checkbox
-                                aria-label={`Select alarm ${alarm.alarm_id}`}
-                                checked={selectedForAction}
-                                onClick={(event) => event.stopPropagation()}
-                                onChange={() => toggleRecordSelection(alarm.alarm_id)}
-                              />
-                            </td>
                             {columns.map((key) => (
                               <td
                                 key={key}

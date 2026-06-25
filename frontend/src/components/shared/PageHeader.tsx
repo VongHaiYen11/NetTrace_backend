@@ -18,7 +18,7 @@ export function PageHeader({ title, accent, description, action, className }: Pa
       )}
     >
       <div className="max-w-4xl">
-        <h1 className="text-4xl font-black leading-tight tracking-normal text-[#f7f3ff] sm:text-5xl">
+        <h1 className="capitalize text-4xl font-black leading-tight tracking-normal text-[#f7f3ff] sm:text-5xl">
           {title}
           {accent ? (
             <>

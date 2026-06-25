@@ -1,6 +1,6 @@
 import { format, parseISO } from 'date-fns';
-import { BarChart3, Check, Eye, EyeOff, Grid, Maximize2, Minimize2, PieChart, Table, TrendingUp, X } from 'lucide-react';
-import { useEffect } from 'react';
+import { BarChart3, Check, Eye, EyeOff, Grid, Maximize2, Minimize2, PenLine, PieChart, Table, TrendingUp, X } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { Button } from '../../../components/ui/Button';
 import { Field, Input, Select } from '../../../components/ui/Field';
@@ -50,6 +50,12 @@ export interface WidgetSettingsValues {
   layoutSpan?: 1 | 2;
 }
 
+export interface WidgetPresetOption {
+  id: string;
+  label: string;
+  values: WidgetSettingsValues;
+}
+
 const tableColumnOptions: Array<{ value: ExportColumn; label: string }> = [
   { value: 'alarm_id', label: 'Alarm ID' },
   { value: 'time_created', label: 'Time created' },
@@ -85,6 +91,7 @@ interface WidgetSettingsDrawerProps {
   initialValues: WidgetSettingsValues;
   widgetTitle: string;
   widgetKind: WidgetKind;
+  presets?: WidgetPresetOption[];
 }
 
 function formatDisplayDate(value: string) {
@@ -140,12 +147,17 @@ export function WidgetSettingsDrawer({
   initialValues,
   widgetKind,
   widgetTitle,
+  presets = [],
 }: WidgetSettingsDrawerProps) {
-  const { register, handleSubmit, setValue, watch, reset } = useForm<WidgetSettingsValues>({
+  const { register, handleSubmit, setValue, watch, reset, getValues } = useForm<WidgetSettingsValues>({
     defaultValues: initialValues,
     shouldUnregister: false,
   });
+  const [editingWidgetName, setEditingWidgetName] = useState(false);
 
+  const title = watch('title');
+  const selectedPreset = watch('preset');
+  const selectedPresetValue = presets.some((preset) => preset.id === selectedPreset) ? selectedPreset : '';
   const visible = watch('visible');
   const selectedChartType = watch('chartType');
   const selectedGroupBy = watch('groupBy');
@@ -161,6 +173,7 @@ export function WidgetSettingsDrawer({
   // Reset form when active widget changes or drawer opens
   useEffect(() => {
     reset(initialValues);
+    setEditingWidgetName(false);
   }, [initialValues, reset, isOpen]);
 
   if (!isOpen) return null;
@@ -305,6 +318,19 @@ export function WidgetSettingsDrawer({
     );
   }
 
+  function applyPreset(presetId: string) {
+    const preset = presets.find((option) => option.id === presetId);
+    if (!preset) {
+      setValue('preset', presetId);
+      return;
+    }
+    reset({
+      ...getValues(),
+      ...preset.values,
+      preset: preset.id,
+    });
+  }
+
   return (
     <>
       <div
@@ -318,14 +344,41 @@ export function WidgetSettingsDrawer({
           <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#ff2d85] to-transparent opacity-80" />
           <div>
             <p className="font-mono text-[10px] font-black uppercase tracking-[0.22em] text-[#00f5d4]">
-              Widget console
+              Preset console
             </p>
             <h2 className="mt-1 text-2xl font-black text-[#f3edff] drop-shadow-[0_0_14px_rgba(255,45,133,0.7)]">
-              Widget settings
+              Preset settings
             </h2>
-            <p className="mt-2 inline-flex max-w-full border border-[#00f5d4]/25 bg-[#00f5d4]/5 px-2.5 py-1 font-mono text-xs font-black text-[#00f5d4]">
-              <span className="truncate">{widgetTitle}</span>
-            </p>
+            <div className="mt-2 flex max-w-[330px] items-center gap-1 border border-[#00f5d4]/25 bg-[#00f5d4]/5 px-2.5 py-1">
+              {editingWidgetName ? (
+                <input
+                  autoFocus
+                  aria-label="Preset name"
+                  value={title ?? ''}
+                  onChange={(event) => setValue('title', event.target.value)}
+                  onBlur={() => setEditingWidgetName(false)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') event.currentTarget.blur();
+                  }}
+                  placeholder={getDefaultWidgetTitle(watch())}
+                  className="min-w-0 flex-1 bg-transparent font-mono text-xs font-black text-[#00f5d4] outline-none placeholder:text-[#777086]"
+                />
+              ) : (
+                <span className="min-w-0 flex-1 truncate font-mono text-xs font-black text-[#00f5d4]">
+                  {title?.trim() || widgetTitle || getDefaultWidgetTitle(watch())}
+                </span>
+              )}
+              <button
+                type="button"
+                aria-label="Rename preset"
+                title="Rename preset"
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => setEditingWidgetName(true)}
+                className={drawerIconButtonClass}
+              >
+                <PenLine size={13} />
+              </button>
+            </div>
           </div>
           <div className="absolute right-6 top-5 flex items-center gap-3">
             {!isKpiWidget && (
@@ -373,14 +426,18 @@ export function WidgetSettingsDrawer({
 
         <div className="min-h-0 flex-1 overflow-y-auto px-6 py-6">
           <div className="flex flex-col gap-5">
-            <div className="rounded border border-[#2b2740] bg-[#191727] px-3 py-2">
-              <p className="font-mono text-xs leading-relaxed text-[#a69db6]">
-                Presets define this widget's data, grouping, time range, and display settings inside a saved template.
-              </p>
-            </div>
-            <Field label="Widget name" hint="Leave blank to use data + time range.">
-              <Input placeholder={getDefaultWidgetTitle(watch())} {...register('title')} />
-            </Field>
+            {!isKpiWidget ? (
+              <Field label="Start from preset" hint="Selecting one fills every option; saving updates the preset name and configuration for this widget.">
+                <Select value={selectedPresetValue} onChange={(event) => applyPreset(event.target.value)}>
+                  <option value="">Current widget settings</option>
+                  {presets.map((preset) => (
+                    <option key={preset.id} value={preset.id}>
+                      {preset.label}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            ) : null}
 
             {!isKpiWidget ? (
               <div className="flex flex-col gap-3">

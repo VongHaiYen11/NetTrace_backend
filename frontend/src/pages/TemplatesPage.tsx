@@ -12,17 +12,25 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 import { useState, useMemo, useRef, useEffect } from 'react';
-import { nettraceApi, type PresetSummary, type TemplateSummary } from '../services/generated/nettrace-api';
+import { useOutletContext } from 'react-router-dom';
+import { toast } from 'sonner';
+import {
+  nettraceApi,
+  type TemplateSummary,
+} from '../services/generated/nettrace-api';
 import { StateBlock } from '../components/shared/StateBlock';
 import { PageHeader } from '../components/shared/PageHeader';
 import { PageShell } from '../components/shared/PageShell';
 import { NeonBox } from '../components/ui/NeonBox';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
+import { Checkbox } from '../components/ui/Checkbox';
+import { Field, Input, Select } from '../components/ui/Field';
 import {
   type DashboardWidgetConfig,
   TemplateEditorModal,
 } from '../features/dashboard/components/GeneralSettingsDrawer';
+import type { AppOutletContext } from '../layouts/AppLayout';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -37,6 +45,18 @@ interface PresetFilter {
   chart_type: string;
   severity: string;
   status: string;
+}
+
+interface PresetDraft {
+  presetName: string;
+  chartType: DashboardWidgetConfig['chartType'];
+  startDate: string;
+  endDate: string;
+  status: string;
+  severity: string;
+  errorCode: string;
+  vendor: string;
+  deviceType: string;
 }
 
 type TemplateModalState =
@@ -500,6 +520,7 @@ function ReferenceLine({
 
 export function TemplatesPage() {
   const queryClient = useQueryClient();
+  const { activeTemplate } = useOutletContext<AppOutletContext>();
 
   // ── Templates data ──────────────────────────────────────────────────────────
   const templates = useQuery({
@@ -507,40 +528,15 @@ export function TemplatesPage() {
     queryFn: () => nettraceApi.listTemplates({ limit: 50, offset: 0 }),
   });
 
-  // ── Presets: aggregate from all templates that have widgets ─────────────────
+  // ── Reusable presets, including presets not assigned to templates ───────────
   const templateList = templates.data?.data ?? [];
 
-  // Fetch detail for templates that have widgets so we get real preset data
-  const templateIdsWithWidgets = useMemo(
-    () => templateList.filter((t) => t.number_of_widgets > 0).map((t) => t.template_id),
-    [templateList],
-  );
-
-  // We'll do a single query per template-with-widgets and combine
   const presetQueries = useQuery({
-    queryKey: ['template-presets', templateIdsWithWidgets],
-    enabled: templateIdsWithWidgets.length > 0,
-    queryFn: async () => {
-      const results = await Promise.all(
-        templateIdsWithWidgets.map((id) => nettraceApi.getTemplateDetail(id)),
-      );
-      // Flatten and deduplicate presets by preset_id
-      const seen = new Set<number>();
-      const presets: (PresetSummary & { templateName: string })[] = [];
-      for (const res of results) {
-        const templateName = res.data.name;
-        for (const widget of res.data.widgets) {
-          if (!seen.has(widget.preset.preset_id)) {
-            seen.add(widget.preset.preset_id);
-            presets.push({ ...widget.preset, templateName });
-          }
-        }
-      }
-      return presets;
-    },
+    queryKey: ['template-presets'],
+    queryFn: () => nettraceApi.listPresets({ limit: 1000, offset: 0 }),
   });
 
-  const allPresets = presetQueries.data ?? [];
+  const allPresets = presetQueries.data?.data ?? [];
 
   // ── Template local states ───────────────────────────────────────────────────
   const [templateSearch, setTemplateSearch] = useState('');
@@ -558,6 +554,20 @@ export function TemplatesPage() {
     chart_type: '',
     severity: '',
     status: '',
+  });
+  const [selectedPresetIds, setSelectedPresetIds] = useState<Set<number>>(() => new Set());
+  const [presetModalOpen, setPresetModalOpen] = useState(false);
+  const [creatingPreset, setCreatingPreset] = useState(false);
+  const [presetDraft, setPresetDraft] = useState<PresetDraft>({
+    presetName: '',
+    chartType: 'line',
+    startDate: new Date().toISOString().slice(0, 10),
+    endDate: new Date().toISOString().slice(0, 10),
+    status: '',
+    severity: '',
+    errorCode: '',
+    vendor: '',
+    deviceType: '',
   });
 
   // ── Filter / sort templates ─────────────────────────────────────────────────
@@ -588,7 +598,7 @@ export function TemplatesPage() {
   const filteredPresets = useMemo(() => {
     return allPresets
       .filter((p) => {
-        const searchStr = `${p.chart_type} ${p.severity ?? ''} ${p.status ?? ''} ${p.vendor ?? ''} ${p.device_type ?? ''}`.toLowerCase();
+        const searchStr = `${p.preset_name ?? ''} ${p.chart_type} ${p.severity ?? ''} ${p.status ?? ''} ${p.vendor ?? ''} ${p.device_type ?? ''}`.toLowerCase();
         if (presetSearch && !searchStr.includes(presetSearch.toLowerCase())) return false;
         if (presetFilter.chart_type && p.chart_type !== presetFilter.chart_type) return false;
         if (presetFilter.severity && (p.severity ?? '') !== presetFilter.severity) return false;
@@ -602,6 +612,13 @@ export function TemplatesPage() {
         return presetSortDir === 'asc' ? result : -result;
       });
   }, [allPresets, presetSearch, presetFilter, presetSortKey, presetSortDir]);
+  const visiblePresetIds = useMemo(
+    () => filteredPresets.map((preset) => preset.preset_id),
+    [filteredPresets],
+  );
+  const allVisiblePresetsSelected =
+    visiblePresetIds.length > 0 && visiblePresetIds.every((id) => selectedPresetIds.has(id));
+  const someVisiblePresetsSelected = visiblePresetIds.some((id) => selectedPresetIds.has(id));
 
   // ── Handlers ────────────────────────────────────────────────────────────────
   const handleDeleteTemplate = async () => {
@@ -636,7 +653,61 @@ export function TemplatesPage() {
     setTemplateModal(null);
   };
 
-  const presetIsLoading = templateIdsWithWidgets.length > 0 && presetQueries.isLoading;
+  const togglePresetSelection = (presetId: number) => {
+    setSelectedPresetIds((current) => {
+      const next = new Set(current);
+      if (next.has(presetId)) next.delete(presetId);
+      else next.add(presetId);
+      return next;
+    });
+  };
+
+  const toggleVisiblePresets = () => {
+    setSelectedPresetIds((current) => {
+      const next = new Set(current);
+      if (allVisiblePresetsSelected) {
+        visiblePresetIds.forEach((id) => next.delete(id));
+      } else {
+        visiblePresetIds.forEach((id) => next.add(id));
+      }
+      return next;
+    });
+  };
+
+  const openPresetModal = () => {
+    setPresetModalOpen(true);
+  };
+
+  const handleCreatePreset = async () => {
+    setCreatingPreset(true);
+    try {
+      await nettraceApi.createPreset({
+        preset_name: presetDraft.presetName.trim(),
+        position: 0,
+        chart_type: presetDraft.chartType,
+        start_date: presetDraft.startDate || null,
+        end_date: presetDraft.endDate || null,
+        status: presetDraft.status || null,
+        severity: presetDraft.severity || null,
+        error_code: presetDraft.errorCode || null,
+        vendor: presetDraft.vendor || null,
+        device_type: presetDraft.deviceType || null,
+      });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['template-presets'] }),
+        queryClient.invalidateQueries({ queryKey: ['dashboard-widget-presets'] }),
+      ]);
+      setPresetModalOpen(false);
+      setPresetDraft((current) => ({ ...current, presetName: '' }));
+      toast.success('Reusable preset created');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not create preset.');
+    } finally {
+      setCreatingPreset(false);
+    }
+  };
+
+  const presetIsLoading = presetQueries.isLoading;
   const presetIsError = presetQueries.isError;
 
   // ── Chart type options derived from actual data ─────────────────────────────
@@ -688,7 +759,7 @@ export function TemplatesPage() {
       {/* ───────────────── Templates Section ───────────────── */}
       <section>
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <h2 className="text-[#ff2d85] font-headline font-bold tracking-widest text-xl uppercase drop-shadow-[0_0_8px_rgba(255,45,133,0.8)]">
+          <h2 className="font-headline text-2xl font-bold uppercase tracking-widest text-[#ff2d85] drop-shadow-[0_0_8px_rgba(255,45,133,0.8)]">
             Templates
           </h2>
           <Toolbar>
@@ -741,26 +812,11 @@ export function TemplatesPage() {
             {filteredTemplates.map((template) => {
               const widgetCount = template.number_of_widgets || 0;
               const hasWidgets = widgetCount > 0;
+              const isActive = activeTemplate?.id === `db:${template.template_id}`;
               const formattedDate = formatDistanceToNow(parseISO(template.time_updated), {
                 addSuffix: true,
                 locale: enUS,
               });
-
-              let selectedCardsLabel = 'Dashboard layout configuration node.';
-              if (template.selected_cards) {
-                try {
-                  const parsed = JSON.parse(template.selected_cards);
-                  if (typeof parsed === 'object' && parsed !== null && 'widgets' in parsed) {
-                    selectedCardsLabel = `Saved snapshot · ${(parsed as { widgets?: unknown[] }).widgets?.length ?? 0} widgets`;
-                  } else if (Array.isArray(parsed)) {
-                    selectedCardsLabel = parsed.join(', ');
-                  } else {
-                    selectedCardsLabel = String(parsed);
-                  }
-                } catch {
-                  selectedCardsLabel = template.selected_cards;
-                }
-              }
 
               return (
                 <div
@@ -777,21 +833,17 @@ export function TemplatesPage() {
                         <div className="w-1/3 rounded border border-[#00f5d4]/20 bg-[#00f5d4]/5" />
                       </div>
                     </div>
-                    <span
-                      className={`absolute right-2 top-2 rounded border px-2 py-1 text-[10px] font-bold ${
-                        hasWidgets
-                          ? 'border-[#ffe04a]/30 bg-[#151421] text-[#ffe04a]'
-                          : 'border-white/15 bg-[#151421] text-[#a69db6]'
-                      }`}
-                    >
-                      {hasWidgets ? 'PROD' : 'DRAFT'}
-                    </span>
+                    {isActive ? (
+                      <span className="absolute right-2 top-2 rounded border border-[#00f5d4]/50 bg-[#102321] px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-[#00f5d4] shadow-[0_0_14px_rgba(0,245,212,0.2)]">
+                        Active
+                      </span>
+                    ) : null}
                   </div>
 
                   {/* Content Area */}
                   <div className="flex flex-1 flex-col p-4">
                     <div className="mb-2 flex items-start justify-between gap-3">
-                      <h4 className="truncate pr-2 font-heading font-bold text-white transition-colors group-hover:text-[#00f5d4]">
+                      <h4 className="truncate pr-2 font-heading text-xl font-bold text-white transition-colors group-hover:text-[#00f5d4]">
                         {template.name}
                       </h4>
                       <button
@@ -806,24 +858,13 @@ export function TemplatesPage() {
                       </button>
                     </div>
 
-                    <p className="mb-4 line-clamp-2 flex-1 text-sm text-[#a69db6]">
-                      {selectedCardsLabel}
-                    </p>
+                    <div className="flex-1" />
 
                     {/* Footer */}
                     <div className="mt-auto flex items-end justify-between gap-3">
                       <div className="flex flex-wrap gap-2">
                         <span className="rounded border border-white/10 bg-[#0c0b14]/60 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[#a69db6]">
                           {widgetCount} Widgets
-                        </span>
-                        <span
-                          className={`rounded border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
-                            hasWidgets
-                              ? 'border-[#00f5d4]/30 bg-[#0c0b14]/60 text-[#00f5d4]'
-                              : 'border-[#ff2d85]/30 bg-[#0c0b14]/60 text-[#ff2d85]'
-                          }`}
-                        >
-                          {hasWidgets ? 'Active' : 'Draft'}
                         </span>
                       </div>
                       <span className="shrink-0 text-[10px] font-mono text-[#a69db6]/50">
@@ -841,10 +882,18 @@ export function TemplatesPage() {
       {/* ───────────────── Presets Section ───────────────── */}
       <section className="mt-4">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <h2 className="text-[#ff2d85] font-headline font-bold tracking-widest text-xl uppercase drop-shadow-[0_0_8px_rgba(255,45,133,0.8)]">
+          <h2 className="font-headline text-2xl font-bold uppercase tracking-widest text-[#00f5d4] drop-shadow-[0_0_8px_rgba(0,245,212,0.8)]">
             Presets
           </h2>
           <Toolbar>
+            <Button
+              variant="secondary"
+              className="h-10 border-[#00f5d4]/70 text-[#00f5d4] hover:bg-[#00f5d4]/10"
+              onClick={openPresetModal}
+            >
+              <Plus size={14} />
+              Add preset
+            </Button>
             <PresetFilterMenu
               value={presetFilter}
               chartTypeOptions={chartTypeOptions}
@@ -886,69 +935,47 @@ export function TemplatesPage() {
           />
         ) : (
           <div className="overflow-hidden border border-[#2b2740] rounded-xl bg-[#151421]/60 backdrop-blur-sm shadow-xl">
+            {selectedPresetIds.size > 0 ? (
+              <div className="flex items-center justify-between border-b border-white/10 px-4 py-3 text-xs text-[#a69db6]">
+                <span>{selectedPresetIds.size} selected</span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedPresetIds(new Set())}
+                  className="font-semibold text-[#00f5d4] transition hover:text-[#7fffee]"
+                >
+                  Clear selection
+                </button>
+              </div>
+            ) : null}
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-[#1c1a2e]/60 border-b border-[#2b2740]">
-                    <th
-                      className="px-6 py-4 font-mono text-[10px] uppercase tracking-[0.2em] text-[#a69db6] font-bold cursor-pointer hover:text-white transition-colors"
-                      onClick={() => {
-                        if (presetSortKey === 'chart_type') setPresetSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
-                        else { setPresetSortKey('chart_type'); setPresetSortDir('asc'); }
-                      }}
-                    >
-                      <div className="flex items-center gap-1.5">
-                        Chart Type
-                        <ArrowUpDown size={10} className={presetSortKey === 'chart_type' ? 'text-[#00f5d4]' : 'text-[#a69db6]/40'} />
-                      </div>
+                    <th className="w-12 px-4 py-4">
+                      <Checkbox
+                        aria-label="Select all visible presets"
+                        checked={allVisiblePresetsSelected}
+                        indeterminate={someVisiblePresetsSelected && !allVisiblePresetsSelected}
+                        onChange={toggleVisiblePresets}
+                      />
                     </th>
-                    <th
-                      className="px-6 py-4 font-mono text-[10px] uppercase tracking-[0.2em] text-[#a69db6] font-bold cursor-pointer hover:text-white transition-colors"
-                      onClick={() => {
-                        if (presetSortKey === 'severity') setPresetSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
-                        else { setPresetSortKey('severity'); setPresetSortDir('asc'); }
-                      }}
-                    >
-                      <div className="flex items-center gap-1.5">
-                        Severity
-                        <ArrowUpDown size={10} className={presetSortKey === 'severity' ? 'text-[#00f5d4]' : 'text-[#a69db6]/40'} />
-                      </div>
+                    <th className="px-6 py-4 font-mono text-[10px] uppercase tracking-[0.2em] text-[#a69db6] font-bold">
+                      Preset Name
                     </th>
-                    <th
-                      className="px-6 py-4 font-mono text-[10px] uppercase tracking-[0.2em] text-[#a69db6] font-bold cursor-pointer hover:text-white transition-colors"
-                      onClick={() => {
-                        if (presetSortKey === 'status') setPresetSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
-                        else { setPresetSortKey('status'); setPresetSortDir('asc'); }
-                      }}
-                    >
-                      <div className="flex items-center gap-1.5">
-                        Status
-                        <ArrowUpDown size={10} className={presetSortKey === 'status' ? 'text-[#00f5d4]' : 'text-[#a69db6]/40'} />
-                      </div>
+                    <th className="px-6 py-4 font-mono text-[10px] uppercase tracking-[0.2em] text-[#a69db6] font-bold">
+                      Chart Type
                     </th>
-                    <th
-                      className="px-6 py-4 font-mono text-[10px] uppercase tracking-[0.2em] text-[#a69db6] font-bold cursor-pointer hover:text-white transition-colors"
-                      onClick={() => {
-                        if (presetSortKey === 'vendor') setPresetSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
-                        else { setPresetSortKey('vendor'); setPresetSortDir('asc'); }
-                      }}
-                    >
-                      <div className="flex items-center gap-1.5">
-                        Vendor
-                        <ArrowUpDown size={10} className={presetSortKey === 'vendor' ? 'text-[#00f5d4]' : 'text-[#a69db6]/40'} />
-                      </div>
+                    <th className="px-6 py-4 font-mono text-[10px] uppercase tracking-[0.2em] text-[#a69db6] font-bold">
+                      Severity
                     </th>
-                    <th
-                      className="px-6 py-4 font-mono text-[10px] uppercase tracking-[0.2em] text-[#a69db6] font-bold cursor-pointer hover:text-white transition-colors"
-                      onClick={() => {
-                        if (presetSortKey === 'device_type') setPresetSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
-                        else { setPresetSortKey('device_type'); setPresetSortDir('asc'); }
-                      }}
-                    >
-                      <div className="flex items-center gap-1.5">
-                        Device
-                        <ArrowUpDown size={10} className={presetSortKey === 'device_type' ? 'text-[#00f5d4]' : 'text-[#a69db6]/40'} />
-                      </div>
+                    <th className="px-6 py-4 font-mono text-[10px] uppercase tracking-[0.2em] text-[#a69db6] font-bold">
+                      Status
+                    </th>
+                    <th className="px-6 py-4 font-mono text-[10px] uppercase tracking-[0.2em] text-[#a69db6] font-bold">
+                      Vendor
+                    </th>
+                    <th className="px-6 py-4 font-mono text-[10px] uppercase tracking-[0.2em] text-[#a69db6] font-bold">
+                      Device
                     </th>
                     <th className="px-6 py-4 font-mono text-[10px] uppercase tracking-[0.2em] text-[#a69db6] font-bold">
                       Template
@@ -958,11 +985,9 @@ export function TemplatesPage() {
                 <tbody className="divide-y divide-[#2b2740]/40">
                   {filteredPresets.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="px-6 py-10 text-center text-sm text-[#a69db6]">
+                      <td colSpan={8} className="px-6 py-10 text-center text-sm text-[#a69db6]">
                         {allPresets.length === 0
-                          ? templateIdsWithWidgets.length === 0
-                            ? 'No templates have widgets yet. Create a template and add widgets to see presets here.'
-                            : 'Loading preset data from templates...'
+                          ? 'No reusable presets have been created yet.'
                           : 'No presets match the current filters.'}
                       </td>
                     </tr>
@@ -980,9 +1005,22 @@ export function TemplatesPage() {
                           : 'blue';
 
                       return (
-                        <tr key={preset.preset_id} className="hover:bg-white/[0.02] transition-colors group">
+                        <tr
+                          key={preset.preset_id}
+                          className="group transition-colors hover:bg-white/[0.02]"
+                        >
+                          <td className="px-4 py-4">
+                            <Checkbox
+                              aria-label={`Select preset ${preset.preset_id}`}
+                              checked={selectedPresetIds.has(preset.preset_id)}
+                              onChange={() => togglePresetSelection(preset.preset_id)}
+                            />
+                          </td>
+                          <td className="px-6 py-4 text-xs font-mono text-[#a69db6]">
+                            {preset.preset_name ?? '—'}
+                          </td>
                           <td className="px-6 py-4">
-                            <span className="font-mono text-[11px] font-bold uppercase tracking-wide text-[#00f5d4]">
+                            <span className="font-mono text-xs text-[#a69db6]">
                               {preset.chart_type}
                             </span>
                           </td>
@@ -1008,7 +1046,7 @@ export function TemplatesPage() {
                           </td>
                           <td className="px-6 py-4">
                             <span className="text-xs font-mono text-[#a69db6]/60 italic">
-                              {(preset as PresetSummary & { templateName: string }).templateName}
+                              {preset.template_name ?? 'Unassigned'}
                             </span>
                           </td>
                         </tr>
@@ -1050,6 +1088,125 @@ export function TemplatesPage() {
           </div>
         </div>
       )}
+
+      {presetModalOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#07070f]/80 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-2xl rounded-lg border border-[#00f5d4]/30 bg-[#151421] p-6 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-white/10 pb-4">
+              <div>
+                <h3 className="text-xl font-black text-[#f3edff]">Add Preset</h3>
+                <p className="mt-1 text-sm text-[#a69db6]">
+                  Save a reusable widget configuration now and assign it to a template later.
+                </p>
+              </div>
+              <Button variant="ghost" size="icon" onClick={() => setPresetModalOpen(false)}>
+                <X size={16} />
+              </Button>
+            </div>
+
+            <div className="mt-5 grid gap-4 sm:grid-cols-2">
+              <div className="sm:col-span-2">
+                <Field label="Preset name">
+                  <Input
+                    value={presetDraft.presetName}
+                    onChange={(event) =>
+                      setPresetDraft((current) => ({ ...current, presetName: event.target.value }))
+                    }
+                    placeholder="Critical router alarms"
+                  />
+                </Field>
+                <p className="mt-1 text-xs text-[#a69db6]">
+                  This name becomes the widget heading when the preset is used.
+                </p>
+              </div>
+              <Field label="Chart type">
+                <Select
+                  value={presetDraft.chartType}
+                  onChange={(event) =>
+                    setPresetDraft((current) => ({
+                      ...current,
+                      chartType: event.target.value as PresetDraft['chartType'],
+                    }))
+                  }
+                >
+                  <option value="line">Line</option>
+                  <option value="bar">Bar</option>
+                  <option value="pie">Pie</option>
+                  <option value="table">Table</option>
+                  <option value="heatmap">Heatmap</option>
+                </Select>
+              </Field>
+              <Field label="Severity">
+                <Select
+                  value={presetDraft.severity}
+                  onChange={(event) => setPresetDraft((current) => ({ ...current, severity: event.target.value }))}
+                >
+                  <option value="">Any severity</option>
+                  <option value="critical">Critical</option>
+                  <option value="major">Major</option>
+                  <option value="minor">Minor</option>
+                  <option value="warning">Warning</option>
+                </Select>
+              </Field>
+              <Field label="Status">
+                <Select
+                  value={presetDraft.status}
+                  onChange={(event) => setPresetDraft((current) => ({ ...current, status: event.target.value }))}
+                >
+                  <option value="">Any status</option>
+                  <option value="active">Active</option>
+                  <option value="closed">Closed</option>
+                  <option value="acknowledged">Acknowledged</option>
+                </Select>
+              </Field>
+              <Field label="Error code">
+                <Input
+                  value={presetDraft.errorCode}
+                  onChange={(event) => setPresetDraft((current) => ({ ...current, errorCode: event.target.value }))}
+                />
+              </Field>
+              <Field label="Vendor">
+                <Input
+                  value={presetDraft.vendor}
+                  onChange={(event) => setPresetDraft((current) => ({ ...current, vendor: event.target.value }))}
+                />
+              </Field>
+              <Field label="Device type">
+                <Input
+                  value={presetDraft.deviceType}
+                  onChange={(event) => setPresetDraft((current) => ({ ...current, deviceType: event.target.value }))}
+                />
+              </Field>
+              <Field label="Start date">
+                <Input
+                  type="date"
+                  value={presetDraft.startDate}
+                  onChange={(event) => setPresetDraft((current) => ({ ...current, startDate: event.target.value }))}
+                />
+              </Field>
+              <Field label="End date">
+                <Input
+                  type="date"
+                  value={presetDraft.endDate}
+                  onChange={(event) => setPresetDraft((current) => ({ ...current, endDate: event.target.value }))}
+                />
+              </Field>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-3 border-t border-white/10 pt-4">
+              <Button variant="ghost" onClick={() => setPresetModalOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                onClick={handleCreatePreset}
+                disabled={creatingPreset || !presetDraft.presetName.trim()}
+              >
+                {creatingPreset ? 'Adding...' : 'Add preset'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {templateModal ? (
         <TemplateEditorModal

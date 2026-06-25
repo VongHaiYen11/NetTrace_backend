@@ -35,6 +35,7 @@
     * [6.3. Retrieve Detailed Template (`GET /api/v1/templates/:id`)](#63-retrieve-detailed-template-get-apiv1templatesid)
     * [6.4. Update Template (`PUT /api/v1/templates/:id`)](#64-update-template-put-apiv1templatesid)
     * [6.5. Delete Template (`DELETE /api/v1/templates/:id`)](#65-delete-template-delete-apiv1templatesid)
+    * [6.6. Reusable Presets (`GET/POST /api/v1/presets`)](#66-reusable-presets-getpost-apiv1presets)
 * [🛠️ Tech Stack & Libraries](#%EF%B8%8F-tech-stack--libraries)
 * [🚀 Setting Up & Running](#-setting-up--running)
 
@@ -415,7 +416,7 @@ curl -X POST http://localhost:3000/api/v1/templates \
     "selected_cards": "[\"totalAlarms\", \"activeAlarms\"]",
     "widgets": [
       {
-        "device_id": "DEV001",
+        "preset_name": "Critical switch alarms",
         "position": 1,
         "chart_type": "line",
         "status": "active",
@@ -453,7 +454,7 @@ curl -X PUT http://localhost:3000/api/v1/templates/1 \
     "selected_cards": "[\"totalAlarms\"]",
     "widgets": [
       {
-        "device_id": "DEV001",
+        "preset_name": "Critical switch alarms",
         "position": 1,
         "chart_type": "bar",
         "status": "active",
@@ -469,6 +470,26 @@ Deletes a template. Associated widgets are removed by the database cascade; pres
 **cURL Call:**
 ```bash
 curl -X DELETE http://localhost:3000/api/v1/templates/1
+```
+
+#### 6.6. Reusable Presets (<code>GET/POST /api/v1/presets</code>)
+Lists or creates named reusable widget configurations. A preset may remain unassigned until a template widget uses it.
+
+**Create a named preset:**
+```bash
+curl -X POST http://localhost:3000/api/v1/presets \
+  -H "Content-Type: application/json" \
+  -d '{
+    "preset_name": "Critical router alarms",
+    "chart_type": "bar",
+    "severity": "critical",
+    "device_type": "router"
+  }'
+```
+
+**List presets:**
+```bash
+curl -X GET "http://localhost:3000/api/v1/presets?limit=50&offset=0"
 ```
 </details>
 

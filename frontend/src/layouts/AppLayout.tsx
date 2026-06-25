@@ -1,7 +1,7 @@
 import { NavLink, Outlet } from 'react-router-dom';
 import {
   Activity,
-  BarChart3,
+  BarChart2,
   Download,
   LayoutDashboard,
   PanelLeftClose,
@@ -12,18 +12,29 @@ import {
 import { useEffect, useState } from 'react';
 import { Button } from '../components/ui/Button';
 import { cn } from '../utils/cn';
+import type { DashboardWidgetConfig } from '../features/dashboard/components/GeneralSettingsDrawer';
+
+export interface AppOutletContext {
+  sidebarOpen: boolean;
+  dashboardWidgets: DashboardWidgetConfig[];
+  setDashboardWidgets: React.Dispatch<React.SetStateAction<DashboardWidgetConfig[]>>;
+  activeTemplate: { id: string; name: string } | null;
+  setActiveTemplate: React.Dispatch<React.SetStateAction<{ id: string; name: string } | null>>;
+}
 
 const navItems = [
-  { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { to: '/alarms', label: 'Alarm explorer', icon: Siren },
-  { to: '/templates', label: 'Templates & presets', icon: BarChart3 },
-  { to: '/export', label: 'Export data', icon: Download },
+  { to: '/dashboard', label: 'Dashboard', icon: BarChart2 },
+  { to: '/alarms', label: 'Alarm Explorer', icon: Siren },
+  { to: '/templates', label: 'Templates & Presets', icon:  LayoutDashboard},
+  { to: '/export', label: 'Export Data', icon: Download },
 ];
 
 export function AppLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(() =>
     typeof window === 'undefined' ? true : window.matchMedia('(min-width: 1024px)').matches,
   );
+  const [dashboardWidgets, setDashboardWidgets] = useState<DashboardWidgetConfig[]>([]);
+  const [activeTemplate, setActiveTemplate] = useState<{ id: string; name: string } | null>(null);
 
   useEffect(() => {
     const mediaQuery = window.matchMedia('(min-width: 1024px)');
@@ -118,7 +129,15 @@ export function AppLayout() {
         </aside>
 
         <main className="min-w-0 flex-1 transition-[width] duration-200">
-          <Outlet context={{ sidebarOpen }} />
+          <Outlet
+            context={{
+              sidebarOpen,
+              dashboardWidgets,
+              setDashboardWidgets,
+              activeTemplate,
+              setActiveTemplate,
+            } satisfies AppOutletContext}
+          />
         </main>
       </div>
     </div>

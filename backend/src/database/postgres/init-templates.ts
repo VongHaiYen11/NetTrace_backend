@@ -18,6 +18,7 @@ export async function initTemplateTables(): Promise<void> {
 
     CREATE TABLE IF NOT EXISTS preset (
         preset_id SERIAL PRIMARY KEY,
+        preset_name VARCHAR(255),
         position INT,
         chart_type VARCHAR(100),
         start_date TIMESTAMP,
@@ -28,6 +29,9 @@ export async function initTemplateTables(): Promise<void> {
         vendor VARCHAR(100),
         device_type VARCHAR(50)
     );
+
+    ALTER TABLE preset
+        ADD COLUMN IF NOT EXISTS preset_name VARCHAR(255);
 
     CREATE TABLE IF NOT EXISTS widget (
         widget_id SERIAL PRIMARY KEY,
