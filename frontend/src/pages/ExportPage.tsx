@@ -51,12 +51,6 @@ const FORMAT_OPTIONS: Array<{
       description: 'Structured alarm records for integrations and API handoff.',
       icon: FileJson,
     },
-    {
-      value: 'pdf',
-      label: 'PDF',
-      description: 'Compact review report for bounded alarm snapshots.',
-      icon: FileArchive,
-    },
   ];
 
 const COLUMN_OPTIONS: Array<{ value: ExportColumn; label: string }> = [
@@ -105,7 +99,6 @@ const FORMAT_EXTENSION: Record<ExportFormat, string> = {
   csv: 'csv',
   xlsx: 'xlsx',
   json: 'json',
-  pdf: 'pdf',
 };
 
 function splitCsv(value: string) {
@@ -602,12 +595,7 @@ export function ExportPage() {
               ))}
             </div>
 
-            {format === 'pdf' ? (
-              <p className="mt-5 rounded border border-secondary/30 bg-secondary/10 p-3 text-sm leading-6 text-medium">
-                PDF is best for bounded review packets. Use CSV, Excel, or JSON for very large
-                datasets.
-              </p>
-            ) : null}
+
 
             <Button
               className="mt-6 h-12 w-full border-primary bg-primary text-base font-black text-white shadow-glow-primary hover:bg-primary-dark"

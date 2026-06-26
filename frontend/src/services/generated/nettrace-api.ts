@@ -239,7 +239,7 @@ export type ExportColumn =
   | 'description';
 
 export interface ExportRequest {
-  format: 'csv' | 'xlsx' | 'pdf' | 'json';
+  format: 'csv' | 'xlsx' | 'json';
   columns?: ExportColumn[];
   filters?: CommonFilters & {
     sort_by?: SortBy;

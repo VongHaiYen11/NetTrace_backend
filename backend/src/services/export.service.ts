@@ -12,7 +12,7 @@ interface ColumnDef {
   getValue: (row: any, dev: any, err: any) => any;
 }
 
-type ExportFormat = 'csv' | 'xlsx' | 'pdf' | 'json';
+type ExportFormat = 'csv' | 'xlsx' | 'json';
 
 const COLUMN_DEFS: Record<string, ColumnDef> = {
   alarm_id: { key: 'alarm_id', header: 'Alarm ID', width: 40, getValue: (r) => r.alarm_id },
@@ -88,7 +88,7 @@ export class ExportService {
     private readonly queryAlarmsRepo: QueryAlarmsRepository,
     private readonly deviceRepo: DeviceRepository,
     private readonly errorRepo: ErrorRepository,
-  ) {}
+  ) { }
 
   async exportAlarms(
     params: {
@@ -237,35 +237,6 @@ export class ExportService {
       metrics.records_returned += recordsCount;
       res.write(']');
       res.end();
-    } else if (format === 'pdf') {
-      const tableLines = [activeCols.map((col) => col.header).join(' | ')];
-
-      for await (const chunk of clickhouseStream as AsyncIterable<Buffer>) {
-        const rows = this.parseJsonRows(chunk);
-        if (rows.length === 0) continue;
-        await this.enrichBatch(rows, {
-          needsDeviceMetadata,
-          needsErrorMetadata,
-          deviceMap,
-          errorMap,
-          metrics,
-        });
-        metrics.export_batches = (metrics.export_batches ?? 0) + 1;
-        metrics.clickhouse_rows_returned = (metrics.clickhouse_rows_returned ?? 0) + rows.length;
-
-        for (const row of rows) {
-          recordsCount++;
-          const values = this.projectRowValues(row, activeCols, deviceMap, errorMap);
-          tableLines.push(values.map((value) => this.formatPdfCell(value)).join(' | '));
-        }
-      }
-
-      if (recordsCount === 0) {
-        tableLines.push('No records found matching filters.');
-      }
-
-      metrics.records_returned += recordsCount;
-      res.end(this.buildSimplePdf(tableLines));
     } else {
       const options = {
         stream: res,
@@ -324,11 +295,7 @@ export class ExportService {
       return;
     }
 
-    if (format === 'pdf') {
-      res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', 'attachment; filename="alarms_export.pdf"');
-      return;
-    }
+
 
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
     res.setHeader('Content-Disposition', 'attachment; filename="alarms_export.json"');
@@ -358,8 +325,30 @@ export class ExportService {
     }, {});
   }
 
-  private parseJsonRows(chunk: Buffer): any[] {
-    const line = chunk.toString().trim();
+  private parseJsonRows(chunk: any): any[] {
+    if (Array.isArray(chunk)) {
+      return chunk.map((item) => {
+        if (item && typeof item.json === 'function') {
+          return item.json();
+        }
+        if (item && typeof item.text === 'string') {
+          try {
+            return JSON.parse(item.text);
+          } catch {
+            return item;
+          }
+        }
+        return item;
+      });
+    }
+
+    if (chunk && typeof chunk.json === 'function') {
+      return [chunk.json()];
+    }
+
+    const line = (Buffer.isBuffer(chunk) || typeof chunk === 'string')
+      ? chunk.toString().trim()
+      : '';
     if (!line) return [];
     return line
       .split('\n')
@@ -379,24 +368,24 @@ export class ExportService {
   ) {
     const missingDeviceIds = context.needsDeviceMetadata
       ? [
-          ...new Set(
-            rows
-              .map((row) => row.device_id)
-              .filter((id): id is string => Boolean(id))
-              .filter((id) => !context.deviceMap[id.toLowerCase()]),
-          ),
-        ]
+        ...new Set(
+          rows
+            .map((row) => row.device_id)
+            .filter((id): id is string => Boolean(id))
+            .filter((id) => !context.deviceMap[id.toLowerCase()]),
+        ),
+      ]
       : [];
 
     const missingErrorCodes = context.needsErrorMetadata
       ? [
-          ...new Set(
-            rows
-              .map((row) => row.error_code)
-              .filter((code): code is string => Boolean(code))
-              .filter((code) => !context.errorMap[code.toLowerCase()]),
-          ),
-        ]
+        ...new Set(
+          rows
+            .map((row) => row.error_code)
+            .filter((code): code is string => Boolean(code))
+            .filter((code) => !context.errorMap[code.toLowerCase()]),
+        ),
+      ]
       : [];
 
     if (missingDeviceIds.length === 0 && missingErrorCodes.length === 0) {
@@ -435,66 +424,7 @@ export class ExportService {
     return str;
   }
 
-  private formatPdfCell(val: any): string {
-    if (val === null || val === undefined) return '';
-    const normalized = String(val).replace(/\s+/g, ' ').trim();
-    return normalized.length > 32 ? `${normalized.slice(0, 29)}...` : normalized;
-  }
 
-  private escapePdfText(value: string): string {
-    return value.replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
-  }
-
-  private buildSimplePdf(lines: string[]): Buffer {
-    const linesPerPage = 42;
-    const pages: string[][] = [];
-    for (let index = 0; index < lines.length; index += linesPerPage) {
-      pages.push(lines.slice(index, index + linesPerPage));
-    }
-
-    const objects: string[] = [];
-    objects.push('<< /Type /Catalog /Pages 2 0 R >>');
-    objects.push(''); // Pages object is filled once page ids are known.
-    objects.push('<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>');
-
-    const pageObjectIds: number[] = [];
-    for (const pageLines of pages) {
-      const content = [
-        'BT',
-        '/F1 8 Tf',
-        '40 800 Td',
-        '12 TL',
-        ...pageLines.map((line) => `(${this.escapePdfText(line)}) Tj T*`),
-        'ET',
-      ].join('\n');
-      const contentObjectId = objects.length + 1;
-      objects.push(`<< /Length ${Buffer.byteLength(content)} >>\nstream\n${content}\nendstream`);
-      const pageObjectId = objects.length + 1;
-      pageObjectIds.push(pageObjectId);
-      objects.push(
-        `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 842] /Resources << /Font << /F1 3 0 R >> >> /Contents ${contentObjectId} 0 R >>`,
-      );
-    }
-
-    objects[1] =
-      `<< /Type /Pages /Kids [${pageObjectIds.map((id) => `${id} 0 R`).join(' ')}] /Count ${pageObjectIds.length} >>`;
-
-    let pdf = '%PDF-1.4\n';
-    const offsets = [0];
-    for (let index = 0; index < objects.length; index++) {
-      offsets.push(Buffer.byteLength(pdf));
-      pdf += `${index + 1} 0 obj\n${objects[index]}\nendobj\n`;
-    }
-    const xrefOffset = Buffer.byteLength(pdf);
-    pdf += `xref\n0 ${objects.length + 1}\n`;
-    pdf += '0000000000 65535 f \n';
-    for (let index = 1; index < offsets.length; index++) {
-      pdf += `${String(offsets[index]).padStart(10, '0')} 00000 n \n`;
-    }
-    pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
-
-    return Buffer.from(pdf);
-  }
 
   private writeEmptyResponse(res: Response, format: ExportFormat, columns?: string[]) {
     const selectedKeys = columns && columns.length > 0 ? columns : Object.keys(COLUMN_DEFS);
@@ -509,13 +439,7 @@ export class ExportService {
       res.end();
     } else if (format === 'json') {
       res.end('[]');
-    } else if (format === 'pdf') {
-      res.end(
-        this.buildSimplePdf([
-          activeCols.map((col) => col.header).join(' | '),
-          'No records found matching filters.',
-        ]),
-      );
+
     } else {
       const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({ stream: res });
       const worksheet = workbook.addWorksheet('Alarms');

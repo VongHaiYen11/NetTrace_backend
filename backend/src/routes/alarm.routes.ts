@@ -569,7 +569,7 @@ router.post('/analytics/heatmap', validateBody(HeatmapSchema), heatmapController
  * /api/v1/export:
  *   post:
  *     summary: Export alarms list
- *     description: Streams a full/filtered copy of alarm telemetry formatted as CSV, Excel, JSON, or a compact PDF report.
+ *     description: Streams a full/filtered copy of alarm telemetry formatted as CSV, Excel, or JSON.
  *     tags:
  *       - Export
  *     requestBody:
@@ -583,7 +583,7 @@ router.post('/analytics/heatmap', validateBody(HeatmapSchema), heatmapController
  *             properties:
  *               format:
  *                 type: string
- *                 enum: [csv, xlsx, pdf, json]
+ *                 enum: [csv, xlsx, json]
  *                 example: "csv"
  *               columns:
  *                 type: array

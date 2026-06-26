@@ -896,7 +896,7 @@ export function TemplatesPage() {
             <Button
               variant="secondary"
               className="h-10 border-secondary/70 text-secondary hover:bg-secondary/10"
-              onClick={openPresetModal}
+              onClick={() => openPresetModal()}
             >
               <Plus size={14} />
               Add preset

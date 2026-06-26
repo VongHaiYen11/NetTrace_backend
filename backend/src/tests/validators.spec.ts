@@ -165,7 +165,7 @@ describe('Validation Layer Tests', () => {
 
   describe('ExportSchema', () => {
     it('should accept supported export formats', () => {
-      for (const format of ['csv', 'xlsx', 'pdf', 'json']) {
+      for (const format of ['csv', 'xlsx', 'json']) {
         expect(ExportSchema.parse({ format }).format).toBe(format);
       }
     });

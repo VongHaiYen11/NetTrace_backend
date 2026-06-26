@@ -9,6 +9,10 @@ export function errorMiddleware(
   res: Response,
   _next: NextFunction,
 ) {
+  if (res.headersSent) {
+    return _next(err);
+  }
+
   const reqId = req.headers['x-request-id'] || res.locals.requestId || 'unknown';
   // Log the full error stack internally
   logger.error(

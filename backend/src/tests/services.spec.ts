@@ -637,54 +637,6 @@ describe('Service Layer Tests', () => {
       ]);
     });
 
-    it('should export alarms as PDF with selected columns', async () => {
-      const mockQueryRepo = {
-        queryAlarmsStream: jest.fn(),
-      } as unknown as jest.Mocked<QueryAlarmsRepository>;
-
-      const exportService = new ExportService(mockQueryRepo, mockDeviceRepo, mockErrorRepo);
-
-      const mockStream = new Readable({
-        read() {
-          this.push(
-            JSON.stringify({
-              alarm_id: 'a1',
-              status: 'active',
-              severity: 'critical',
-            }) + '\n',
-          );
-          this.push(null);
-        },
-      });
-
-      mockQueryRepo.queryAlarmsStream.mockResolvedValue(mockStream);
-
-      const chunks: Buffer[] = [];
-      const mockRes = new PassThrough() as any;
-      mockRes.setHeader = jest.fn();
-      mockRes.on('data', (chunk: any) => {
-        chunks.push(Buffer.from(chunk));
-      });
-
-      await exportService.exportAlarms(
-        {
-          format: 'pdf',
-          columns: ['alarm_id', 'severity', 'status'],
-          filters: {
-            from_time: new Date(),
-            to_time: new Date(),
-          },
-        },
-        mockRes,
-        metrics,
-      );
-
-      const pdf = Buffer.concat(chunks).toString();
-      expect(mockRes.setHeader).toHaveBeenCalledWith('Content-Type', 'application/pdf');
-      expect(pdf).toContain('%PDF-1.4');
-      expect(pdf).toContain('Alarm ID | Severity | Status');
-      expect(pdf).toContain('a1 | critical | active');
-    });
   });
 
   describe('MetadataOptionsService', () => {
