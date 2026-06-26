@@ -446,7 +446,7 @@ function ReferenceLine({
 
 export function TemplatesPage() {
   const queryClient = useQueryClient();
-  const { activeTemplate } = useOutletContext<AppOutletContext>();
+  const { activeTemplate, setDashboardWidgets, setActiveTemplate } = useOutletContext<AppOutletContext>();
 
   // ── Templates data ──────────────────────────────────────────────────────────
   const templates = useQuery({
@@ -567,6 +567,10 @@ export function TemplatesPage() {
     if (!templateToDelete) return;
     try {
       await nettraceApi.deleteTemplate(templateToDelete.id);
+      if (activeTemplate && activeTemplate.id === `db:${templateToDelete.id}`) {
+        setActiveTemplate(null);
+        setDashboardWidgets([]);
+      }
       await queryClient.invalidateQueries({ queryKey: ['templates'] });
       setTemplateToDelete(null);
     } catch (err) {
@@ -587,11 +591,15 @@ export function TemplatesPage() {
     });
   };
 
-  const handleTemplateSaved = async () => {
+  const handleTemplateSaved = async (saved: { id: string; name: string; widgets: DashboardWidgetConfig[] }) => {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ['templates'] }),
       queryClient.invalidateQueries({ queryKey: ['template-presets'] }),
     ]);
+    if (activeTemplate && activeTemplate.id === saved.id) {
+      setActiveTemplate({ id: saved.id, name: saved.name });
+      setDashboardWidgets(saved.widgets);
+    }
     setTemplateModal(null);
   };
 

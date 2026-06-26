@@ -65,7 +65,7 @@ interface GeneralSettingsDrawerProps {
   onClose: () => void;
   onSave: (widgets: DashboardWidgetConfig[]) => void;
   onTemplateChange: (template: { id: string; name: string } | null) => void;
-  onTemplateSaved?: () => void;
+  onTemplateSaved?: (saved: { id: string; name: string; widgets: DashboardWidgetConfig[] }) => void;
 }
 
 interface TemplateEditorModalProps {
@@ -75,7 +75,7 @@ interface TemplateEditorModalProps {
   templateId?: number;
   templateName?: string;
   onClose: () => void;
-  onSaved?: () => void;
+  onSaved?: (saved: { id: string; name: string; widgets: DashboardWidgetConfig[] }) => void;
 }
 
 const summaryOptions = [
@@ -988,11 +988,14 @@ export function GeneralSettingsDrawer({
   }
 
   function saveDetailDraft() {
-    setDraftWidgets(detailDraftWidgets.map(normalizeWidgetTitle));
+    const normalizedWidgets = detailDraftWidgets.map(normalizeWidgetTitle);
+    setDraftWidgets(normalizedWidgets);
     setDraftLayoutCount(detailLayoutCount);
     setSelectedTemplateId('none');
     onTemplateChange(null);
     setDetailModalOpen(false);
+    onSave(normalizedWidgets);
+    onClose();
   }
 
   async function createTemplateFromDraft(sourceWidgets = draftWidgets, sourceLayoutCount = draftLayoutCount) {
@@ -1014,7 +1017,11 @@ export function GeneralSettingsDrawer({
         setDetailTemplateName('');
       }
       toast.success('Template saved');
-      onTemplateSaved?.();
+      onTemplateSaved?.({
+        id: `db:${created.data.template_id}`,
+        name: normalizedTemplateName,
+        widgets: normalizedWidgets,
+      });
       return {
         id: `db:${created.data.template_id}`,
         name: normalizedTemplateName,
@@ -1058,7 +1065,11 @@ export function GeneralSettingsDrawer({
         setDraftDashboardName(normalizedTemplateName);
       }
       toast.success('Template updated');
-      onTemplateSaved?.();
+      onTemplateSaved?.({
+        id: `db:${targetTemplateId}`,
+        name: normalizedTemplateName,
+        widgets: normalizedWidgets,
+      });
       return true;
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Could not update template.';
@@ -1138,6 +1149,7 @@ export function GeneralSettingsDrawer({
         id: `db:${savedTemplateId}`,
         name: detailTemplateName.trim() || selectedTemplate?.name || 'Untitled',
       });
+      onClose();
       return;
     }
     saveDetailDraft();

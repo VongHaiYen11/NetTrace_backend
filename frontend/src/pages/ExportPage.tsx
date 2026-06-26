@@ -359,7 +359,7 @@ export function ExportPage() {
         description="Download alarm records with the format, columns, filters, and sorting you need."
       />
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <section className="grid gap-4 lg:grid-cols-3">
         {FORMAT_OPTIONS.map((option) => {
           const Icon = option.icon;
           const active = format === option.value;
@@ -477,7 +477,7 @@ export function ExportPage() {
                 />
               </Field>
             </div>
-            <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <div className="mt-4 grid gap-4 lg:grid-cols-3">
               <MultiChoiceSelect
                 label="Severity"
                 values={severities}
