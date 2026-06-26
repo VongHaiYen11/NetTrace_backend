@@ -1085,7 +1085,7 @@ export function TemplatesPage() {
           <div className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm" onClick={() => setPresetModalOpen(false)} />
           <div className="fixed inset-0 z-[70] flex items-center justify-center p-4" onClick={() => setPresetModalOpen(false)}>
             <div
-              className="relative flex max-h-[90vh] w-full max-w-[800px] flex-col rounded-md border border-white/10 bg-panel-light text-light shadow-2xl"
+              className="relative flex max-h-[90vh] w-full max-w-[800px] flex-col rounded-md border border-white/10 bg-panel-light text-light shadow-2xl overflow-hidden"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center justify-between border-b border-white/10 px-7 py-5">
