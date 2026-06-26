@@ -10,7 +10,15 @@ import {
   ListFilter,
   ChevronDown,
   CheckCircle2,
+  TrendingUp,
+  BarChart3,
+  PieChart,
+  Table,
+  Grid,
+  Check,
 } from 'lucide-react';
+import { cn } from '../utils/cn';
+import { encodeTableColumns, decodeTableColumns } from '../utils/columns';
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -38,26 +46,24 @@ type TemplateSort = 'date' | 'name' | 'widgets';
 type TemplateSortDir = 'asc' | 'desc';
 type TemplateWidgetFilter = 'all' | 'with-widgets' | 'with-kpis';
 
-type PresetSortKey = 'chart_type' | 'severity' | 'status' | 'vendor' | 'device_type';
+type PresetSortKey = 'preset_name' | 'chart_type';
 type PresetSortDir = 'asc' | 'desc';
 
 interface PresetFilter {
   chart_type: string;
-  severity: string;
-  status: string;
 }
 
 interface PresetDraft {
   id?: number;
   presetName: string;
   chartType: DashboardWidgetConfig['chartType'];
+  metric: string;
+  groupBy: string;
+  timeBucket: string;
+  heatmapMode: 'weekday' | 'calendar';
+  tableColumns: string[];
   startDate: string;
   endDate: string;
-  status: string;
-  severity: string;
-  errorCode: string;
-  vendor: string;
-  deviceType: string;
 }
 
 type TemplateModalState =
@@ -374,20 +380,16 @@ function TemplateFilterMenu({
 function PresetFilterMenu({
   value,
   chartTypeOptions,
-  severityOptions,
-  statusOptions,
   onChange,
   onClear,
 }: {
   value: PresetFilter;
   chartTypeOptions: string[];
-  severityOptions: string[];
-  statusOptions: string[];
   onChange: (value: PresetFilter) => void;
   onClear: () => void;
 }) {
   const accentColor = '#00f5d4';
-  const activeCount = [value.chart_type, value.severity, value.status].filter(Boolean).length;
+  const activeCount = [value.chart_type].filter(Boolean).length;
 
   return (
     <ControlMenu
@@ -404,20 +406,6 @@ function PresetFilterMenu({
           options={chartTypeOptions}
           accentColor={accentColor}
           onChange={(chart_type) => onChange({ ...value, chart_type })}
-        />
-        <CompactSelect
-          label="Severity"
-          value={value.severity}
-          options={severityOptions}
-          accentColor={accentColor}
-          onChange={(severity) => onChange({ ...value, severity })}
-        />
-        <CompactSelect
-          label="Status"
-          value={value.status}
-          options={statusOptions}
-          accentColor={accentColor}
-          onChange={(status) => onChange({ ...value, status })}
         />
         <button
           type="button"
@@ -441,6 +429,34 @@ function ReferenceLine({
 }) {
   return <p className="mb-6 max-w-3xl text-sm leading-6 text-muted">{description}</p>;
 }
+
+const tableColumnOptions: Array<{ value: string; label: string }> = [
+  { value: 'alarm_id', label: 'Alarm ID' },
+  { value: 'time_created', label: 'Time created' },
+  { value: 'time_solved', label: 'Time solved' },
+  { value: 'status', label: 'Status' },
+  { value: 'severity', label: 'Severity' },
+  { value: 'error_code', label: 'Error code' },
+  { value: 'error_name', label: 'Error name' },
+  { value: 'error_domain', label: 'Error domain' },
+  { value: 'device_id', label: 'Device ID' },
+  { value: 'device_name', label: 'Device name' },
+  { value: 'device_type', label: 'Device type' },
+  { value: 'station_name', label: 'Station name' },
+  { value: 'station_province', label: 'Province' },
+  { value: 'vendor_name', label: 'Vendor name' },
+  { value: 'raw_log', label: 'Raw log' },
+  { value: 'description', label: 'Description' },
+];
+
+const defaultTableColumns: string[] = [
+  'time_created',
+  'error_name',
+  'status',
+  'severity',
+  'device_name',
+  'description',
+];
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
@@ -491,22 +507,21 @@ export function TemplatesPage() {
   const [presetSortDir, setPresetSortDir] = useState<PresetSortDir>('asc');
   const [presetFilter, setPresetFilter] = useState<PresetFilter>({
     chart_type: '',
-    severity: '',
-    status: '',
   });
   const [selectedPresetIds, setSelectedPresetIds] = useState<Set<number>>(() => new Set());
   const [presetModalOpen, setPresetModalOpen] = useState(false);
+  const [presetHeatmapMode, setPresetHeatmapMode] = useState<'weekday' | 'calendar'>('weekday');
   const [creatingPreset, setCreatingPreset] = useState(false);
   const [presetDraft, setPresetDraft] = useState<PresetDraft>({
     presetName: '',
     chartType: 'line',
-    startDate: new Date().toISOString().slice(0, 10),
-    endDate: new Date().toISOString().slice(0, 10),
-    status: '',
-    severity: '',
-    errorCode: '',
-    vendor: '',
-    deviceType: '',
+    metric: 'count',
+    groupBy: 'none',
+    timeBucket: 'day',
+    heatmapMode: 'weekday',
+    tableColumns: defaultTableColumns,
+    startDate: '',
+    endDate: '',
   });
 
   // ── Filter / sort templates ─────────────────────────────────────────────────
@@ -540,11 +555,9 @@ export function TemplatesPage() {
   const filteredPresets = useMemo(() => {
     return allPresets
       .filter((p) => {
-        const searchStr = `${p.preset_name ?? ''} ${p.chart_type} ${p.severity ?? ''} ${p.status ?? ''} ${p.vendor ?? ''} ${p.device_type ?? ''}`.toLowerCase();
+        const searchStr = `${p.preset_name ?? ''} ${p.chart_type}`.toLowerCase();
         if (presetSearch && !searchStr.includes(presetSearch.toLowerCase())) return false;
         if (presetFilter.chart_type && p.chart_type !== presetFilter.chart_type) return false;
-        if (presetFilter.severity && (p.severity ?? '') !== presetFilter.severity) return false;
-        if (presetFilter.status && (p.status ?? '') !== presetFilter.status) return false;
         return true;
       })
       .sort((a, b) => {
@@ -624,32 +637,51 @@ export function TemplatesPage() {
     });
   };
 
+  const getYearFromDate = (value: string) => {
+    return value ? value.slice(0, 4) : String(new Date().getFullYear());
+  };
+
+  const getYearDateRange = (yearValue: string) => {
+    const year = Number(yearValue) || new Date().getFullYear();
+    const currentYear = new Date().getFullYear();
+    return {
+      startDate: `${year}-01-01`,
+      endDate: year === currentYear ? new Date().toISOString().slice(0, 10) : `${year}-12-31`,
+    };
+  };
+
   const openPresetModal = (preset?: typeof allPresets[0]) => {
     if (preset) {
+      const start = preset.start_date ? new Date(preset.start_date).toISOString().slice(0, 10) : '';
+      const end = preset.end_date ? new Date(preset.end_date).toISOString().slice(0, 10) : '';
+      const isCal = start.endsWith('-01-01') && (end.endsWith('-12-31') || end === new Date().toISOString().slice(0, 10));
+
       setPresetDraft({
         id: preset.preset_id,
         presetName: preset.preset_name || '',
         chartType: preset.chart_type as any,
-        startDate: preset.start_date ? new Date(preset.start_date).toISOString().slice(0, 10) : '',
-        endDate: preset.end_date ? new Date(preset.end_date).toISOString().slice(0, 10) : '',
-        status: preset.status || '',
-        severity: preset.severity || '',
-        errorCode: preset.error_code || '',
-        vendor: preset.vendor || '',
-        deviceType: preset.device_type || '',
+        startDate: start,
+        endDate: end,
+        metric: preset.status || 'count',
+        groupBy: preset.severity || (preset.chart_type === 'pie' ? 'severity' : 'none'),
+        timeBucket: preset.error_code || 'day',
+        heatmapMode: (preset.vendor as 'weekday' | 'calendar') || 'weekday',
+        tableColumns: decodeTableColumns(preset.device_type) || defaultTableColumns,
       });
+      setPresetHeatmapMode(isCal ? 'calendar' : 'weekday');
     } else {
       setPresetDraft({
         presetName: '',
         chartType: 'line',
-        startDate: new Date().toISOString().slice(0, 10),
-        endDate: new Date().toISOString().slice(0, 10),
-        status: '',
-        severity: '',
-        errorCode: '',
-        vendor: '',
-        deviceType: '',
+        metric: 'count',
+        groupBy: 'none',
+        timeBucket: 'day',
+        heatmapMode: 'weekday',
+        tableColumns: defaultTableColumns,
+        startDate: '',
+        endDate: '',
       });
+      setPresetHeatmapMode('weekday');
     }
     setPresetModalOpen(true);
   };
@@ -663,11 +695,11 @@ export function TemplatesPage() {
         chart_type: presetDraft.chartType,
         start_date: presetDraft.startDate || null,
         end_date: presetDraft.endDate || null,
-        status: presetDraft.status || null,
-        severity: presetDraft.severity || null,
-        error_code: presetDraft.errorCode || null,
-        vendor: presetDraft.vendor || null,
-        device_type: presetDraft.deviceType || null,
+        status: presetDraft.metric,
+        severity: presetDraft.groupBy,
+        error_code: presetDraft.timeBucket,
+        vendor: presetDraft.heatmapMode,
+        device_type: encodeTableColumns(presetDraft.tableColumns),
       };
 
       if (presetDraft.id) {
@@ -716,16 +748,6 @@ export function TemplatesPage() {
     return ['', ...Array.from(types)];
   }, [allPresets]);
 
-  const severityOptions = useMemo(() => {
-    const vals = new Set(allPresets.map((p) => p.severity ?? '').filter(Boolean));
-    return ['', ...Array.from(vals)];
-  }, [allPresets]);
-
-  const statusOptions = useMemo(() => {
-    const vals = new Set(allPresets.map((p) => p.status ?? '').filter(Boolean));
-    return ['', ...Array.from(vals)];
-  }, [allPresets]);
-
   const templateSortOptions: DropdownOption<TemplateSort>[] = [
     { value: 'date', label: 'Date' },
     { value: 'name', label: 'Name' },
@@ -733,11 +755,8 @@ export function TemplatesPage() {
   ];
 
   const presetSortOptions: DropdownOption<PresetSortKey>[] = [
+    { value: 'preset_name', label: 'Preset name' },
     { value: 'chart_type', label: 'Chart type' },
-    { value: 'severity', label: 'Severity' },
-    { value: 'status', label: 'Status' },
-    { value: 'vendor', label: 'Vendor' },
-    { value: 'device_type', label: 'Device' },
   ];
 
   const templateGuideDescription =
@@ -912,10 +931,8 @@ export function TemplatesPage() {
             <PresetFilterMenu
               value={presetFilter}
               chartTypeOptions={chartTypeOptions}
-              severityOptions={severityOptions}
-              statusOptions={statusOptions}
               onChange={setPresetFilter}
-              onClear={() => setPresetFilter({ chart_type: '', severity: '', status: '' })}
+              onClear={() => setPresetFilter({ chart_type: '' })}
             />
             <SortMenu
               options={presetSortOptions}
@@ -989,27 +1006,12 @@ export function TemplatesPage() {
                     <th className="px-6 py-4 font-mono text-[10px] uppercase tracking-[0.2em] text-muted font-bold">
                       Chart Type
                     </th>
-                    <th className="px-6 py-4 font-mono text-[10px] uppercase tracking-[0.2em] text-muted font-bold">
-                      Severity
-                    </th>
-                    <th className="px-6 py-4 font-mono text-[10px] uppercase tracking-[0.2em] text-muted font-bold">
-                      Status
-                    </th>
-                    <th className="px-6 py-4 font-mono text-[10px] uppercase tracking-[0.2em] text-muted font-bold">
-                      Vendor
-                    </th>
-                    <th className="px-6 py-4 font-mono text-[10px] uppercase tracking-[0.2em] text-muted font-bold">
-                      Device
-                    </th>
-                    <th className="px-6 py-4 font-mono text-[10px] uppercase tracking-[0.2em] text-muted font-bold">
-                      Template
-                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/40">
                   {filteredPresets.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="px-6 py-10 text-center text-sm text-muted">
+                      <td colSpan={3} className="px-6 py-10 text-center text-sm text-muted">
                         {allPresets.length === 0
                           ? 'No reusable presets have been created yet.'
                           : 'No presets match the current filters.'}
@@ -1017,17 +1019,6 @@ export function TemplatesPage() {
                     </tr>
                   ) : (
                     filteredPresets.map((preset) => {
-                      const severityTone =
-                        preset.severity === 'critical'
-                          ? 'red'
-                          : preset.severity === 'major'
-                          ? 'orange'
-                          : preset.severity === 'minor'
-                          ? 'green'
-                          : preset.severity === 'warning'
-                          ? 'yellow'
-                          : 'blue';
-
                       return (
                         <tr
                           key={preset.preset_id}
@@ -1047,31 +1038,6 @@ export function TemplatesPage() {
                           <td className="px-6 py-4">
                             <span className="font-mono text-xs text-muted">
                               {preset.chart_type}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4">
-                            {preset.severity ? (
-                              <Badge tone={severityTone as 'red' | 'orange' | 'green' | 'yellow' | 'blue'}>{preset.severity}</Badge>
-                            ) : (
-                              <span className="text-placeholder text-xs font-mono">—</span>
-                            )}
-                          </td>
-                          <td className="px-6 py-4">
-                            {preset.status ? (
-                              <Badge tone={preset.status === 'active' ? 'green' : 'neutral'}>{preset.status}</Badge>
-                            ) : (
-                              <span className="text-placeholder text-xs font-mono">—</span>
-                            )}
-                          </td>
-                          <td className="px-6 py-4 text-xs font-mono text-muted">
-                            {preset.vendor ?? '—'}
-                          </td>
-                          <td className="px-6 py-4 text-xs font-mono text-muted">
-                            {preset.device_type ?? '—'}
-                          </td>
-                          <td className="px-6 py-4">
-                            <span className="text-xs font-mono text-muted/60 italic">
-                              {preset.template_name ?? 'Unassigned'}
                             </span>
                           </td>
                         </tr>
@@ -1115,114 +1081,342 @@ export function TemplatesPage() {
       )}
 
       {presetModalOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-2xl rounded-lg border border-secondary/30 bg-panel-light p-6 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-white/10 pb-4">
+        <>
+          <div className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm" onClick={() => setPresetModalOpen(false)} />
+          <div className="fixed inset-0 z-[70] flex items-center justify-center p-4" onClick={() => setPresetModalOpen(false)}>
+            <div
+              className="relative flex max-h-[90vh] w-full max-w-[800px] flex-col rounded-md border border-white/10 bg-panel-light text-light shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between border-b border-white/10 px-7 py-5">
               <div>
-                <h3 className="text-xl font-black text-light">{presetDraft.id ? 'Edit Preset' : 'Add Preset'}</h3>
-                <p className="mt-1 text-sm text-muted">
+                <p className="font-mono text-xs font-bold uppercase tracking-[0.18em] text-secondary">
+                  Preset configuration
+                </p>
+                <h2 className="mt-1 font-mono text-3xl font-black text-light">
+                  {presetDraft.id ? 'Edit Preset' : 'Add Preset'}
+                </h2>
+                <p className="mt-1 font-mono text-xs text-muted">
                   Save a reusable widget configuration now and assign it to a template later.
                 </p>
               </div>
-              <Button variant="ghost" size="icon" onClick={() => setPresetModalOpen(false)}>
-                <X size={16} />
-              </Button>
+              <button
+                type="button"
+                className="rounded p-1.5 text-muted hover:bg-white/10 hover:text-white"
+                onClick={() => setPresetModalOpen(false)}
+              >
+                <X size={20} />
+              </button>
             </div>
 
-            <div className="mt-5 grid gap-4 sm:grid-cols-2">
-              <div className="sm:col-span-2">
-                <Field label="Preset name">
-                  <Input
-                    value={presetDraft.presetName}
-                    onChange={(event) =>
-                      setPresetDraft((current) => ({ ...current, presetName: event.target.value }))
-                    }
-                    placeholder="Critical router alarms"
-                  />
-                </Field>
-                <p className="mt-1 text-xs text-muted">
-                  This name becomes the widget heading when the preset is used.
-                </p>
+             <div className="flex-1 overflow-y-auto px-6 py-6">
+              <div>
+                <div className="grid gap-4">
+                    <Field label="Preset name" hint="Saving changes updates the preset name shown on the widget.">
+                      <Input
+                        value={presetDraft.presetName}
+                        onChange={(event) =>
+                          setPresetDraft((current) => ({ ...current, presetName: event.target.value }))
+                        }
+                        placeholder="Critical router alarms"
+                      />
+                    </Field>
+
+                    <div>
+                      <p className="mb-3 font-mono text-base font-black tracking-normal text-secondary">
+                        Preset chart type
+                      </p>
+                      <div className="grid grid-cols-5 gap-3">
+                        {[
+                          { id: 'line', label: 'Line', icon: TrendingUp },
+                          { id: 'bar', label: 'Bar', icon: BarChart3 },
+                          { id: 'pie', label: 'Pie', icon: PieChart },
+                          { id: 'table', label: 'Table', icon: Table },
+                          { id: 'heatmap', label: 'Heatmap', icon: Grid },
+                        ].map((type) => {
+                          const Icon = type.icon;
+                          const isSelected = presetDraft.chartType === type.id;
+                          return (
+                            <button
+                              key={type.id}
+                              type="button"
+                              onClick={() =>
+                                setPresetDraft((current) => {
+                                  let heatmapMode = current.heatmapMode;
+                                  let start = current.startDate;
+                                  let end = current.endDate;
+                                  if (type.id === 'heatmap' && current.chartType !== 'heatmap') {
+                                    heatmapMode = 'weekday';
+                                    setPresetHeatmapMode('weekday');
+                                  }
+                                  return {
+                                    ...current,
+                                    chartType: type.id as any,
+                                    heatmapMode,
+                                    startDate: start,
+                                    endDate: end,
+                                  };
+                                })
+                              }
+                              className={`flex min-h-[86px] flex-col items-center justify-center rounded border p-3 transition ${
+                                isSelected
+                                  ? 'border-primary bg-primary/10 text-primary shadow-glow-primary'
+                                  : 'border-border bg-input text-muted hover:border-primary/60 hover:text-light'
+                              }`}
+                            >
+                              <Icon size={20} />
+                              <span className="mt-2 font-mono text-xs font-bold tracking-normal">
+                                {type.label}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {presetDraft.chartType === 'line' || presetDraft.chartType === 'bar' || presetDraft.chartType === 'pie' ? (
+                      <>
+                        <Field label="Data">
+                          <Select
+                            value={presetDraft.metric}
+                            onChange={(event) =>
+                              setPresetDraft((current) => ({
+                                ...current,
+                                metric: event.target.value,
+                              }))
+                            }
+                          >
+                            <option value="count">Alarm count</option>
+                            <option value="avg_duration">Avg handling time</option>
+                            <option value="max_duration">Max handling time</option>
+                            <option value="affected_devices">Affected devices</option>
+                          </Select>
+                        </Field>
+                        {presetDraft.chartType === 'bar' || presetDraft.chartType === 'pie' ? (
+                          <Field label={presetDraft.chartType === 'pie' ? 'Slice by' : 'Group by'}>
+                            <Select
+                              value={presetDraft.groupBy}
+                              onChange={(event) =>
+                                setPresetDraft((current) => ({
+                                  ...current,
+                                  groupBy: event.target.value,
+                                }))
+                              }
+                            >
+                              {presetDraft.chartType === 'bar' ? (
+                                <option value="none">No group (time series)</option>
+                              ) : null}
+                              <option value="severity">Severity</option>
+                              <option value="status">Status</option>
+                              <option value="error_code">Error code</option>
+                              <option value="device">Device</option>
+                              <option value="device_type">Device type</option>
+                              <option value="vendor">Vendor</option>
+                              <option value="station">Station</option>
+                              <option value="province">Province</option>
+                            </Select>
+                          </Field>
+                        ) : null}
+                        {presetDraft.chartType === 'line' || (presetDraft.chartType === 'bar' && presetDraft.groupBy === 'none') ? (
+                          <Field label="Time bucket">
+                            <Select
+                              value={presetDraft.timeBucket}
+                              onChange={(event) =>
+                                setPresetDraft((current) => ({
+                                  ...current,
+                                  timeBucket: event.target.value,
+                                }))
+                              }
+                            >
+                              <option value="hour">Hourly</option>
+                              <option value="day">Daily</option>
+                              <option value="week">Weekly</option>
+                              <option value="month">Monthly</option>
+                              <option value="year">Yearly</option>
+                            </Select>
+                          </Field>
+                        ) : null}
+                      </>
+                    ) : null}
+
+                    {presetDraft.chartType === 'heatmap' ? (
+                      <Field label="Heatmap mode">
+                        <Select
+                          value={presetHeatmapMode}
+                          onChange={(event) => {
+                            const mode = event.target.value as 'weekday' | 'calendar';
+                            setPresetHeatmapMode(mode);
+                            if (mode === 'calendar') {
+                              const range = getYearDateRange(getYearFromDate(presetDraft.startDate));
+                              setPresetDraft((current) => ({
+                                ...current,
+                                heatmapMode: mode,
+                                startDate: range.startDate,
+                                endDate: range.endDate,
+                              }));
+                            } else {
+                              setPresetDraft((current) => ({
+                                ...current,
+                                heatmapMode: mode,
+                              }));
+                            }
+                          }}
+                        >
+                          <option value="weekday">Weekday heatmap</option>
+                          <option value="calendar">Year heatmap</option>
+                        </Select>
+                      </Field>
+                    ) : null}
+
+                    {presetDraft.chartType === 'table' ? (
+                      <div>
+                        <p className="mb-3 font-mono text-base font-black tracking-normal text-secondary">
+                          Table columns
+                        </p>
+                        <div className="space-y-3">
+                          <div className="flex flex-wrap gap-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              onClick={() =>
+                                setPresetDraft((current) => ({
+                                  ...current,
+                                  tableColumns: defaultTableColumns,
+                                }))
+                              }
+                            >
+                              Default
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              onClick={() =>
+                                setPresetDraft((current) => ({
+                                  ...current,
+                                  tableColumns: [],
+                                }))
+                              }
+                            >
+                              Deselect all
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="secondary"
+                              onClick={() =>
+                                setPresetDraft((current) => ({
+                                  ...current,
+                                  tableColumns: tableColumnOptions.map((item) => item.value),
+                                }))
+                              }
+                            >
+                              Select all
+                            </Button>
+                          </div>
+                          <div className="grid gap-2 sm:grid-cols-2">
+                            {tableColumnOptions.map((option) => {
+                              const checked = presetDraft.tableColumns.includes(option.value);
+                              return (
+                                <button
+                                  key={option.value}
+                                  type="button"
+                                  onClick={() =>
+                                    setPresetDraft((current) => {
+                                      const cols = current.tableColumns.includes(option.value)
+                                        ? current.tableColumns.filter((item) => item !== option.value)
+                                        : [...current.tableColumns, option.value];
+                                      return {
+                                        ...current,
+                                        tableColumns: cols,
+                                      };
+                                    })
+                                  }
+                                  className={cn(
+                                    'flex items-center justify-between border p-3 text-left font-mono text-sm transition',
+                                    checked
+                                      ? 'border-secondary/40 bg-secondary/5 text-light'
+                                      : 'border-border bg-input text-muted hover:border-primary/45',
+                                  )}
+                                >
+                                  <span>{option.label}</span>
+                                  <span
+                                    className={cn(
+                                      'flex h-5 w-5 items-center justify-center rounded transition',
+                                      checked ? 'bg-secondary text-input-dark' : 'border border-white/20',
+                                    )}
+                                  >
+                                    {checked ? <Check size={13} strokeWidth={3} /> : null}
+                                  </span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {presetDraft.chartType === 'heatmap' && presetHeatmapMode === 'calendar' ? (
+                      <div>
+                        <p className="mb-3 font-mono text-base font-black tracking-normal text-secondary">
+                          Year
+                        </p>
+                        <p className="mb-4 border border-border bg-input px-3 py-2 font-mono text-xs text-light">
+                          {getYearFromDate(presetDraft.startDate) === String(new Date().getFullYear())
+                            ? `${getYearFromDate(presetDraft.startDate)} · Jan 1 to today`
+                            : `${getYearFromDate(presetDraft.startDate)} · Jan 1 to Dec 31`}
+                        </p>
+                        <Field label="Year">
+                          <Input
+                            type="number"
+                            min="2020"
+                            max={String(new Date().getFullYear())}
+                            value={getYearFromDate(presetDraft.startDate)}
+                            onChange={(event) => {
+                              const range = getYearDateRange(event.target.value);
+                              setPresetDraft((current) => ({
+                                ...current,
+                                startDate: range.startDate,
+                                endDate: range.endDate,
+                              }));
+                            }}
+                          />
+                        </Field>
+                      </div>
+                    ) : (
+                      <div>
+                        <p className="mb-3 font-mono text-base font-black tracking-normal text-secondary">
+                          Time range
+                        </p>
+                        <div className="grid gap-4 sm:grid-cols-2">
+                          <Field label="Start date">
+                            <Input
+                              type="date"
+                              value={presetDraft.startDate}
+                              onChange={(event) => setPresetDraft((current) => ({ ...current, startDate: event.target.value }))}
+                            />
+                          </Field>
+                          <Field label="End date">
+                            <Input
+                              type="date"
+                              value={presetDraft.endDate}
+                              onChange={(event) => setPresetDraft((current) => ({ ...current, endDate: event.target.value }))}
+                            />
+                          </Field>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
-              <Field label="Chart type">
-                <Select
-                  value={presetDraft.chartType}
-                  onChange={(event) =>
-                    setPresetDraft((current) => ({
-                      ...current,
-                      chartType: event.target.value as PresetDraft['chartType'],
-                    }))
-                  }
-                >
-                  <option value="line">Line</option>
-                  <option value="bar">Bar</option>
-                  <option value="pie">Pie</option>
-                  <option value="table">Table</option>
-                  <option value="heatmap">Heatmap</option>
-                </Select>
-              </Field>
-              <Field label="Severity">
-                <Select
-                  value={presetDraft.severity}
-                  onChange={(event) => setPresetDraft((current) => ({ ...current, severity: event.target.value }))}
-                >
-                  <option value="">Any severity</option>
-                  <option value="critical">Critical</option>
-                  <option value="major">Major</option>
-                  <option value="minor">Minor</option>
-                  <option value="warning">Warning</option>
-                </Select>
-              </Field>
-              <Field label="Status">
-                <Select
-                  value={presetDraft.status}
-                  onChange={(event) => setPresetDraft((current) => ({ ...current, status: event.target.value }))}
-                >
-                  <option value="">Any status</option>
-                  <option value="active">Active</option>
-                  <option value="closed">Closed</option>
-                  <option value="acknowledged">Acknowledged</option>
-                </Select>
-              </Field>
-              <Field label="Error code">
-                <Input
-                  value={presetDraft.errorCode}
-                  onChange={(event) => setPresetDraft((current) => ({ ...current, errorCode: event.target.value }))}
-                />
-              </Field>
-              <Field label="Vendor">
-                <Input
-                  value={presetDraft.vendor}
-                  onChange={(event) => setPresetDraft((current) => ({ ...current, vendor: event.target.value }))}
-                />
-              </Field>
-              <Field label="Device type">
-                <Input
-                  value={presetDraft.deviceType}
-                  onChange={(event) => setPresetDraft((current) => ({ ...current, deviceType: event.target.value }))}
-                />
-              </Field>
-              <Field label="Start date">
-                <Input
-                  type="date"
-                  value={presetDraft.startDate}
-                  onChange={(event) => setPresetDraft((current) => ({ ...current, startDate: event.target.value }))}
-                />
-              </Field>
-              <Field label="End date">
-                <Input
-                  type="date"
-                  value={presetDraft.endDate}
-                  onChange={(event) => setPresetDraft((current) => ({ ...current, endDate: event.target.value }))}
-                />
-              </Field>
-            </div>
 
-            <div className="mt-6 flex justify-end gap-3 border-t border-white/10 pt-4">
-              <Button variant="ghost" onClick={() => setPresetModalOpen(false)}>
+            <div className="mt-auto flex justify-end gap-3 border-t border-white/10 px-6 py-4 bg-panel-light/95 sticky bottom-0">
+              <Button variant="ghost" className="h-11 px-5" onClick={() => setPresetModalOpen(false)}>
                 Cancel
               </Button>
               <Button
+                className="h-11 px-6"
                 onClick={handleSavePreset}
                 disabled={creatingPreset || !presetDraft.presetName.trim()}
               >
@@ -1231,7 +1425,8 @@ export function TemplatesPage() {
             </div>
           </div>
         </div>
-      ) : null}
+      </>
+    ) : null}
 
       {templateModal ? (
         <TemplateEditorModal

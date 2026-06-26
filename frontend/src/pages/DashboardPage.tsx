@@ -19,6 +19,7 @@ import {
   type WidgetSettingsValues,
 } from '../features/dashboard/components/WidgetSettingsDrawer';
 import { nettraceApi } from '../services/generated/nettrace-api';
+import { decodeTableColumns } from '../utils/columns';
 import type { AppOutletContext } from '../layouts/AppLayout';
 
 type WidgetType =
@@ -60,36 +61,83 @@ export function DashboardPage() {
   const [activeWidgetId, setActiveWidgetId] = useState<string | null>(null);
   const [generalSettingsOpen, setGeneralSettingsOpen] = useState(false);
 
+function normalizePresetChartType(value: string | null | undefined): 'line' | 'bar' | 'pie' | 'table' | 'heatmap' {
+  if (value === 'line' || value === 'bar' || value === 'pie' || value === 'table' || value === 'heatmap') {
+    return value;
+  }
+  return 'line';
+}
+
+function normalizePresetMetric(value: string | null | undefined) {
+  if (value === 'count' || value === 'avg_duration' || value === 'max_duration' || value === 'affected_devices') {
+    return value;
+  }
+  return 'count';
+}
+
+function normalizePresetGroupBy(value: string | null | undefined) {
+  if (value === 'none') return 'none';
+  if (
+    value === 'severity' ||
+    value === 'status' ||
+    value === 'error_code' ||
+    value === 'device' ||
+    value === 'device_type' ||
+    value === 'vendor' ||
+    value === 'station' ||
+    value === 'province'
+  ) {
+    return value;
+  }
+  return 'none';
+}
+
+function normalizePresetTimeBucket(value: string | null | undefined) {
+  if (value === 'hour' || value === 'day' || value === 'week' || value === 'month' || value === 'year') {
+    return value;
+  }
+  return 'day';
+}
+
+function normalizePresetHeatmapMode(value: string | null | undefined) {
+  if (value === 'weekday' || value === 'calendar') {
+    return value;
+  }
+  return 'weekday';
+}
+
+function normalizePresetTableColumns(value: string | null | undefined) {
+  return decodeTableColumns(value);
+}
+
   const widgetPresets = useQuery({
     queryKey: ['dashboard-widget-presets'],
     queryFn: async () => {
       const templates = await nettraceApi.listTemplates({ limit: 50, offset: 0 });
       const presets = await nettraceApi.listPresets({ limit: 1000, offset: 0 });
-      const options: WidgetPresetOption[] = presets.data.map((preset) => ({
-        id: `preset:${preset.preset_id}`,
-        label: `${preset.preset_name ?? `Preset ${preset.preset_id}`} · ${preset.template_name ?? 'Unassigned'}`,
-        values: {
-          title: preset.preset_name || `Preset ${preset.preset_id}`,
-          visible: true,
-          chartType:
-            preset.chart_type === 'bar' ||
-            preset.chart_type === 'pie' ||
-            preset.chart_type === 'table' ||
-            preset.chart_type === 'heatmap'
-              ? preset.chart_type
-              : 'line',
-          metric: 'count',
-          groupBy: preset.chart_type === 'pie' ? 'severity' : 'none',
-          timeBucket: 'day',
-          heatmapMode: 'weekday',
-          info1: true,
-          info2: true,
-          info3: true,
-          preset: `preset:${preset.preset_id}`,
-          startDate: preset.start_date?.slice(0, 10) ?? '',
-          endDate: preset.end_date?.slice(0, 10) ?? '',
-        },
-      }));
+      const options: WidgetPresetOption[] = presets.data.map((preset) => {
+        const chartType = normalizePresetChartType(preset.chart_type);
+        return {
+          id: `preset:${preset.preset_id}`,
+          label: `${preset.preset_name ?? `Preset ${preset.preset_id}`} · ${preset.template_name ?? 'Unassigned'}`,
+          values: {
+            title: preset.preset_name || `Preset ${preset.preset_id}`,
+            visible: true,
+            chartType,
+            metric: normalizePresetMetric(preset.status) as any,
+            groupBy: normalizePresetGroupBy(preset.severity) as any,
+            timeBucket: normalizePresetTimeBucket(preset.error_code) as any,
+            heatmapMode: normalizePresetHeatmapMode(preset.vendor) as any,
+            tableColumns: normalizePresetTableColumns(preset.device_type),
+            info1: true,
+            info2: true,
+            info3: true,
+            preset: `preset:${preset.preset_id}`,
+            startDate: preset.start_date?.slice(0, 10) ?? '',
+            endDate: preset.end_date?.slice(0, 10) ?? '',
+          },
+        };
+      });
 
       return {
         options,

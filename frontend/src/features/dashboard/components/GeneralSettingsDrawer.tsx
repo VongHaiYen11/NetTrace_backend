@@ -32,8 +32,12 @@ import {
   type TemplateSummary,
   type TemplateWidgetDetail,
   type TemplateWidgetInput,
+  type GroupBy,
+  type Metric,
+  type TimeBucket,
 } from '../../../services/generated/nettrace-api';
 import { cn } from '../../../utils/cn';
+import { encodeTableColumns, decodeTableColumns } from '../../../utils/columns';
 import type { WidgetKind, WidgetSettingsValues } from './WidgetSettingsDrawer';
 
 export type DashboardWidgetConfig = WidgetSettingsValues & {
@@ -302,8 +306,8 @@ function applyKpiSelection(widgets: DashboardWidgetConfig[], kind: KpiWidgetKind
       info2: true,
       info3: true,
       preset: sourceWidget?.preset ?? 'Active Connections',
-      startDate: sourceWidget?.startDate ?? '2026-06-01',
-      endDate: sourceWidget?.endDate ?? '2026-06-30',
+      startDate: '',
+      endDate: '',
     };
     return [...widgets, newWidget];
   }
@@ -456,11 +460,11 @@ export function buildTemplateWidgetInputs(widgets: DashboardWidgetConfig[]): Tem
     chart_type: widget.chartType,
     start_date: widget.startDate || null,
     end_date: widget.endDate || null,
-    status: null,
-    severity: null,
-    error_code: null,
-    vendor: null,
-    device_type: null,
+    status: widget.metric || null,
+    severity: widget.groupBy || null,
+    error_code: widget.timeBucket || null,
+    vendor: widget.heatmapMode || null,
+    device_type: encodeTableColumns(widget.tableColumns),
   }));
 }
 
@@ -506,6 +510,50 @@ function normalizeTemplateDate(value: string | null | undefined, fallback: strin
   return value ? value.slice(0, 10) : fallback;
 }
 
+type HeatmapMode = 'weekday' | 'calendar';
+
+function normalizeMetric(value: string | null | undefined): Metric {
+  if (value === 'count' || value === 'avg_duration' || value === 'max_duration' || value === 'affected_devices') {
+    return value;
+  }
+  return 'count';
+}
+
+function normalizeGroupBy(value: string | null | undefined): 'none' | GroupBy {
+  if (value === 'none') return 'none';
+  if (
+    value === 'severity' ||
+    value === 'status' ||
+    value === 'error_code' ||
+    value === 'device' ||
+    value === 'device_type' ||
+    value === 'vendor' ||
+    value === 'station' ||
+    value === 'province'
+  ) {
+    return value;
+  }
+  return 'none';
+}
+
+function normalizeTimeBucket(value: string | null | undefined): TimeBucket {
+  if (value === 'hour' || value === 'day' || value === 'week' || value === 'month' || value === 'year') {
+    return value;
+  }
+  return 'day';
+}
+
+function normalizeHeatmapMode(value: string | null | undefined): HeatmapMode {
+  if (value === 'weekday' || value === 'calendar') {
+    return value;
+  }
+  return 'weekday';
+}
+
+function normalizeTableColumns(value: string | null | undefined): ExportColumn[] | undefined {
+  return decodeTableColumns(value);
+}
+
 function applyPresetToWidget(
   widget: DashboardWidgetConfig,
   preset: PresetSummary,
@@ -516,10 +564,11 @@ function applyPresetToWidget(
     title: preset.preset_name || `Preset ${preset.preset_id}`,
     preset: `preset:${preset.preset_id}`,
     chartType,
-    groupBy: chartType === 'pie' ? 'severity' : 'none',
-    metric: 'count',
-    timeBucket: 'day',
-    heatmapMode: chartType === 'heatmap' ? 'weekday' : widget.heatmapMode,
+    groupBy: normalizeGroupBy(preset.severity),
+    metric: normalizeMetric(preset.status),
+    timeBucket: normalizeTimeBucket(preset.error_code),
+    heatmapMode: normalizeHeatmapMode(preset.vendor),
+    tableColumns: normalizeTableColumns(preset.device_type),
     layoutSpan: chartType === 'table' || chartType === 'heatmap' ? 2 : 1,
     startDate: normalizeTemplateDate(preset.start_date, widget.startDate),
     endDate: normalizeTemplateDate(preset.end_date, widget.endDate),
@@ -545,13 +594,14 @@ function applyTemplateWidgetsFromDb(
       visible: true,
       layoutOrder: templateWidget.preset.position || index + 1,
       chartType,
-      groupBy: chartType === 'pie' ? 'severity' : 'none',
-      metric: 'count',
-      timeBucket: 'day',
-      heatmapMode: chartType === 'heatmap' ? 'weekday' : slot.heatmapMode,
+      groupBy: normalizeGroupBy(templateWidget.preset.severity),
+      metric: normalizeMetric(templateWidget.preset.status),
+      timeBucket: normalizeTimeBucket(templateWidget.preset.error_code),
+      heatmapMode: normalizeHeatmapMode(templateWidget.preset.vendor),
+      tableColumns: normalizeTableColumns(templateWidget.preset.device_type),
       layoutSpan: chartType === 'table' || chartType === 'heatmap' ? 2 : 1,
-      startDate: normalizeTemplateDate(templateWidget.preset.start_date, slot.startDate || '2026-06-01'),
-      endDate: normalizeTemplateDate(templateWidget.preset.end_date, slot.endDate || '2026-06-30'),
+      startDate: normalizeTemplateDate(templateWidget.preset.start_date, slot.startDate || ''),
+      endDate: normalizeTemplateDate(templateWidget.preset.end_date, slot.endDate || ''),
     });
   });
 
@@ -893,8 +943,8 @@ export function GeneralSettingsDrawer({
       info3: true,
       tableColumns: defaultTableColumns,
       preset: sourceWidget?.preset ?? 'Active Connections',
-      startDate: sourceWidget?.startDate ?? '2026-06-01',
-      endDate: sourceWidget?.endDate ?? '2026-06-30',
+      startDate: '',
+      endDate: '',
     };
     setDetailDraftWidgets((current) => insertChartWidget(current, nextWidget, slot));
     setSelectedSlotId(widgetId);
@@ -919,8 +969,8 @@ export function GeneralSettingsDrawer({
       info3: true,
       tableColumns: defaultTableColumns,
       preset: `preset:${preset.preset_id}`,
-      startDate: sourceWidget?.startDate ?? '2026-06-01',
-      endDate: sourceWidget?.endDate ?? '2026-06-30',
+      startDate: '',
+      endDate: '',
     };
     const nextWidget = applyPresetToWidget(baseWidget, preset);
     setDetailDraftWidgets((current) => insertChartWidget(current, nextWidget, slot));
@@ -1622,8 +1672,12 @@ export function GeneralSettingsDrawer({
       {detailModalOpen ? (
         <>
           <div className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm" onClick={closeDetailModal} />
-          <div className="fixed inset-x-4 top-8 z-[70] mx-auto max-h-[calc(100vh-4rem)] w-[min(1080px,calc(100vw-2rem))] overflow-y-auto rounded-md border border-white/10 bg-panel-light text-light shadow-2xl">
-            <div className="flex items-center justify-between border-b border-white/10 px-7 py-5">
+          <div className="fixed inset-0 z-[70] flex items-center justify-center p-4" onClick={closeDetailModal}>
+            <div
+              className="relative flex max-h-[90vh] w-full max-w-[800px] flex-col rounded-md border border-white/10 bg-panel-light text-light shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between border-b border-white/10 px-7 py-5">
               <div>
                 <p className="font-mono text-xs font-bold uppercase tracking-[0.18em] text-secondary">
                   {detailMode === 'create' ? 'Creating template' : 'Advanced settings'}
@@ -1657,7 +1711,9 @@ export function GeneralSettingsDrawer({
             </div>
 
             {detailStep === 'template' ? (
-              <div className="grid gap-7 px-7 py-7 lg:grid-cols-[280px_1fr]">
+              <div className="flex flex-1 flex-col overflow-hidden">
+                <div className="flex-1 overflow-y-auto px-7 py-7">
+                  <div className="grid gap-7 px-7 py-7 lg:grid-cols-[280px_1fr]">
                 <aside className="rounded-md border border-white/10 bg-panel-dark p-5">
                   <p className="font-mono text-sm font-black text-secondary">
                     {detailMode === 'create' ? 'New template' : 'Current template'}
@@ -1792,22 +1848,26 @@ export function GeneralSettingsDrawer({
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-end gap-3 border-t border-white/10 pt-5">
-                    <Button variant="ghost" className="h-11 px-5" onClick={closeDetailModal}>Cancel</Button>
-                    <Button variant="secondary" className="h-11 px-6 border-secondary text-secondary" onClick={goToWidgetStep}>
-                      Widgets
-                    </Button>
-                    {detailMode === 'edit' ? (
-                      <Button className="h-11 px-6" onClick={saveDetailModal} disabled={creatingTemplate}>
-                        Save changes
-                      </Button>
-                    ) : null}
                   </div>
                 </div>
               </div>
+
+                <div className="mt-auto flex items-center justify-end gap-3 border-t border-white/10 px-7 py-4 bg-panel-light/95 sticky bottom-0">
+                  <Button variant="ghost" className="h-11 px-5" onClick={closeDetailModal}>Cancel</Button>
+                  <Button variant="secondary" className="h-11 px-6 border-secondary text-secondary" onClick={goToWidgetStep}>
+                    Widgets
+                  </Button>
+                  {detailMode === 'edit' ? (
+                    <Button className="h-11 px-6" onClick={saveDetailModal} disabled={creatingTemplate}>
+                      Save changes
+                    </Button>
+                  ) : null}
+                </div>
+              </div>
             ) : (
-              <div className="px-6 py-6">
-                <div className="grid gap-7 lg:grid-cols-[300px_1fr]">
+              <div className="flex flex-1 flex-col overflow-hidden">
+                <div className="flex-1 overflow-y-auto px-6 py-6">
+                  <div className="grid gap-7 lg:grid-cols-[300px_1fr]">
                   <div>
                     <p className="font-mono text-lg font-black text-secondary drop-shadow-glow-secondary">
                       Layout map
@@ -2303,27 +2363,29 @@ export function GeneralSettingsDrawer({
                     ) : null}
                   </div>
                 </div>
+              </div>
 
-                <div className="mt-8 flex items-center justify-between border-t border-white/10 pt-5">
-                  <Button variant="ghost" className="h-11 px-5" onClick={() => setDetailStep('template')}>Back</Button>
-                  <div className="flex items-center gap-3">
-                    <Button variant="ghost" className="h-11 px-5" onClick={closeDetailModal}>Cancel</Button>
-                    <Button
-                      className="h-11 px-6 disabled:cursor-not-allowed disabled:border-border-muted disabled:bg-input-dark disabled:text-placeholder disabled:opacity-100"
-                      onClick={saveDetailModal}
-                      disabled={creatingTemplate || (detailMode === 'create' && !allDetailWidgetSlotsComplete)}
-                      title={
-                        detailMode === 'create' && !allDetailWidgetSlotsComplete
-                          ? `Complete all ${detailLayoutCount} widget slots before creating the template.`
-                          : undefined
-                      }
-                    >
-                      {detailMode === 'create' ? (creatingTemplate ? 'Creating...' : 'Create template') : 'Save changes'}
-                    </Button>
-                  </div>
+              <div className="mt-auto flex items-center justify-between border-t border-white/10 px-6 py-4 bg-panel-light/95 sticky bottom-0">
+                <Button variant="ghost" className="h-11 px-5" onClick={() => setDetailStep('template')}>Back</Button>
+                <div className="flex items-center gap-3">
+                  <Button variant="ghost" className="h-11 px-5" onClick={closeDetailModal}>Cancel</Button>
+                  <Button
+                    className="h-11 px-6 disabled:cursor-not-allowed disabled:border-border-muted disabled:bg-input-dark disabled:text-placeholder disabled:opacity-100"
+                    onClick={saveDetailModal}
+                    disabled={creatingTemplate || (detailMode === 'create' && !allDetailWidgetSlotsComplete)}
+                    title={
+                      detailMode === 'create' && !allDetailWidgetSlotsComplete
+                        ? `Complete all ${detailLayoutCount} widget slots before creating the template.`
+                        : undefined
+                    }
+                  >
+                    {detailMode === 'create' ? (creatingTemplate ? 'Creating...' : 'Create template') : 'Save changes'}
+                  </Button>
                 </div>
               </div>
-            )}
+            </div>
+          )}
+            </div>
           </div>
         </>
       ) : null}
