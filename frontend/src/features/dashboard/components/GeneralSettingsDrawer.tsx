@@ -48,7 +48,7 @@ export type DashboardWidgetConfig = WidgetSettingsValues & {
   layoutSpan: 1 | 2;
 };
 
-type LayoutCount = 2 | 3 | 4 | 5 | 6;
+type LayoutCount = 1 | 2 | 3 | 4 | 5 | 6;
 
 interface DashboardTemplate {
   id: string;
@@ -373,7 +373,7 @@ function compactVisibleChartOrder(widgets: DashboardWidgetConfig[]) {
 
 export function getLayoutCapacity(widgets: DashboardWidgetConfig[]) {
   const visibleCount = getVisibleChartWidgets(widgets).length;
-  return Math.min(6, Math.max(2, visibleCount)) as LayoutCount;
+  return Math.min(6, Math.max(1, visibleCount)) as LayoutCount;
 }
 
 function hideChartWidget(widgets: DashboardWidgetConfig[], widgetId: string) {
@@ -583,7 +583,7 @@ function applyTemplateWidgetsFromDb(
     (a, b) => a.preset.position - b.preset.position || a.widget_id - b.widget_id,
   );
   const chartSlots = getChartWidgets(sourceWidgets);
-  const visibleCount = Math.min(Math.max(orderedTemplateWidgets.length, 2), 6) as LayoutCount;
+  const visibleCount = Math.min(Math.max(orderedTemplateWidgets.length, 1), 6) as LayoutCount;
   const updatesById = new Map<string, Partial<DashboardWidgetConfig>>();
 
   orderedTemplateWidgets.slice(0, chartSlots.length).forEach((templateWidget, index) => {
@@ -640,7 +640,7 @@ function createDashboardTemplateFromDetail(template: TemplateDetail): DashboardT
     };
   }
 
-  const layoutCount = Math.min(Math.max(template.widgets.length, 2), 6) as LayoutCount;
+  const layoutCount = Math.min(Math.max(template.widgets.length, 1), 6) as LayoutCount;
   return {
     id: `db:${template.template_id}`,
     name: getSavedTemplateName(template),
@@ -740,9 +740,9 @@ export function GeneralSettingsDrawer({
                 id: `db:${template.template_id}`,
                 name: getSavedTemplateName(template),
                 description: 'POSTGRES / SAVED_LAYOUT',
-                layoutCount: Math.min(Math.max(template.number_of_widgets || 2, 2), 6) as LayoutCount,
+                layoutCount: Math.min(Math.max(template.number_of_widgets || 1, 1), 6) as LayoutCount,
                 apply: (currentWidgets: DashboardWidgetConfig[]) =>
-                  withVisibleChartCount(currentWidgets, Math.min(Math.max(template.number_of_widgets || 2, 2), 6) as LayoutCount),
+                  withVisibleChartCount(currentWidgets, Math.min(Math.max(template.number_of_widgets || 1, 1), 6) as LayoutCount),
               };
             }
           }),
@@ -1349,7 +1349,7 @@ export function GeneralSettingsDrawer({
 
                     {sidebarLayoutDropdownOpen ? (
                       <div className="absolute left-0 right-0 top-full z-20 mt-2 space-y-1 rounded-md border border-border bg-panel-dark p-2 shadow-2xl">
-                        {([2, 3, 4, 5, 6] as LayoutCount[]).map((count) => {
+                        {([1, 2, 3, 4, 5, 6] as LayoutCount[]).map((count) => {
                           const selected = count === sidebarLayoutCount;
                           return (
                             <button
@@ -1747,8 +1747,9 @@ export function GeneralSettingsDrawer({
                         <p className="mt-1 text-sm text-muted">Pick the chart/table slot count.</p>
                       </div>
                     </div>
-                    <div className="mt-3 grid gap-3 md:grid-cols-5">
+                    <div className="mt-3 grid gap-3 grid-cols-2 md:grid-cols-3">
                       {[
+                        { count: 1, icon: Maximize2, label: 'Hero' },
                         { count: 2, icon: Grid2X2, label: 'Focused' },
                         { count: 3, icon: LayoutGrid, label: 'Simple' },
                         { count: 4, icon: LayoutGrid, label: 'Balanced' },
