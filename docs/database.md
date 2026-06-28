@@ -35,14 +35,25 @@ ORDER BY (alarm_id);
 * **Prohibited Joins:** Direct joins with PostgreSQL tables are strictly forbidden at the database level.
 * **PREWHERE:** Dynamic query parameters are positioned in the `PREWHERE` statement to filter candidate rows before larger string data blocks (`raw_log`, `description`) are loaded into memory.
 
+### Purpose Of ClickHouse Declarations
+
+| Declaration | Purpose |
+| --- | --- |
+| `ENGINE = MergeTree` | Enables ClickHouse's primary storage engine for large append-heavy analytical tables. |
+| `PARTITION BY toDate(time_created)` | Splits data by event date so time-range queries can skip unrelated partitions. |
+| `ORDER BY (alarm_id)` | Defines the table sorting key. This supports deterministic storage layout; query-specific pruning still relies mainly on partition and `PREWHERE` filters. |
+| `LowCardinality(String)` for `status`, `severity` | Dictionary-encodes repeated categorical values to reduce storage and speed filters/grouping. |
+| `Nullable(DateTime)` for `time_solved` | Allows active alarms to omit a solved timestamp without using sentinel dates. |
+
 ---
 
 ## 🐘 PostgreSQL (OLTP Metadata & Configurations)
 
-PostgreSQL stores metadata configurations (stations, devices, vendors, and error code definitions) as well as dashboard layout configurations (templates, widgets, and filters).
+PostgreSQL stores metadata configurations (stations, devices, vendors, and error code definitions) as well as dashboard layout configurations (templates, widgets, and presets).
 
 Presets are reusable records and may exist without a template. A preset becomes part of a dashboard template only when a `widget` row links its `preset_id` to a `template_id`.
 `preset_name` is the user-facing reusable configuration name returned by preset and template-detail APIs.
+Presets store reusable chart configuration only; widget-specific `position`, `start_date`, and `end_date` live on `widget`.
 
 ### Relational Metadata Tables
 ```sql
@@ -94,6 +105,17 @@ CREATE INDEX idx_station_longitude ON station(longitude);
 CREATE INDEX idx_station_latitude ON station(latitude);
 ```
 
+### Purpose Of Metadata Declarations
+
+| Declaration | Purpose |
+| --- | --- |
+| Primary keys on `vendor_id`, `station_id`, `device_id`, `error_code` | Fast direct lookup and stable IDs for federation with ClickHouse event rows. |
+| `device.vendor_id` and `device.station_id` foreign keys | Maintains relational integrity between devices, vendors, and stations. |
+| `idx_device_vendor` | Speeds resolving vendor filters to matching devices before querying ClickHouse. |
+| `idx_device_station` | Speeds resolving station filters to matching devices before querying ClickHouse. |
+| `idx_device_type` | Speeds direct device-type metadata filtering. |
+| `idx_station_longitude`, `idx_station_latitude` | Supports future location/range lookup and map-oriented filtering. |
+
 ### Dashboard Layout Customization Tables
 These tables support saving customized configurations of KPI cards and widgets.
 
@@ -142,20 +164,34 @@ CREATE INDEX idx_preset_group_by ON Preset(group_by);
 CREATE INDEX idx_preset_time_bucket ON Preset(time_bucket);
 ```
 
+### Purpose Of Dashboard Declarations
+
+| Declaration | Purpose |
+| --- | --- |
+| `template.selected_cards TEXT` | Stores the frontend layout/KPI snapshot as serialized JSON text. |
+| `template.number_of_widgets` | Keeps a fast count for template filtering and listing. |
+| `preset.chart_type` | Determines which chart-specific preset columns are meaningful. |
+| `preset.metric`, `group_by`, `time_bucket`, `heatmap_mode`, `table_columns` | Stores reusable widget configuration. Unused fields are normalized to `NULL` by chart type. |
+| `widget.position` | Stores the slot position because the same preset can be reused in different slots. |
+| `widget.start_date`, `widget.end_date` | Stores date range per template widget because reused presets should not force a shared date range. |
+| `fk_widget_template ... ON DELETE CASCADE` | Automatically removes widget links when a template is deleted. |
+| `fk_widget_preset ... ON DELETE CASCADE` | Protects referential integrity at the DB level; application logic blocks deleting presets while used. |
+| `idx_widget_template` | Speeds loading all widgets for a template detail view. |
+| `idx_widget_preset` | Speeds checking whether a preset is currently used before deletion. |
+| `idx_widget_position` | Speeds ordered slot rendering and template detail ordering. |
+| Preset field indexes | Support filtering/searching reusable presets by chart configuration fields. |
+
 ---
 
 ## 🔗 Entity Relationships (Concept Map)
 
 ```text
   [Vendor] 1 --------- * [Device] * --------- 1 [Station]
-                             |
-                             | 1
-                             |
-                             | 1 (Cascaded)
-                          [Preset] * --------- 0..1 [Error]
-                             |
-                             | 1 (Cascaded)
-                          [Widget] * --------- 1 [Template]
+
+  [Template] 1 --------- * [Widget] * --------- 1 [Preset]
+       |                      |
+       |                      └─ owns slot position and date range
+       └─ cascade delete removes widget links only
 ```
 
 ## Core Design Decisions
@@ -165,6 +201,7 @@ Under no circumstances may a SQL query contain a link or join between PostgreSQL
 
 ### 2. Cascading Delete Integrity
 * Removing a `Template` will automatically cascade-delete all of its `Widget` entities.
-* Deleting a `Preset` will cascade-delete its `Widget` references.
+* Deleting a `Preset` is blocked by the application while any `Widget` references it.
 * Presets are reusable; deleting a template removes only widget links, not preset rows.
 * Preset columns store widget configuration (`metric`, `group_by`, `time_bucket`, `heatmap_mode`, `table_columns`) rather than direct metadata foreign keys.
+* Preset columns are normalized by chart type; fields irrelevant to the chart type are stored as `NULL`.

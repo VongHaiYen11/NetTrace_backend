@@ -1,623 +1,102 @@
-# Frontend AGENT Instructions
+# NetTrace Frontend Agent Guidelines
 
 ## Purpose
 
-This frontend is part of the NetTrace platform.
+This frontend is the React/Vite dashboard for NetTrace. It must follow the current backend contract and the existing in-repo UI system. The backend API and generated frontend types are the source of truth for data shape.
 
-The frontend must faithfully implement approved Figma designs and consume existing backend APIs.
+## Current Stack
 
-The backend API is the source of truth.
+- React 18, TypeScript, Vite
+- Tailwind CSS with project tokens in `src/styles/tokens.css`
+- React Router
+- TanStack Query for server state
+- React Hook Form for widget settings
+- Recharts and ECharts for charts
+- Lucide React icons
+- Sonner notifications
+- Generated/manual API client at `src/services/generated/nettrace-api.ts`
 
-The Figma design is the source of truth for UI and UX.
+## Project Structure
 
----
-
-# Design Sources
-
-## Figma Design
-
-The figma design is exported by .png file in design folder.
----
-
-# Design System
-
-The design system should follow the existing Figma project as the primary source of truth.
-
-Use the Figma MCP server whenever available to inspect and extract:
-
-* Typography and font usage
-* Color palette and design tokens
-* Spacing and layout rules
-* Iconography
-* Component variants and states
-* Responsive behavior
-
-Do not introduce new design tokens, colors, fonts, spacing scales, or icon styles unless they already exist in Figma or are explicitly approved.
-
-When design details are unclear:
-
-1. Inspect similar screens in Figma.
-2. Inspect existing implemented components.
-3. Follow established patterns.
-4. Avoid introducing new design decisions.
-
-Maintain visual consistency across all screens by reusing the design language already present in Figma.
-
----
-
-# Technology Stack
-
-## Core
-
-* React
-* TypeScript
-* Vite
-
-## Styling
-
-* TailwindCSS
-* tailwind-merge
-* clsx
-
-## Routing
-
-* React Router
-
-## Data Fetching
-
-* TanStack Query (React Query)
-
-## HTTP
-
-* Generated API Client Only
-
-## State Management
-
-* React Context (when needed)
-* Local component state by default
-
-## Forms
-
-* React Hook Form
-* Zod
-
-## Tables
-
-* TanStack Table
-
-## Charts & Data Visualization
-
-* Recharts
-
-## Date Handling
-
-* date-fns
-
-## Utilities
-
-* lodash-es
-
-## Notifications
-
-* Sonner
-
-## Icons
-
-* Lucide React
-
----
-
-# API Integration Rules
-
-Backend APIs already exist.
-
-Never create new API contracts.
-
-Never create mock APIs.
-
-Never create fake endpoints.
-
-Always use existing generated API clients and hooks.
-
-Always use backend DTOs and generated TypeScript types.
-
-Backend OpenAPI specification is the source of truth.
-
-If an API capability appears missing:
-
-* Do not invent endpoints.
-* Do not fabricate request payloads.
-* Do not fabricate response fields.
-* Surface the limitation clearly.
-
----
-
-# Project Structure
-
-Preferred structure:
-
+```text
 src/
-├── pages/
-├── features/
 ├── components/
-│ ├── ui/
-│ └── shared/
-├── hooks/
-├── services/
-├── types/
+│   ├── shared/
+│   └── ui/
+├── features/
+│   └── dashboard/
 ├── layouts/
+├── pages/
 ├── routes/
+├── services/
+│   └── generated/
+├── styles/
 └── utils/
-
----
-
-# Component Architecture
-
-Preferred principles:
-
-* Reusable components first
-* Thin pages
-* Feature-oriented organization
-* Separation of presentation and business logic
-
-Rules:
-
-* Move reusable logic into hooks
-* Move reusable UI into components
-* Avoid duplicated UI patterns
-* Avoid duplicated business logic
-* Avoid business logic inside presentation components
-
----
-
-# UI Rules
-
-Create reusable components whenever possible.
-
-Avoid duplicated UI patterns.
-
-Keep pages thin.
-
-Move reusable logic into hooks.
-
-Move reusable UI into components.
-
-Do not place business logic inside presentation components.
-
-Follow existing patterns before introducing new abstractions.
-
----
-
-# Figma Implementation Rules
-
-When implementing a Figma screen:
-
-1. Read the design through images in the design folder.
-2. Identify reusable components.
-3. Reuse existing components before creating new ones.
-4. Preserve spacing and hierarchy.
-5. Match typography exactly.
-6. Match colors exactly.
-7. Match component states exactly.
-8. Match interaction patterns exactly.
-9. Match layout structure exactly.
-10. Ensure responsive behavior.
-
-Do not redesign screens.
-
-Do not improve the design.
-
-Do not introduce new UX patterns.
-
-Do not invent layouts.
-
-Desktop Figma implementation should be visually identical whenever possible.
-
----
-
-# Responsive Design Rules
-
-## Responsive Strategy
-
-If responsive designs are not available in Figma:
-
-The agent is responsible for creating responsive behavior using established SaaS and dashboard design conventions.
-
-Priority:
-
-1. Preserve usability
-2. Preserve information hierarchy
-3. Preserve visual consistency
-4. Preserve design language
-5. Preserve desktop fidelity
-
-Desktop implementation must remain visually identical to Figma.
-
-Responsive adaptations should only affect tablet and mobile layouts.
-
----
-
-## Breakpoints
-
-Use Tailwind default breakpoints:
-
-* sm = 640px
-* md = 768px
-* lg = 1024px
-* xl = 1280px
-* 2xl = 1536px
-
-Device categories:
-
-* Mobile: < 640px
-* Tablet: 640px–1023px
-* Desktop: ≥ 1024px
-* Large Desktop: ≥ 1440px
-
----
-
-## Layout Adaptation
-
-When responsive behavior is unspecified:
-
-* Preserve content hierarchy.
-* Preserve information architecture.
-* Avoid horizontal scrolling.
-* Convert horizontal layouts into vertical layouts.
-* Maintain readable spacing.
-* Maintain readable typography.
-* Maintain accessibility.
-
-Examples:
-
-Desktop:
-
-[KPI 1] [KPI 2] [KPI 3] [KPI 4]
-
-Mobile:
-
-[KPI 1]
-[KPI 2]
-[KPI 3]
-[KPI 4]
-
----
-
-## Grid Rules
-
-Default responsive grids:
-
-Desktop:
-
-* 12-column grid
-
-Tablet:
-
-* 6-column grid
-
-Mobile:
-
-* 4-column grid
-
----
-
-## Sidebar Behavior
-
-Desktop:
-
-* Persistent sidebar
-
-Tablet:
-
-* Collapsible sidebar
-
-Mobile:
-
-* Drawer sidebar
-
----
-
-## Forms
-
-Desktop:
-
-* Multi-column layouts allowed
-
-Tablet:
-
-* Reduce columns where appropriate
-
-Mobile:
-
-* Single-column layouts preferred
-
-Requirements:
-
-* Inputs must remain easily tappable.
-* Labels must remain visible.
-* Validation messages must remain readable.
-
----
-
-## Dialogs
-
-Desktop:
-
-* Centered modal
-
-Tablet:
-
-* Modal or sheet
-
-Mobile:
-
-* Full-screen sheet or drawer
-
----
-
-## Buttons
-
-Desktop:
-
-* Content-width buttons
-
-Mobile:
-
-* Full-width when appropriate
-
-Maintain touch-friendly sizing.
-
----
-
-## Cards
-
-Desktop:
-
-* Multi-column layouts
-
-Mobile:
-
-* Vertical stacking
-
----
-
-## Tables
-
-Tables must remain usable on mobile.
-
-Preferred adaptation order:
-
-1. Horizontal scrolling container
-2. Column priority hiding
-3. Card representation
-
-Do not remove important data unless explicitly specified.
-
----
-
-## Dashboard Responsive Requirements
-
-Desktop is the primary target.
-
-Tablet must be fully supported.
-
-Mobile must remain functional.
-
-Requirements:
-
-* KPI cards stack vertically.
-* Filters collapse when necessary.
-* Charts resize automatically.
-* Tables remain usable.
-* Sidebar becomes drawer.
-* Navigation remains accessible.
-
-Do not create separate mobile experiences unless explicitly requested.
-
----
-
-# Typography Rules
-
-Follow Figma typography exactly on desktop.
-
-If responsive typography is unspecified:
-
-Desktop:
-
-* Match Figma exactly
-
-Tablet/Mobile:
-
-Scale proportionally.
-
-Recommended fallback:
-
-* H1: 32 → 24
-* H2: 24 → 20
-* H3: 20 → 18
-* Body: 16 → 14
-
-Maintain visual hierarchy.
-
----
-
-# Chart & Visualization Rules
-
-Charts are first-class UI elements.
-
-Preferred library:
-
-* Recharts
-
-Requirements:
-
-* Responsive by default
-* Accessible
-* Reusable
-* Typed props
-* Consistent formatting
-
-Create reusable chart wrappers.
-
-Examples:
-
-* Line Chart
-* Area Chart
-* Bar Chart
-* Stacked Bar Chart
-* Pie Chart
-* Donut Chart
-* Trend Charts
-* KPI Cards
-* Time Series Charts
-
-Avoid chart-specific business logic.
-
-Charts should receive data via props.
-
----
-
-## Responsive Chart Behavior
-
-On smaller screens:
-
-* Reduce tick density.
-* Reduce label density.
-* Preserve readability.
-* Preserve tooltip functionality.
-* Avoid clipping.
-* Avoid overlapping labels.
-
----
-
-# State Management Rules
-
-Default:
-
-* Local component state
-
-Use React Context only when state sharing is required.
-
-Avoid unnecessary global state.
-
-Server state must use React Query.
-
----
-
-# Data Fetching Rules
-
-Always use React Query.
-
-Requirements:
-
-* Proper caching
-* Loading states
-* Error states
-* Retry strategy when appropriate
-
-Avoid duplicate requests.
-
----
-
-# Performance Rules
-
-Use React Query caching.
-
-Avoid unnecessary re-renders.
-
-Use memoization only when justified.
-
-Prefer composition over premature optimization.
-
-Lazy-load routes when appropriate.
-
-Avoid large component trees when unnecessary.
-
-Avoid expensive computations inside render.
-
----
-
-# Accessibility Rules
-
-Use semantic HTML.
-
-Requirements:
-
-* Labels for form controls
-* Keyboard accessibility
-* Visible focus states
-* Accessible tables
-* Accessible charts where possible
-* Sufficient color contrast
-
-Support screen readers where possible.
-
----
-
-# TypeScript Rules
-
-Use strict TypeScript.
-
-Requirements:
-
-* No any
-* No implicit any
-* Strong typing everywhere
-* Use generated API types
-* Use DTOs from backend
-
-Prefer explicit types when helpful.
-
----
-
-# Code Quality Rules
-
-Prefer readable code.
-
-Avoid clever abstractions.
-
-Avoid duplicated code.
-
-Follow existing naming conventions.
-
-Follow existing project patterns.
-
-Maintain consistency across the codebase.
-
----
-
-# Testing Considerations
-
-When creating components:
-
-* Keep components testable.
-* Separate business logic from UI.
-* Avoid side effects in rendering.
-
----
-
-# Agent Restrictions
-
-Do NOT:
-
-* Create fake APIs
-* Create mock APIs
-* Create mock DTOs
-* Create fake endpoints
-* Invent backend fields
-* Invent request payloads
-* Invent response payloads
-* Change existing API contracts
-* Ignore Figma designs
-* Redesign screens
-* Introduce new UI libraries
-* Introduce new design systems
-* Introduce unapproved dependencies
-
-Always prefer consistency over creativity.
-
-Always follow backend contracts.
-
-Always follow Figma.
-
-Always preserve the established design language.
+```
+
+## API Integration Rules
+
+- Use `nettraceApi` and exported DTO types from `src/services/generated/nettrace-api.ts`.
+- Do not invent API paths, request fields, response fields, or mock endpoints.
+- When backend contract changes, update the generated client types and all affected UI payload builders.
+- Use TanStack Query for server data.
+- Invalidate affected query keys after mutations. Template/preset changes usually affect `templates`, `template-presets`, and `dashboard-widget-presets`.
+- Respect backend ownership:
+  - `template` stores dashboard metadata and selected-card/layout snapshot.
+  - `preset` stores reusable widget config only.
+  - `widget` links a template to a preset and owns slot data such as `position`, `start_date`, and `end_date`.
+
+## Dashboard Template And Preset Rules
+
+- Reusing an unchanged preset must save a `preset_id` widget link, not duplicate a preset.
+- If a user starts from a preset and changes reusable config, save a new preset. If the name did not change, append the next available numeric suffix.
+- Date ranges are widget-specific. Do not store date range in `preset`.
+- Normalize preset payloads by chart type before saving:
+  - `line`: keep `metric`, `time_bucket`; store other chart-specific fields as `null`.
+  - `bar`: keep `metric`; keep `group_by` only when not `none`; keep `time_bucket` only when ungrouped.
+  - `pie`: keep `metric`, `group_by`.
+  - `table`: keep only `table_columns`.
+  - `heatmap`: keep only `heatmap_mode`.
+- Deleting a template removes widget links but keeps presets.
+- Deleting a preset must be blocked when it is used by any template.
+
+## UI And Design Rules
+
+- Follow existing screens and components before introducing new patterns.
+- Use design tokens from `src/styles/tokens.css` and Tailwind config. Do not hard-code one-off colors when a token exists.
+- Use `src/components/ui` and `src/components/shared` for repeated controls and page chrome.
+- Use Lucide icons for buttons and controls when an icon exists.
+- Keep dashboard and operational screens dense, scannable, and work-focused.
+- Figma exports in `frontend/design/` are references for current screens. If Figma and code disagree, preserve the implemented token/component system unless the user explicitly asks to realign to Figma.
+
+## Component And State Rules
+
+- Keep pages reasonably thin; move repeated UI to components and repeated behavior to hooks/helpers.
+- Use local state for local UI state.
+- Use React context only for shared app state such as the active dashboard/template context.
+- Avoid duplicated payload-building logic; centralize shared transformation helpers in `src/utils`.
+- Do not place network calls inside presentational-only components unless that is already the established local pattern.
+
+## Responsive And Accessibility Rules
+
+- Desktop is the primary target, but tablet and mobile must remain usable.
+- Avoid incoherent overlap and text clipping.
+- Use semantic controls, labels for form inputs, keyboard-accessible buttons, and visible focus states.
+- Tables may use horizontal scrolling when a card representation would hide important data.
+
+## TypeScript Rules
+
+- Keep strict TypeScript.
+- Prefer generated backend DTO types for API data.
+- Avoid `any` unless interacting with an unavoidable legacy boundary; keep it locally contained.
+- Prefer explicit helper return types when a payload builder feeds an API contract.
+
+## Build Verification
+
+Before finishing substantial frontend changes, run:
+
+```bash
+npm run build
+```
+
+The current Vite build may warn about large chunks; that warning is known and not itself a failure.

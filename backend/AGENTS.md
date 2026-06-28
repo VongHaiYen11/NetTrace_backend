@@ -1,4 +1,4 @@
-# Antigravity Alarm Analytics API - Technical Specification
+# NetTrace Alarm Analytics API - Technical Specification
 
 ## 📌 Project Overview
 Build a high-performance API system serving:
@@ -10,7 +10,7 @@ Build a high-performance API system serving:
 
 ### 💾 Data Storage
 * **ClickHouse:** Stores Alarm Events (large volume data, optimized for analysis).
-* **PostgreSQL:** Stores Metadata (devices, station configuration, network errors).
+* **PostgreSQL:** Stores metadata (devices, station configuration, network errors) and dashboard template/preset configuration.
 
 ### ⚙️ Core Requirements
 * Query alarm data by multiple dynamic filter conditions.
@@ -193,8 +193,17 @@ CREATE INDEX idx_preset_group_by ON preset(group_by);
 CREATE INDEX idx_preset_time_bucket ON preset(time_bucket);
 ```
 
+Dashboard ownership rules:
+
+* `template` owns layout metadata, selected KPI/layout snapshot, and widget count.
+* `preset` owns reusable chart configuration only. Presets do not store date range or slot position.
+* `widget` links a template to a preset and owns slot-specific fields: `position`, `start_date`, and `end_date`.
+* Deleting a template cascade-deletes widget links through `fk_widget_template`; preset rows remain.
+* Deleting a preset is blocked while any widget still references it.
+* Preset fields must be normalized by `chart_type` before persistence so unused fields are stored as `NULL`.
+
 > [!NOTE]
-> PostgreSQL is responsible for: Looking up metadata, label enrichment, and retrieving filter option lists. **Do not execute analytical queries on PostgreSQL.**
+> PostgreSQL is responsible for: Looking up metadata, label enrichment, retrieving filter option lists, and storing dashboard templates/presets/widgets. **Do not execute alarm analytics queries on PostgreSQL.**
 
 ---
 
@@ -698,8 +707,15 @@ Manage custom dashboard layouts (Template, Widget, Preset) for users.
 #### 2.6. Standalone Preset APIs
 * **Endpoints:** `GET /api/v1/presets`, `POST /api/v1/presets`, `PUT /api/v1/presets/:id`, `DELETE /api/v1/presets`
 * **Purpose:** List reusable presets and create presets that are not yet assigned to a template.
-* **Behavior:** Creating a preset inserts only into `preset`. A `widget` row is created later when the preset is assigned to a template. Editing a preset (`PUT`) updates its metadata. Deleting a preset (`DELETE` with `{"ids": [...]}`) removes the preset completely.
-* **Create/Update Request:** Requires `preset_name` and uses semantic preset fields (`metric`, `group_by`, `time_bucket`, `heatmap_mode`, `table_columns`). Slot `position` belongs to `widget`, not `preset`.
+* **Behavior:** Creating a preset inserts only into `preset`. A `widget` row is created later when the preset is assigned to a template. Editing a preset (`PUT`) updates its metadata. Deleting a preset (`DELETE` with `{"ids": [...]}`) removes only unused presets.
+* **Delete Guard:** Deleting a preset is rejected with HTTP 409 when the preset is still referenced by a `widget` row.
+* **Create/Update Request:** Requires `preset_name` and uses semantic preset fields (`metric`, `group_by`, `time_bucket`, `heatmap_mode`, `table_columns`). Slot `position` and date range belong to `widget`, not `preset`.
+* **Chart-Type Normalization:** Preset persistence must store irrelevant fields as `NULL`:
+  * `line`: keep `metric`, `time_bucket`; clear `group_by`, `heatmap_mode`, `table_columns`.
+  * `bar`: keep `metric`; keep `group_by` only when not `none`; keep `time_bucket` only when ungrouped; clear `heatmap_mode`, `table_columns`.
+  * `pie`: keep `metric`, `group_by`; clear `time_bucket`, `heatmap_mode`, `table_columns`.
+  * `table`: keep `table_columns`; clear `metric`, `group_by`, `time_bucket`, `heatmap_mode`.
+  * `heatmap`: keep `heatmap_mode`; clear `metric`, `group_by`, `time_bucket`, `table_columns`.
 * **List Response:** Includes `preset_name` plus assignment metadata (`template_id`, `template_name`) when the preset is in use.
 * **Create Response:** HTTP 201 with a `PresetResponse`, including `preset_name`.
 
