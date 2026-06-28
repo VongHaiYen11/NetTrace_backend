@@ -3,10 +3,18 @@ import { pgPool } from '../database/postgres/connection.js';
 import { TemplateRepository, Template } from '../repositories/template.repository.js';
 import { PresetRepository, Preset } from '../repositories/preset.repository.js';
 import { WidgetRepository, WidgetWithPreset } from '../repositories/widget.repository.js';
+import { normalizePresetFieldsByChartType } from '../utils/preset-fields.js';
 
 export interface DetailedTemplate extends Template {
   widgets: WidgetWithPreset[];
 }
+
+type TemplateWidgetInput = Partial<Omit<Preset, 'preset_id'>> & {
+  preset_id?: number;
+  position: number;
+  start_date?: Date | string | null;
+  end_date?: Date | string | null;
+};
 
 export class TemplateService {
   constructor(
@@ -18,7 +26,7 @@ export class TemplateService {
   async createTemplate(
     name: string,
     selectedCards: string | null,
-    widgetsData: Omit<Preset, 'preset_id'>[],
+    widgetsData: TemplateWidgetInput[],
   ): Promise<Template> {
     const client = await pgPool.connect();
     try {
@@ -32,27 +40,17 @@ export class TemplateService {
         client,
       );
 
-      // Create Presets and Widgets
+      // Create new presets only when needed, then link widgets by position.
       for (const wData of widgetsData) {
-        // Insert Preset
-        const preset = await this.presetRepo.createPreset(
-          {
-            preset_name: wData.preset_name || null,
-            position: wData.position,
-            chart_type: wData.chart_type,
-            start_date: wData.start_date || null,
-            end_date: wData.end_date || null,
-            status: wData.status || null,
-            severity: wData.severity || null,
-            error_code: wData.error_code || null,
-            vendor: wData.vendor || null,
-            device_type: wData.device_type || null,
-          },
+        const presetId = await this.resolvePresetId(wData, client);
+        await this.widgetRepo.createWidget(
+          template.template_id,
+          presetId,
+          wData.position,
+          wData.start_date,
+          wData.end_date,
           client,
         );
-
-        // Create Widget linking template and preset
-        await this.widgetRepo.createWidget(template.template_id, preset.preset_id!, client);
       }
 
       await client.query('COMMIT');
@@ -86,7 +84,7 @@ export class TemplateService {
     id: number,
     name?: string,
     selectedCards?: string | null,
-    widgetsData?: Omit<Preset, 'preset_id'>[],
+    widgetsData?: TemplateWidgetInput[],
   ): Promise<Template | null> {
     const client = await pgPool.connect();
     try {
@@ -105,36 +103,21 @@ export class TemplateService {
       if (selectedCards !== undefined) updates.selected_cards = selectedCards;
 
       if (widgetsData !== undefined) {
-        // Query old widgets of this template to find their preset_ids
-        const oldWidgets = await this.widgetRepo.getWidgetsWithPresetsByTemplateId(id, client);
-        const oldPresetIds = oldWidgets.map((w) => w.preset_id);
-
-        // Delete old presets (widget rows cascade-deleted via FK ON DELETE CASCADE)
-        if (oldPresetIds.length > 0) {
-          await this.presetRepo.deletePresetsByIds(oldPresetIds, client);
-        }
+        await this.widgetRepo.deleteWidgetsByTemplateId(id, client);
 
         // Insert new presets and widgets. The persisted counter must reflect
         // the widget links actually recreated by this transaction.
         let persistedWidgetCount = 0;
         for (const wData of widgetsData) {
-          const preset = await this.presetRepo.createPreset(
-            {
-              preset_name: wData.preset_name || null,
-              position: wData.position,
-              chart_type: wData.chart_type,
-              start_date: wData.start_date || null,
-              end_date: wData.end_date || null,
-              status: wData.status || null,
-              severity: wData.severity || null,
-              error_code: wData.error_code || null,
-              vendor: wData.vendor || null,
-              device_type: wData.device_type || null,
-            },
+          const presetId = await this.resolvePresetId(wData, client);
+          await this.widgetRepo.createWidget(
+            id,
+            presetId,
+            wData.position,
+            wData.start_date,
+            wData.end_date,
             client,
           );
-
-          await this.widgetRepo.createWidget(id, preset.preset_id!, client);
           persistedWidgetCount += 1;
         }
 
@@ -156,11 +139,6 @@ export class TemplateService {
     const client = await pgPool.connect();
     try {
       await client.query('BEGIN');
-      const widgets = await this.widgetRepo.getWidgetsWithPresetsByTemplateId(id, client);
-      const presetIds = widgets.map((w) => w.preset_id);
-      if (presetIds.length > 0) {
-        await this.presetRepo.deletePresetsByIds(presetIds, client);
-      }
       const success = await this.templateRepo.deleteTemplate(id, client);
       await client.query('COMMIT');
       return success;
@@ -170,5 +148,33 @@ export class TemplateService {
     } finally {
       client.release();
     }
+  }
+
+  private async resolvePresetId(wData: TemplateWidgetInput, client: pg.PoolClient): Promise<number> {
+    if (wData.preset_id) {
+      const existing = await this.presetRepo.getPresetById(wData.preset_id, client);
+      if (!existing?.preset_id) {
+        throw new Error(`Preset ${wData.preset_id} not found`);
+      }
+      return existing.preset_id;
+    }
+
+    const preset = await this.presetRepo.createPreset(
+      normalizePresetFieldsByChartType({
+        preset_name: wData.preset_name || null,
+        chart_type: wData.chart_type || 'line',
+        metric: wData.metric || null,
+        group_by: wData.group_by || null,
+        time_bucket: wData.time_bucket || null,
+        heatmap_mode: wData.heatmap_mode || null,
+        table_columns: wData.table_columns || null,
+      }),
+      client,
+    );
+
+    if (!preset.preset_id) {
+      throw new Error('Failed to create preset for template widget');
+    }
+    return preset.preset_id;
   }
 }

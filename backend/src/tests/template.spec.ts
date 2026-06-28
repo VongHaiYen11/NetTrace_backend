@@ -35,9 +35,9 @@ describe('Dashboard Template System Tests', () => {
           {
             position: 1,
             chart_type: 'line',
-            status: 'active',
-            severity: 'critical',
-            vendor: 'Cisco',
+            metric: 'count',
+            group_by: 'severity',
+            heatmap_mode: 'weekday',
             start_date: '2026-06-01T00:00:00Z',
             end_date: '2026-06-30T00:00:00Z',
           },
@@ -47,7 +47,7 @@ describe('Dashboard Template System Tests', () => {
       const result = createTemplateSchema.safeParse(payload);
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.data.widgets[0].vendor).toBe('Cisco');
+        expect(result.data.widgets[0].heatmap_mode).toBe('weekday');
         expect(result.data.widgets[0].start_date).toBe('2026-06-01T00:00:00Z');
       }
     });
@@ -132,6 +132,7 @@ describe('Dashboard Template System Tests', () => {
       presetRepo = {
         createPreset: jest.fn(),
         getPresetById: jest.fn(),
+        findUsedPresetsByIds: jest.fn(),
         deletePresetsByIds: jest.fn(),
       } as unknown as jest.Mocked<PresetRepository>;
 
@@ -151,13 +152,13 @@ describe('Dashboard Template System Tests', () => {
         {
           position: 1,
           chart_type: 'line',
-          status: 'active',
-          severity: null,
-          error_code: null,
-          vendor: 'Cisco',
-          device_type: null,
-          start_date: null,
-          end_date: null,
+          metric: 'count',
+          group_by: null,
+          time_bucket: null,
+          heatmap_mode: 'weekday',
+          table_columns: null,
+          start_date: '2026-06-01T00:00:00Z',
+          end_date: '2026-06-30T00:00:00Z',
         },
       ];
 
@@ -172,15 +173,13 @@ describe('Dashboard Template System Tests', () => {
 
       presetRepo.createPreset.mockResolvedValue({
         preset_id: 42,
-        position: 1,
+        preset_name: 'Line preset',
         chart_type: 'line',
-        status: 'active',
-        severity: null,
-        error_code: null,
-        vendor: 'Cisco',
-        device_type: null,
-        start_date: null,
-        end_date: null,
+        metric: 'count',
+        group_by: null,
+        time_bucket: null,
+        heatmap_mode: 'weekday',
+        table_columns: null,
       });
 
       const result = await service.createTemplate(name, selectedCards, widgets);
@@ -188,10 +187,17 @@ describe('Dashboard Template System Tests', () => {
       expect(mockClient.query).toHaveBeenCalledWith('BEGIN');
       expect(templateRepo.createTemplate).toHaveBeenCalledWith(name, selectedCards, 1, mockClient);
       expect(presetRepo.createPreset).toHaveBeenCalledWith(
-        expect.objectContaining({ vendor: 'Cisco', chart_type: 'line' }),
+        expect.objectContaining({ chart_type: 'line', heatmap_mode: null, table_columns: null }),
         mockClient,
       );
-      expect(widgetRepo.createWidget).toHaveBeenCalledWith(10, 42, mockClient);
+      expect(widgetRepo.createWidget).toHaveBeenCalledWith(
+        10,
+        42,
+        1,
+        '2026-06-01T00:00:00Z',
+        '2026-06-30T00:00:00Z',
+        mockClient,
+      );
       expect(mockClient.query).toHaveBeenCalledWith('COMMIT');
       expect(mockClient.release).toHaveBeenCalled();
       expect(result.template_id).toBe(10);
@@ -204,11 +210,11 @@ describe('Dashboard Template System Tests', () => {
         {
           position: 1,
           chart_type: 'line',
-          status: 'active',
-          severity: null,
-          error_code: null,
-          vendor: null,
-          device_type: null,
+          metric: 'count',
+          group_by: null,
+          time_bucket: null,
+          heatmap_mode: null,
+          table_columns: null,
           start_date: null,
           end_date: null,
         },
@@ -239,19 +245,20 @@ describe('Dashboard Template System Tests', () => {
           widget_id: 101,
           template_id: 1,
           preset_id: 42,
+          position: 1,
+          start_date: null,
+          end_date: null,
           time_created: new Date(),
           time_updated: new Date(),
           preset: {
             preset_id: 42,
-            position: 1,
+            preset_name: 'Cisco line',
             chart_type: 'line',
-            status: 'active',
-            severity: 'critical',
-            error_code: null,
-            vendor: 'Cisco',
-            device_type: null,
-            start_date: null,
-            end_date: null,
+            metric: 'count',
+            group_by: 'severity',
+            time_bucket: null,
+            heatmap_mode: 'weekday',
+            table_columns: null,
           },
         },
       ];
@@ -263,7 +270,7 @@ describe('Dashboard Template System Tests', () => {
       expect(widgetRepo.getWidgetsWithPresetsByTemplateId).toHaveBeenCalledWith(1);
       expect(result).not.toBeNull();
       expect(result!.widgets.length).toBe(1);
-      expect(result!.widgets[0].preset.vendor).toBe('Cisco');
+      expect(result!.widgets[0].preset.heatmap_mode).toBe('weekday');
       expect(result!.widgets[0].preset_id).toBe(42);
     });
 
@@ -290,65 +297,54 @@ describe('Dashboard Template System Tests', () => {
         number_of_widgets: 1,
       });
 
-      widgetRepo.getWidgetsWithPresetsByTemplateId.mockResolvedValue([
-        {
-          widget_id: 99,
-          template_id: 1,
-          preset_id: 33,
-          time_created: new Date(),
-          time_updated: new Date(),
-          preset: {
-            preset_id: 33,
-            position: 1,
-            chart_type: 'line',
-            status: null,
-            severity: null,
-            error_code: null,
-            vendor: null,
-            device_type: null,
-            start_date: null,
-            end_date: null,
-          },
-        },
-      ]);
-
       presetRepo.createPreset.mockResolvedValue({
         preset_id: 45,
-        position: 2,
+        preset_name: 'Huawei bar',
         chart_type: 'bar',
-        status: null,
-        severity: null,
-        error_code: null,
-        vendor: 'Huawei',
-        device_type: null,
-        start_date: null,
-        end_date: null,
+        metric: 'count',
+        group_by: 'severity',
+        time_bucket: null,
+        heatmap_mode: null,
+        table_columns: null,
       });
 
       const widgets = [
         {
           position: 2,
           chart_type: 'bar',
-          status: null,
-          severity: null,
-          error_code: null,
-          vendor: 'Huawei',
-          device_type: null,
-          start_date: null,
-          end_date: null,
+          metric: 'count',
+          group_by: 'severity',
+          time_bucket: null,
+          heatmap_mode: null,
+          table_columns: null,
+          start_date: '2026-06-01T00:00:00Z',
+          end_date: '2026-06-30T00:00:00Z',
         },
       ];
 
       const result = await service.updateTemplate(1, 'New Name', undefined, widgets);
 
       expect(mockClient.query).toHaveBeenCalledWith('BEGIN');
-      expect(widgetRepo.getWidgetsWithPresetsByTemplateId).toHaveBeenCalledWith(1, mockClient);
-      expect(presetRepo.deletePresetsByIds).toHaveBeenCalledWith([33], mockClient);
+      expect(widgetRepo.deleteWidgetsByTemplateId).toHaveBeenCalledWith(1, mockClient);
+      expect(presetRepo.deletePresetsByIds).not.toHaveBeenCalled();
       expect(presetRepo.createPreset).toHaveBeenCalledWith(
-        expect.objectContaining({ vendor: 'Huawei', chart_type: 'bar' }),
+        expect.objectContaining({
+          chart_type: 'bar',
+          group_by: 'severity',
+          time_bucket: null,
+          heatmap_mode: null,
+          table_columns: null,
+        }),
         mockClient,
       );
-      expect(widgetRepo.createWidget).toHaveBeenCalledWith(1, 45, mockClient);
+      expect(widgetRepo.createWidget).toHaveBeenCalledWith(
+        1,
+        45,
+        2,
+        '2026-06-01T00:00:00Z',
+        '2026-06-30T00:00:00Z',
+        mockClient,
+      );
       expect(templateRepo.updateTemplate).toHaveBeenCalledWith(
         1,
         { name: 'New Name', number_of_widgets: 1 },
@@ -369,27 +365,6 @@ describe('Dashboard Template System Tests', () => {
         time_updated: new Date(),
       };
       templateRepo.getTemplateById.mockResolvedValue(originalTemplate);
-      widgetRepo.getWidgetsWithPresetsByTemplateId.mockResolvedValue([
-        {
-          widget_id: 10,
-          template_id: 1,
-          preset_id: 20,
-          time_created: new Date(),
-          time_updated: new Date(),
-          preset: {
-            preset_id: 20,
-            position: 1,
-            chart_type: 'line',
-            status: null,
-            severity: null,
-            error_code: null,
-            vendor: null,
-            device_type: null,
-            start_date: null,
-            end_date: null,
-          },
-        },
-      ]);
       templateRepo.updateTemplate.mockResolvedValue({
         ...originalTemplate,
         number_of_widgets: 0,
@@ -397,7 +372,8 @@ describe('Dashboard Template System Tests', () => {
 
       await service.updateTemplate(1, undefined, '{"widgets":[]}', []);
 
-      expect(presetRepo.deletePresetsByIds).toHaveBeenCalledWith([20], mockClient);
+      expect(widgetRepo.deleteWidgetsByTemplateId).toHaveBeenCalledWith(1, mockClient);
+      expect(presetRepo.deletePresetsByIds).not.toHaveBeenCalled();
       expect(presetRepo.createPreset).not.toHaveBeenCalled();
       expect(widgetRepo.createWidget).not.toHaveBeenCalled();
       expect(templateRepo.updateTemplate).toHaveBeenCalledWith(
@@ -418,35 +394,13 @@ describe('Dashboard Template System Tests', () => {
       expect(result).toBeNull();
     });
 
-    it('should delete template and its presets successfully in transaction', async () => {
-      widgetRepo.getWidgetsWithPresetsByTemplateId.mockResolvedValue([
-        {
-          widget_id: 99,
-          template_id: 1,
-          preset_id: 33,
-          time_created: new Date(),
-          time_updated: new Date(),
-          preset: {
-            preset_id: 33,
-            position: 1,
-            chart_type: 'line',
-            status: null,
-            severity: null,
-            error_code: null,
-            vendor: null,
-            device_type: null,
-            start_date: null,
-            end_date: null,
-          },
-        },
-      ]);
+    it('should delete template and leave reusable presets intact', async () => {
       templateRepo.deleteTemplate.mockResolvedValue(true);
 
       const result = await service.deleteTemplate(1);
 
       expect(mockClient.query).toHaveBeenCalledWith('BEGIN');
-      expect(widgetRepo.getWidgetsWithPresetsByTemplateId).toHaveBeenCalledWith(1, mockClient);
-      expect(presetRepo.deletePresetsByIds).toHaveBeenCalledWith([33], mockClient);
+      expect(presetRepo.deletePresetsByIds).not.toHaveBeenCalled();
       expect(templateRepo.deleteTemplate).toHaveBeenCalledWith(1, mockClient);
       expect(mockClient.query).toHaveBeenCalledWith('COMMIT');
       expect(mockClient.release).toHaveBeenCalled();

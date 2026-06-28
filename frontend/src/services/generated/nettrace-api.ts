@@ -159,15 +159,12 @@ export interface TemplateSummary {
 export interface PresetSummary {
   preset_id: number;
   preset_name: string | null;
-  position: number;
   chart_type: string;
-  start_date: string | null;
-  end_date: string | null;
-  status: string | null;
-  severity: string | null;
-  error_code: string | null;
-  vendor: string | null;
-  device_type: string | null;
+  metric: string | null;
+  group_by: string | null;
+  time_bucket: string | null;
+  heatmap_mode: string | null;
+  table_columns: string | null;
   template_id?: number | null;
   template_name?: string | null;
 }
@@ -175,6 +172,9 @@ export interface PresetSummary {
 export interface TemplateWidgetDetail {
   widget_id: number;
   preset_id: number;
+  position: number;
+  start_date: string | null;
+  end_date: string | null;
   time_created: string;
   time_updated: string;
   preset: PresetSummary;
@@ -185,16 +185,17 @@ export interface TemplateDetail extends TemplateSummary {
 }
 
 export interface TemplateWidgetInput {
+  preset_id?: number | null;
   preset_name?: string | null;
   position: number;
-  chart_type: string;
+  chart_type?: string | null;
   start_date?: string | null;
   end_date?: string | null;
-  status?: string | null;
-  severity?: string | null;
-  error_code?: string | null;
-  vendor?: string | null;
-  device_type?: string | null;
+  metric?: string | null;
+  group_by?: string | null;
+  time_bucket?: string | null;
+  heatmap_mode?: string | null;
+  table_columns?: string | null;
 }
 
 export interface CreateTemplateRequest {
@@ -209,9 +210,15 @@ export interface UpdateTemplateRequest {
   widgets?: TemplateWidgetInput[];
 }
 
-export type CreatePresetRequest = Omit<TemplateWidgetInput, 'preset_name'> & {
+export interface CreatePresetRequest {
   preset_name: string;
-};
+  chart_type: string;
+  metric?: string | null;
+  group_by?: string | null;
+  time_bucket?: string | null;
+  heatmap_mode?: string | null;
+  table_columns?: string | null;
+}
 
 export interface MetadataFilterOptions {
   deviceTypes: string[];

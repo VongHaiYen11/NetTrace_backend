@@ -110,21 +110,21 @@ CREATE TABLE Template (
 CREATE TABLE Preset (
     preset_id SERIAL PRIMARY KEY,
     preset_name VARCHAR(255),
-    position INT,
     chart_type VARCHAR(100),
-    start_date TIMESTAMP,
-    end_date TIMESTAMP,
-    status VARCHAR(50),
-    severity VARCHAR(50),
-    error_code VARCHAR(50),
-    vendor VARCHAR(100),
-    device_type VARCHAR(50)
+    metric VARCHAR(50),
+    group_by VARCHAR(50),
+    time_bucket VARCHAR(50),
+    heatmap_mode VARCHAR(100),
+    table_columns VARCHAR(500)
 );
 
 CREATE TABLE Widget (
     widget_id SERIAL PRIMARY KEY,
     template_id INT NOT NULL,
     preset_id INT NOT NULL,
+    position INT NOT NULL DEFAULT 0,
+    start_date TIMESTAMP,
+    end_date TIMESTAMP,
     time_created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     time_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_widget_template FOREIGN KEY (template_id) 
@@ -134,11 +134,12 @@ CREATE TABLE Widget (
 );
 
 -- Performance Indexes
-CREATE INDEX idx_preset_error_code ON Preset(error_code);
-CREATE INDEX idx_preset_status ON Preset(status);
-CREATE INDEX idx_preset_severity ON Preset(severity);
 CREATE INDEX idx_widget_template ON Widget(template_id);
 CREATE INDEX idx_widget_preset ON Widget(preset_id);
+CREATE INDEX idx_widget_position ON Widget(position);
+CREATE INDEX idx_preset_metric ON Preset(metric);
+CREATE INDEX idx_preset_group_by ON Preset(group_by);
+CREATE INDEX idx_preset_time_bucket ON Preset(time_bucket);
 ```
 
 ---
@@ -165,5 +166,5 @@ Under no circumstances may a SQL query contain a link or join between PostgreSQL
 ### 2. Cascading Delete Integrity
 * Removing a `Template` will automatically cascade-delete all of its `Widget` entities.
 * Deleting a `Preset` will cascade-delete its `Widget` references.
-* Deleting a `Device` will cascade-delete its `Preset`.
-* If a metadata record (`error_code`, `vendor_id`) linked to a `Preset` is removed, the column in the `Preset` table is set to `NULL` to avoid orphaned widget records while preserving the layout configuration.
+* Presets are reusable; deleting a template removes only widget links, not preset rows.
+* Preset columns store widget configuration (`metric`, `group_by`, `time_bucket`, `heatmap_mode`, `table_columns`) rather than direct metadata foreign keys.

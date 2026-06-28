@@ -157,21 +157,21 @@ CREATE TABLE template (
 CREATE TABLE preset (
     preset_id SERIAL PRIMARY KEY,
     preset_name VARCHAR(255),
-    position INT,
     chart_type VARCHAR(100),
-    start_date TIMESTAMP,
-    end_date TIMESTAMP,
-    status VARCHAR(50),
-    severity VARCHAR(50),
-    error_code VARCHAR(50),
-    vendor VARCHAR(100),
-    device_type VARCHAR(50)
+    metric VARCHAR(50),
+    group_by VARCHAR(50),
+    time_bucket VARCHAR(50),
+    heatmap_mode VARCHAR(100),
+    table_columns VARCHAR(500)
 );
 
 CREATE TABLE widget (
     widget_id SERIAL PRIMARY KEY,
     template_id INT NOT NULL,
     preset_id INT NOT NULL,
+    position INT NOT NULL DEFAULT 0,
+    start_date TIMESTAMP,
+    end_date TIMESTAMP,
     time_created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     time_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_widget_template
@@ -187,9 +187,10 @@ CREATE TABLE widget (
 -- Indexes
 CREATE INDEX idx_widget_template ON widget(template_id);
 CREATE INDEX idx_widget_preset ON widget(preset_id);
-CREATE INDEX idx_preset_status ON preset(status);
-CREATE INDEX idx_preset_severity ON preset(severity);
-CREATE INDEX idx_preset_error_code ON preset(error_code);
+CREATE INDEX idx_widget_position ON widget(position);
+CREATE INDEX idx_preset_metric ON preset(metric);
+CREATE INDEX idx_preset_group_by ON preset(group_by);
+CREATE INDEX idx_preset_time_bucket ON preset(time_bucket);
 ```
 
 > [!NOTE]
@@ -541,7 +542,7 @@ Manage custom dashboard layouts (Template, Widget, Preset) for users.
 
 #### 2.1. Create Template API
 * **Endpoint:** `POST /api/v1/templates`
-* **Purpose:** Creates a new Template along with its widgets and configuration presets. Executed in a PostgreSQL Transaction to guarantee atomicity.
+* **Purpose:** Creates a new Template and links widget slots to presets. Existing presets are reused by `preset_id`; new custom widget configs create a preset first. Executed in a PostgreSQL Transaction to guarantee atomicity.
 * **Request Body (application/json):**
   ```json
   {
@@ -549,16 +550,17 @@ Manage custom dashboard layouts (Template, Widget, Preset) for users.
     "selected_cards": "string (optional, JSON string array of KPI cards chosen by the user)",
     "widgets": [
       {
+        "preset_id": "number (optional, existing reusable preset ID; if provided, no new preset is created)",
         "preset_name": "Critical router alarms",
         "position": "number (widget grid position index)",
         "chart_type": "string (rendering chart type)",
         "start_date": "string (optional, ISO-8601 date-time)",
         "end_date": "string (optional, ISO-8601 date-time)",
-        "status": "string (optional, status filter setting)",
-        "severity": "string (optional, severity filter setting)",
-        "error_code": "string (optional, error code filter setting)",
-        "vendor": "string (optional, vendor name filter setting)",
-        "device_type": "string (optional, device type filter setting)"
+        "metric": "string (optional, analytics metric)",
+        "group_by": "string (optional, chart grouping field)",
+        "time_bucket": "string (optional, time bucket for time-series charts)",
+        "heatmap_mode": "string (optional, heatmap mode)",
+        "table_columns": "string (optional, encoded table columns)"
       }
     ]
   }
@@ -619,20 +621,20 @@ Manage custom dashboard layouts (Template, Widget, Preset) for users.
         {
           "widget_id": 1,
           "preset_id": 42,
+          "position": 1,
+          "start_date": "2026-06-01T00:00:00.000Z",
+          "end_date": "2026-06-30T23:59:59.000Z",
           "time_created": "2026-06-21T10:15:00.000Z",
           "time_updated": "2026-06-21T10:15:00.000Z",
           "preset": {
             "preset_id": 42,
             "preset_name": "Critical router alarms",
-            "position": 1,
             "chart_type": "line",
-            "start_date": "2026-06-01T00:00:00.000Z",
-            "end_date": "2026-06-30T23:59:59.000Z",
-            "status": "active",
-            "severity": "critical",
-            "error_code": "ERR001",
-            "vendor": "Cisco",
-            "device_type": "router"
+            "metric": "count",
+            "group_by": "severity",
+            "time_bucket": "day",
+            "heatmap_mode": "weekday",
+            "table_columns": null
           }
         }
       ]
@@ -642,7 +644,7 @@ Manage custom dashboard layouts (Template, Widget, Preset) for users.
 
 #### 2.4. Update Template API
 * **Endpoint:** `PUT /api/v1/templates/:id`
-* **Purpose:** Updates Template details and synchronizes its widgets/presets (removing old entries, inserting new ones) inside a PostgreSQL Transaction. Automatically updates number_of_widgets and time_updated.
+* **Purpose:** Updates Template details and synchronizes widget links inside a PostgreSQL Transaction. Existing presets are reused by `preset_id`; custom widget configs create new presets. Automatically updates number_of_widgets and time_updated.
 * **Request Body (application/json):**
   ```json
   {
@@ -650,16 +652,17 @@ Manage custom dashboard layouts (Template, Widget, Preset) for users.
     "selected_cards": "string",
     "widgets": [
       {
+        "preset_id": "number",
         "preset_name": "Critical router alarms",
         "position": "number",
         "chart_type": "string",
         "start_date": "string",
         "end_date": "string",
-        "status": "string",
-        "severity": "string",
-        "error_code": "string",
-        "vendor": "string",
-        "device_type": "string"
+        "metric": "string",
+        "group_by": "string",
+        "time_bucket": "string",
+        "heatmap_mode": "string",
+        "table_columns": "string"
       }
     ]
   }
@@ -681,7 +684,7 @@ Manage custom dashboard layouts (Template, Widget, Preset) for users.
 
 #### 2.5. Delete Template API
 * **Endpoint:** `DELETE /api/v1/templates/:id`
-* **Purpose:** Delete Template. Associated widgets cascade-deleted via FK; orphaned presets are deleted in the service layer before template removal.
+* **Purpose:** Delete Template. Associated widget links cascade-delete via FK; preset rows remain reusable.
 * **Response Shape (HTTP 200):**
   ```json
   {
@@ -696,7 +699,7 @@ Manage custom dashboard layouts (Template, Widget, Preset) for users.
 * **Endpoints:** `GET /api/v1/presets`, `POST /api/v1/presets`, `PUT /api/v1/presets/:id`, `DELETE /api/v1/presets`
 * **Purpose:** List reusable presets and create presets that are not yet assigned to a template.
 * **Behavior:** Creating a preset inserts only into `preset`. A `widget` row is created later when the preset is assigned to a template. Editing a preset (`PUT`) updates its metadata. Deleting a preset (`DELETE` with `{"ids": [...]}`) removes the preset completely.
-* **Create/Update Request:** Requires `preset_name` and uses the remaining `WidgetInput` fields; `position` defaults to `0` while unassigned.
+* **Create/Update Request:** Requires `preset_name` and uses semantic preset fields (`metric`, `group_by`, `time_bucket`, `heatmap_mode`, `table_columns`). Slot `position` belongs to `widget`, not `preset`.
 * **List Response:** Includes `preset_name` plus assignment metadata (`template_id`, `template_name`) when the preset is in use.
 * **Create Response:** HTTP 201 with a `PresetResponse`, including `preset_name`.
 

@@ -202,15 +202,15 @@ describe('Validation Layer Tests', () => {
   });
 
   describe('Preset schemas', () => {
-    it('creates an unassigned preset with position zero by default', () => {
+    it('creates an unassigned preset without widget-owned dates', () => {
       const parsed = createPresetSchema.parse({
         preset_name: 'Critical alarms',
         chart_type: 'line',
-        start_date: '2026-06-01',
+        metric: 'count',
       });
-      expect(parsed.position).toBe(0);
       expect(parsed.preset_name).toBe('Critical alarms');
       expect(parsed.chart_type).toBe('line');
+      expect(parsed.metric).toBe('count');
     });
 
     it('validates preset pagination defaults and limits', () => {

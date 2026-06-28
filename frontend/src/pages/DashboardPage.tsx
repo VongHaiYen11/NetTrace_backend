@@ -124,23 +124,24 @@ function normalizePresetTableColumns(value: string | null | undefined) {
             title: preset.preset_name || `Preset ${preset.preset_id}`,
             visible: true,
             chartType,
-            metric: normalizePresetMetric(preset.status) as any,
-            groupBy: normalizePresetGroupBy(preset.severity) as any,
-            timeBucket: normalizePresetTimeBucket(preset.error_code) as any,
-            heatmapMode: normalizePresetHeatmapMode(preset.vendor) as any,
-            tableColumns: normalizePresetTableColumns(preset.device_type),
+            metric: normalizePresetMetric(preset.metric) as any,
+            groupBy: normalizePresetGroupBy(preset.group_by) as any,
+            timeBucket: normalizePresetTimeBucket(preset.time_bucket) as any,
+            heatmapMode: normalizePresetHeatmapMode(preset.heatmap_mode) as any,
+            tableColumns: normalizePresetTableColumns(preset.table_columns),
             info1: true,
             info2: true,
             info3: true,
             preset: `preset:${preset.preset_id}`,
-            startDate: preset.start_date?.slice(0, 10) ?? '',
-            endDate: preset.end_date?.slice(0, 10) ?? '',
+            startDate: '',
+            endDate: '',
           },
         };
       });
 
       return {
         options,
+        presets: presets.data,
         templateIds: templates.data.map((template) => template.template_id),
       };
     },
@@ -195,7 +196,7 @@ function normalizePresetTableColumns(value: string | null | undefined) {
       await nettraceApi.updateTemplate(templateId, {
         name: currentTemplate.name,
         selected_cards: buildTemplateSnapshot(nextWidgets, getLayoutCapacity(nextWidgets)),
-        widgets: buildTemplateWidgetInputs(nextWidgets),
+        widgets: buildTemplateWidgetInputs(nextWidgets, widgetPresets.data?.presets ?? []),
       });
       setWidgets(nextWidgets);
       toast.success('Widget and template updated');
@@ -264,7 +265,7 @@ function normalizePresetTableColumns(value: string | null | undefined) {
             onClick={() => setGeneralSettingsOpen(true)}
           >
             <PenLine size={18} />
-            Customize
+            Templates
           </Button>
         }
       />

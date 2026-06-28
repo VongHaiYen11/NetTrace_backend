@@ -4,15 +4,12 @@ const nullableText = (max: number) => z.string().trim().max(max).nullable().opti
 
 export const createPresetSchema = z.object({
   preset_name: z.string().trim().min(1).max(255),
-  position: z.coerce.number().int().min(0).default(0),
   chart_type: z.string().trim().min(1).max(100),
-  start_date: z.string().nullable().optional(),
-  end_date: z.string().nullable().optional(),
-  status: nullableText(50),
-  severity: nullableText(50),
-  error_code: nullableText(50),
-  vendor: nullableText(100),
-  device_type: nullableText(50),
+  metric: nullableText(50),
+  group_by: nullableText(50),
+  time_bucket: nullableText(50),
+  heatmap_mode: nullableText(100),
+  table_columns: nullableText(500),
 });
 
 export const listPresetsQuerySchema = z.object({

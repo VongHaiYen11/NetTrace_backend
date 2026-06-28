@@ -324,10 +324,13 @@ export function WidgetSettingsDrawer({
       setValue('preset', presetId);
       return;
     }
+    const currentValues = getValues();
     reset({
-      ...getValues(),
+      ...currentValues,
       ...preset.values,
       preset: preset.id,
+      startDate: currentValues.startDate,
+      endDate: currentValues.endDate,
     });
   }
 
@@ -343,13 +346,10 @@ export function WidgetSettingsDrawer({
         <div className="relative overflow-hidden border-b border-primary/30 px-6 py-5">
           <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary to-transparent opacity-80" />
           <div>
-            <p className="font-mono text-[10px] font-black uppercase tracking-[0.22em] text-secondary">
-              Preset console
-            </p>
-            <h2 className="mt-1 text-2xl font-black text-light drop-shadow-glow-primary">
-              Preset settings
+            <h2 className="mt-1 text-3xl font-black text-light drop-shadow-glow-primary">
+              Preset Settings
             </h2>
-            <div className="mt-2 flex max-w-[330px] items-center gap-1 border border-secondary/25 bg-secondary/5 px-2.5 py-1">
+            <div className="mt-3 flex items-center gap-1 border border-secondary/25 bg-secondary/5 px-2.5 py-1">
               {editingWidgetName ? (
                 <input
                   autoFocus

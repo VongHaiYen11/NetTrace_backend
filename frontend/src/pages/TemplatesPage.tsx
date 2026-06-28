@@ -18,12 +18,14 @@ import {
   Check,
 } from 'lucide-react';
 import { cn } from '../utils/cn';
-import { encodeTableColumns, decodeTableColumns } from '../utils/columns';
+import { decodeTableColumns } from '../utils/columns';
+import { normalizePresetFieldsByChartType } from '../utils/presetPayload';
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
   nettraceApi,
+  type PresetSummary,
   type TemplateSummary,
 } from '../services/generated/nettrace-api';
 import { StateBlock } from '../components/shared/StateBlock';
@@ -44,7 +46,6 @@ import type { AppOutletContext } from '../layouts/AppLayout';
 
 type TemplateSort = 'date' | 'name' | 'widgets';
 type TemplateSortDir = 'asc' | 'desc';
-type TemplateWidgetFilter = 'all' | 'with-widgets' | 'with-kpis';
 
 type PresetSortKey = 'preset_name' | 'chart_type';
 type PresetSortDir = 'asc' | 'desc';
@@ -62,9 +63,11 @@ interface PresetDraft {
   timeBucket: string;
   heatmapMode: 'weekday' | 'calendar';
   tableColumns: string[];
-  startDate: string;
-  endDate: string;
 }
+
+type PresetDeleteDialog =
+  | { mode: 'confirm'; presets: PresetSummary[] }
+  | { mode: 'blocked'; presets: PresetSummary[] };
 
 type TemplateModalState =
   | { mode: 'create'; widgets: DashboardWidgetConfig[] }
@@ -83,6 +86,10 @@ function getTemplateWidgets(template: TemplateSummary) {
   } catch {
     return createTemplateDraftWidgets();
   }
+}
+
+function getTemplateKpiCount(template: TemplateSummary) {
+  return getTemplateWidgets(template).filter((widget) => widget.type?.startsWith('kpi') && widget.visible !== false).length;
 }
 
 // ─── Menu Components ─────────────────────────────────────────────────────────
@@ -253,30 +260,6 @@ function SortMenu<T extends string>({
   );
 }
 
-function FilterChip({
-  label,
-  active,
-  accentColor,
-  onClick,
-}: {
-  label: string;
-  active: boolean;
-  accentColor: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`w-full rounded-md px-3 py-2.5 text-left text-sm transition-colors ${
-        active ? 'bg-white/[0.07] text-white' : 'text-muted hover:bg-white/[0.04] hover:text-white'
-      }`}
-    >
-      {label}
-    </button>
-  );
-}
-
 function CompactSelect({
   label,
   value,
@@ -348,31 +331,56 @@ function Toolbar({ children }: { children: React.ReactNode }) {
 }
 
 function TemplateFilterMenu({
-  value,
-  counts,
-  onChange,
+  widgetValue,
+  kpiValue,
+  onWidgetChange,
+  onKpiChange,
 }: {
-  value: TemplateWidgetFilter;
-  counts: { all: number; widgets: number; kpis: number };
-  onChange: (value: TemplateWidgetFilter) => void;
+  widgetValue: string;
+  kpiValue: string;
+  onWidgetChange: (value: string) => void;
+  onKpiChange: (value: string) => void;
 }) {
   const accentColor = '#ff2d85';
+  const activeCount = [widgetValue !== 'all', kpiValue !== 'all'].filter(Boolean).length;
 
   return (
     <ControlMenu
       label="Filter"
       icon={ListFilter}
       accentColor={accentColor}
-      active={value !== 'all'}
-      badge={value !== 'all' ? 1 : undefined}
+      active={activeCount > 0}
+      badge={activeCount || undefined}
     >
-      <MenuSection label="Widgets">
-        <div className="grid gap-1">
-          <FilterChip label={`All (${counts.all})`} active={value === 'all'} accentColor={accentColor} onClick={() => onChange('all')} />
-          <FilterChip label={`Has widgets (${counts.widgets})`} active={value === 'with-widgets'} accentColor={accentColor} onClick={() => onChange('with-widgets')} />
-          <FilterChip label={`Has KPI cards (${counts.kpis})`} active={value === 'with-kpis'} accentColor={accentColor} onClick={() => onChange('with-kpis')} />
-        </div>
-      </MenuSection>
+      <div className="space-y-3">
+        <CompactSelect
+          label="Widget count"
+          value={widgetValue === 'all' ? '' : widgetValue}
+          options={['1', '2', '3', '4', '5', '6']}
+          accentColor={accentColor}
+          onChange={(value) => onWidgetChange(value || 'all')}
+        />
+        <CompactSelect
+          label="KPI card count"
+          value={kpiValue === 'all' ? '' : kpiValue}
+          options={['0', '1', '2', '3', '4', '5']}
+          accentColor={accentColor}
+          onChange={(value) => onKpiChange(value || 'all')}
+        />
+      </div>
+
+      {activeCount > 0 ? (
+        <button
+          type="button"
+          onClick={() => {
+            onWidgetChange('all');
+            onKpiChange('all');
+          }}
+          className="mt-4 w-full rounded-md px-3 py-2 text-sm font-medium text-muted transition-colors hover:bg-white/[0.04] hover:text-white"
+        >
+          Clear filters
+        </button>
+      ) : null}
     </ControlMenu>
   );
 }
@@ -484,22 +492,10 @@ export function TemplatesPage() {
   const [templateSearch, setTemplateSearch] = useState('');
   const [templateSort, setTemplateSort] = useState<TemplateSort>('date');
   const [templateSortDir, setTemplateSortDir] = useState<TemplateSortDir>('desc');
-  const [templateWidgetFilter, setTemplateWidgetFilter] = useState<TemplateWidgetFilter>('all');
+  const [templateWidgetFilter, setTemplateWidgetFilter] = useState('all');
+  const [templateKpiFilter, setTemplateKpiFilter] = useState('all');
   const [templateModal, setTemplateModal] = useState<TemplateModalState | null>(null);
   const [templateToDelete, setTemplateToDelete] = useState<{ id: number; name: string } | null>(null);
-
-  const templateCounts = useMemo(() => {
-    const data = templates.data?.data || [];
-    let widgets = 0;
-    let kpis = 0;
-    data.forEach(t => {
-      const widgetCount = t.number_of_widgets || 0;
-      if (widgetCount > 0) widgets++;
-      const parsedWidgets = getTemplateWidgets(t);
-      if (parsedWidgets.filter(w => w.type && w.type.startsWith('kpi')).length > 0) kpis++;
-    });
-    return { all: data.length, widgets, kpis };
-  }, [templates.data?.data]);
 
   // ── Preset local states ─────────────────────────────────────────────────────
   const [presetSearch, setPresetSearch] = useState('');
@@ -509,6 +505,7 @@ export function TemplatesPage() {
     chart_type: '',
   });
   const [selectedPresetIds, setSelectedPresetIds] = useState<Set<number>>(() => new Set());
+  const [presetDeleteDialog, setPresetDeleteDialog] = useState<PresetDeleteDialog | null>(null);
   const [presetModalOpen, setPresetModalOpen] = useState(false);
   const [presetHeatmapMode, setPresetHeatmapMode] = useState<'weekday' | 'calendar'>('weekday');
   const [creatingPreset, setCreatingPreset] = useState(false);
@@ -520,8 +517,6 @@ export function TemplatesPage() {
     timeBucket: 'day',
     heatmapMode: 'weekday',
     tableColumns: defaultTableColumns,
-    startDate: '',
-    endDate: '',
   });
 
   // ── Filter / sort templates ─────────────────────────────────────────────────
@@ -530,12 +525,10 @@ export function TemplatesPage() {
     return templates.data.data
       .filter((t) => {
         const widgetCount = t.number_of_widgets || 0;
+        const kpiCount = getTemplateKpiCount(t);
         if (!t.name.toLowerCase().includes(templateSearch.toLowerCase())) return false;
-        if (templateWidgetFilter === 'with-widgets') return widgetCount > 0;
-        if (templateWidgetFilter === 'with-kpis') {
-          const parsedWidgets = getTemplateWidgets(t);
-          return parsedWidgets.filter(w => w.type && w.type.startsWith('kpi')).length > 0;
-        }
+        if (templateWidgetFilter !== 'all' && widgetCount !== Number(templateWidgetFilter)) return false;
+        if (templateKpiFilter !== 'all' && kpiCount !== Number(templateKpiFilter)) return false;
         return true;
       })
       .sort((a, b) => {
@@ -549,7 +542,7 @@ export function TemplatesPage() {
         }
         return templateSortDir === 'asc' ? result : -result;
       });
-  }, [templates.data?.data, templateSearch, templateSort, templateSortDir, templateWidgetFilter]);
+  }, [templates.data?.data, templateSearch, templateSort, templateSortDir, templateWidgetFilter, templateKpiFilter]);
 
   // ── Filter / sort presets ───────────────────────────────────────────────────
   const filteredPresets = useMemo(() => {
@@ -584,7 +577,11 @@ export function TemplatesPage() {
         setActiveTemplate(null);
         setDashboardWidgets([]);
       }
-      await queryClient.invalidateQueries({ queryKey: ['templates'] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['templates'] }),
+        queryClient.invalidateQueries({ queryKey: ['template-presets'] }),
+        queryClient.invalidateQueries({ queryKey: ['dashboard-widget-presets'] }),
+      ]);
       setTemplateToDelete(null);
     } catch (err) {
       console.error('Failed to delete template:', err);
@@ -652,23 +649,17 @@ export function TemplatesPage() {
 
   const openPresetModal = (preset?: typeof allPresets[0]) => {
     if (preset) {
-      const start = preset.start_date ? new Date(preset.start_date).toISOString().slice(0, 10) : '';
-      const end = preset.end_date ? new Date(preset.end_date).toISOString().slice(0, 10) : '';
-      const isCal = start.endsWith('-01-01') && (end.endsWith('-12-31') || end === new Date().toISOString().slice(0, 10));
-
       setPresetDraft({
         id: preset.preset_id,
         presetName: preset.preset_name || '',
         chartType: preset.chart_type as any,
-        startDate: start,
-        endDate: end,
-        metric: preset.status || 'count',
-        groupBy: preset.severity || (preset.chart_type === 'pie' ? 'severity' : 'none'),
-        timeBucket: preset.error_code || 'day',
-        heatmapMode: (preset.vendor as 'weekday' | 'calendar') || 'weekday',
-        tableColumns: decodeTableColumns(preset.device_type) || defaultTableColumns,
+        metric: preset.metric || 'count',
+        groupBy: preset.group_by || (preset.chart_type === 'pie' ? 'severity' : 'none'),
+        timeBucket: preset.time_bucket || 'day',
+        heatmapMode: (preset.heatmap_mode as 'weekday' | 'calendar') || 'weekday',
+        tableColumns: decodeTableColumns(preset.table_columns) || defaultTableColumns,
       });
-      setPresetHeatmapMode(isCal ? 'calendar' : 'weekday');
+      setPresetHeatmapMode((preset.heatmap_mode as 'weekday' | 'calendar') || 'weekday');
     } else {
       setPresetDraft({
         presetName: '',
@@ -678,8 +669,6 @@ export function TemplatesPage() {
         timeBucket: 'day',
         heatmapMode: 'weekday',
         tableColumns: defaultTableColumns,
-        startDate: '',
-        endDate: '',
       });
       setPresetHeatmapMode('weekday');
     }
@@ -691,15 +680,15 @@ export function TemplatesPage() {
     try {
       const payload = {
         preset_name: presetDraft.presetName.trim(),
-        position: 0,
         chart_type: presetDraft.chartType,
-        start_date: presetDraft.startDate || null,
-        end_date: presetDraft.endDate || null,
-        status: presetDraft.metric,
-        severity: presetDraft.groupBy,
-        error_code: presetDraft.timeBucket,
-        vendor: presetDraft.heatmapMode,
-        device_type: encodeTableColumns(presetDraft.tableColumns),
+        ...normalizePresetFieldsByChartType({
+          chartType: presetDraft.chartType,
+          metric: presetDraft.metric,
+          groupBy: presetDraft.groupBy,
+          timeBucket: presetDraft.timeBucket,
+          heatmapMode: presetDraft.heatmapMode,
+          tableColumns: presetDraft.tableColumns,
+        }),
       };
 
       if (presetDraft.id) {
@@ -722,17 +711,27 @@ export function TemplatesPage() {
     }
   };
 
-  const handleDeletePresets = async () => {
+  const openPresetDeleteDialog = () => {
     if (selectedPresetIds.size === 0) return;
-    if (!confirm('Are you sure you want to delete the selected presets?')) return;
-    
+    const selectedPresets = allPresets.filter((preset) => selectedPresetIds.has(preset.preset_id));
+    const usedPresets = selectedPresets.filter((preset) => preset.template_id);
+    setPresetDeleteDialog({
+      mode: usedPresets.length > 0 ? 'blocked' : 'confirm',
+      presets: usedPresets.length > 0 ? usedPresets : selectedPresets,
+    });
+  };
+
+  const handleDeletePresets = async () => {
+    if (!presetDeleteDialog || presetDeleteDialog.mode !== 'confirm') return;
+
     try {
-      await nettraceApi.deletePresets(Array.from(selectedPresetIds));
+      await nettraceApi.deletePresets(presetDeleteDialog.presets.map((preset) => preset.preset_id));
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['template-presets'] }),
         queryClient.invalidateQueries({ queryKey: ['dashboard-widget-presets'] }),
       ]);
       setSelectedPresetIds(new Set());
+      setPresetDeleteDialog(null);
       toast.success('Presets deleted successfully');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Could not delete presets.');
@@ -782,7 +781,12 @@ export function TemplatesPage() {
             Templates
           </h2>
           <Toolbar>
-            <TemplateFilterMenu value={templateWidgetFilter} counts={templateCounts} onChange={setTemplateWidgetFilter} />
+            <TemplateFilterMenu
+              widgetValue={templateWidgetFilter}
+              kpiValue={templateKpiFilter}
+              onWidgetChange={setTemplateWidgetFilter}
+              onKpiChange={setTemplateKpiFilter}
+            />
             <SortMenu
               options={templateSortOptions}
               value={templateSort}
@@ -844,8 +848,7 @@ export function TemplatesPage() {
                 .replace(/ hours?/, ' h')
                 .replace(/ minutes?/, ' min')
                 .replace(/ seconds?/, ' s');
-              const parsedWidgets = getTemplateWidgets(template);
-              const kpiCount = parsedWidgets.filter((w) => w.type && w.type.startsWith('kpi')).length;
+              const kpiCount = getTemplateKpiCount(template);
 
               return (
                 <div
@@ -980,7 +983,7 @@ export function TemplatesPage() {
                   </button>
                   <button
                     type="button"
-                    onClick={handleDeletePresets}
+                    onClick={openPresetDeleteDialog}
                     className="font-semibold text-red-400 transition hover:text-red-300"
                   >
                     Delete selected
@@ -1080,6 +1083,58 @@ export function TemplatesPage() {
         </div>
       )}
 
+      {presetDeleteDialog ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-sm">
+            <NeonBox className="p-6 rounded-lg bg-panel-light shadow-2xl">
+              <div className="flex items-center justify-between mb-4 border-b border-white/10 pb-3">
+                <h3 className="text-lg font-heading font-bold text-primary drop-shadow-glow-primary">
+                  {presetDeleteDialog.mode === 'blocked' ? 'Preset In Use' : 'Delete Preset'}
+                </h3>
+                <Button variant="ghost" size="icon" onClick={() => setPresetDeleteDialog(null)} className="h-8 w-8">
+                  <X size={16} />
+                </Button>
+              </div>
+              {presetDeleteDialog.mode === 'blocked' ? (
+                <div className="space-y-4">
+                  <p className="text-sm text-muted">
+                    This preset is currently used by a template and cannot be deleted. Remove it from the template first.
+                  </p>
+                  <div className="max-h-36 overflow-y-auto border border-border bg-input p-3">
+                    {presetDeleteDialog.presets.map((preset) => (
+                      <div key={preset.preset_id} className="font-mono text-xs text-muted">
+                        <span className="text-light">{preset.preset_name || `Preset ${preset.preset_id}`}</span>
+                        {preset.template_name ? ` · ${preset.template_name}` : null}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm text-muted mb-6">
+                  Are you sure you want to delete {presetDeleteDialog.presets.length === 1 ? (
+                    <strong className="text-white">
+                      "{presetDeleteDialog.presets[0].preset_name || `Preset ${presetDeleteDialog.presets[0].preset_id}`}"
+                    </strong>
+                  ) : (
+                    <strong className="text-white">{presetDeleteDialog.presets.length} presets</strong>
+                  )}? This cannot be undone.
+                </p>
+              )}
+              <div className="mt-6 flex justify-end gap-3">
+                <Button variant="ghost" onClick={() => setPresetDeleteDialog(null)}>
+                  {presetDeleteDialog.mode === 'blocked' ? 'Close' : 'Cancel'}
+                </Button>
+                {presetDeleteDialog.mode === 'confirm' ? (
+                  <Button variant="danger" onClick={handleDeletePresets}>
+                    Confirm
+                  </Button>
+                ) : null}
+              </div>
+            </NeonBox>
+          </div>
+        </div>
+      ) : null}
+
       {presetModalOpen ? (
         <>
           <div className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm" onClick={() => setPresetModalOpen(false)} />
@@ -1143,8 +1198,6 @@ export function TemplatesPage() {
                               onClick={() =>
                                 setPresetDraft((current) => {
                                   let heatmapMode = current.heatmapMode;
-                                  let start = current.startDate;
-                                  let end = current.endDate;
                                   if (type.id === 'heatmap' && current.chartType !== 'heatmap') {
                                     heatmapMode = 'weekday';
                                     setPresetHeatmapMode('weekday');
@@ -1153,8 +1206,6 @@ export function TemplatesPage() {
                                     ...current,
                                     chartType: type.id as any,
                                     heatmapMode,
-                                    startDate: start,
-                                    endDate: end,
                                   };
                                 })
                               }
@@ -1246,20 +1297,10 @@ export function TemplatesPage() {
                           onChange={(event) => {
                             const mode = event.target.value as 'weekday' | 'calendar';
                             setPresetHeatmapMode(mode);
-                            if (mode === 'calendar') {
-                              const range = getYearDateRange(getYearFromDate(presetDraft.startDate));
-                              setPresetDraft((current) => ({
-                                ...current,
-                                heatmapMode: mode,
-                                startDate: range.startDate,
-                                endDate: range.endDate,
-                              }));
-                            } else {
-                              setPresetDraft((current) => ({
-                                ...current,
-                                heatmapMode: mode,
-                              }));
-                            }
+                            setPresetDraft((current) => ({
+                              ...current,
+                              heatmapMode: mode,
+                            }));
                           }}
                         >
                           <option value="weekday">Weekday heatmap</option>
@@ -1357,56 +1398,6 @@ export function TemplatesPage() {
                       </div>
                     ) : null}
 
-                    {presetDraft.chartType === 'heatmap' && presetHeatmapMode === 'calendar' ? (
-                      <div>
-                        <p className="mb-3 font-mono text-base font-black tracking-normal text-secondary">
-                          Year
-                        </p>
-                        <p className="mb-4 border border-border bg-input px-3 py-2 font-mono text-xs text-light">
-                          {getYearFromDate(presetDraft.startDate) === String(new Date().getFullYear())
-                            ? `${getYearFromDate(presetDraft.startDate)} · Jan 1 to today`
-                            : `${getYearFromDate(presetDraft.startDate)} · Jan 1 to Dec 31`}
-                        </p>
-                        <Field label="Year">
-                          <Input
-                            type="number"
-                            min="2020"
-                            max={String(new Date().getFullYear())}
-                            value={getYearFromDate(presetDraft.startDate)}
-                            onChange={(event) => {
-                              const range = getYearDateRange(event.target.value);
-                              setPresetDraft((current) => ({
-                                ...current,
-                                startDate: range.startDate,
-                                endDate: range.endDate,
-                              }));
-                            }}
-                          />
-                        </Field>
-                      </div>
-                    ) : (
-                      <div>
-                        <p className="mb-3 font-mono text-base font-black tracking-normal text-secondary">
-                          Time range
-                        </p>
-                        <div className="grid gap-4 sm:grid-cols-2">
-                          <Field label="Start date">
-                            <Input
-                              type="date"
-                              value={presetDraft.startDate}
-                              onChange={(event) => setPresetDraft((current) => ({ ...current, startDate: event.target.value }))}
-                            />
-                          </Field>
-                          <Field label="End date">
-                            <Input
-                              type="date"
-                              value={presetDraft.endDate}
-                              onChange={(event) => setPresetDraft((current) => ({ ...current, endDate: event.target.value }))}
-                            />
-                          </Field>
-                        </div>
-                      </div>
-                    )}
                   </div>
                 </div>
               </div>

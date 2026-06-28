@@ -405,7 +405,7 @@ curl -X POST http://localhost:3000/api/v1/export \
 Manages dashboard layout configurations (Template, Widget, Preset) in PostgreSQL. Supports atomic transactions for database consistency.
 
 #### 6.1. Create Template (<code>POST /api/v1/templates</code>)
-Creates a new layout template along with widgets and configuration presets.
+Creates a new layout template and links widget slots to presets. If `preset_id` is supplied, the existing preset is reused and only a widget link is created.
 
 **cURL Call:**
 ```bash
@@ -416,11 +416,10 @@ curl -X POST http://localhost:3000/api/v1/templates \
     "selected_cards": "[\"totalAlarms\", \"activeAlarms\"]",
     "widgets": [
       {
-        "preset_name": "Critical switch alarms",
+        "preset_id": 12,
         "position": 1,
-        "chart_type": "line",
-        "status": "active",
-        "severity": "critical"
+        "start_date": "2026-06-01T00:00:00Z",
+        "end_date": "2026-06-30T00:00:00Z"
       }
     ]
   }'
@@ -443,7 +442,7 @@ curl -X GET http://localhost:3000/api/v1/templates/1
 ```
 
 #### 6.4. Update Template (<code>PUT /api/v1/templates/:id</code>)
-Updates the template fields (name, selected cards) and synchronizes the widgets (adding/removing widgets as needed) inside a transaction.
+Updates the template fields (name, selected cards) and synchronizes widget links inside a transaction. Existing presets referenced by `preset_id` are not duplicated.
 
 **cURL Call:**
 ```bash
@@ -457,15 +456,17 @@ curl -X PUT http://localhost:3000/api/v1/templates/1 \
         "preset_name": "Critical switch alarms",
         "position": 1,
         "chart_type": "bar",
-        "status": "active",
-        "severity": "critical"
+        "start_date": "2026-06-01T00:00:00Z",
+        "end_date": "2026-06-30T00:00:00Z",
+        "metric": "count",
+        "group_by": "severity"
       }
     ]
   }'
 ```
 
 #### 6.5. Delete Template (<code>DELETE /api/v1/templates/:id</code>)
-Deletes a template. Associated widgets are removed by the database cascade; presets tied only through remaining widget references may still exist if reused by other templates.
+Deletes a template. Associated widget links are removed by the database cascade; presets remain available for reuse by other templates.
 
 **cURL Call:**
 ```bash
@@ -482,8 +483,8 @@ curl -X POST http://localhost:3000/api/v1/presets \
   -d '{
     "preset_name": "Critical router alarms",
     "chart_type": "bar",
-    "severity": "critical",
-    "device_type": "router"
+    "metric": "count",
+    "group_by": "severity"
   }'
 ```
 

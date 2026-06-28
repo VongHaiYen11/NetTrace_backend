@@ -1,16 +1,25 @@
 import { z } from 'zod';
 
 export const WidgetSchema = z.object({
+  preset_id: z.number().int().positive().optional(),
   preset_name: z.string().trim().min(1).max(255).optional().nullable(),
   position: z.number().int().min(0),
-  chart_type: z.string().min(1, 'chart_type is required').max(100),
+  chart_type: z.string().min(1, 'chart_type is required').max(100).optional(),
   start_date: z.string().optional().nullable(),
   end_date: z.string().optional().nullable(),
-  status: z.string().max(50).optional().nullable(),
-  severity: z.string().max(50).optional().nullable(),
-  error_code: z.string().max(50).optional().nullable(),
-  vendor: z.string().max(100).optional().nullable(),
-  device_type: z.string().max(50).optional().nullable(),
+  metric: z.string().max(50).optional().nullable(),
+  group_by: z.string().max(50).optional().nullable(),
+  time_bucket: z.string().max(50).optional().nullable(),
+  heatmap_mode: z.string().max(100).optional().nullable(),
+  table_columns: z.string().max(500).optional().nullable(),
+}).superRefine((widget, ctx) => {
+  if (!widget.preset_id && !widget.chart_type) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['chart_type'],
+      message: 'chart_type is required when preset_id is not provided',
+    });
+  }
 });
 
 export const createTemplateSchema = z.object({

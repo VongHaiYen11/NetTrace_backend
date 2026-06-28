@@ -39,31 +39,22 @@ const router = Router();
  *               preset_name:
  *                 type: string
  *                 example: "Critical router alarms"
- *               position:
- *                 type: integer
- *                 default: 0
  *               chart_type:
  *                 type: string
  *                 example: "line"
- *               start_date:
+ *               metric:
  *                 type: string
  *                 nullable: true
- *               end_date:
+ *               group_by:
  *                 type: string
  *                 nullable: true
- *               status:
+ *               time_bucket:
  *                 type: string
  *                 nullable: true
- *               severity:
+ *               heatmap_mode:
  *                 type: string
  *                 nullable: true
- *               error_code:
- *                 type: string
- *                 nullable: true
- *               vendor:
- *                 type: string
- *                 nullable: true
- *               device_type:
+ *               table_columns:
  *                 type: string
  *                 nullable: true
  *     responses:
@@ -87,29 +78,21 @@ const router = Router();
  *             properties:
  *               preset_name:
  *                 type: string
- *               position:
- *                 type: integer
  *               chart_type:
  *                 type: string
- *               start_date:
+ *               metric:
  *                 type: string
  *                 nullable: true
- *               end_date:
+ *               group_by:
  *                 type: string
  *                 nullable: true
- *               status:
+ *               time_bucket:
  *                 type: string
  *                 nullable: true
- *               severity:
+ *               heatmap_mode:
  *                 type: string
  *                 nullable: true
- *               error_code:
- *                 type: string
- *                 nullable: true
- *               vendor:
- *                 type: string
- *                 nullable: true
- *               device_type:
+ *               table_columns:
  *                 type: string
  *                 nullable: true
  *     responses:

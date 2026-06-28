@@ -32,8 +32,12 @@ const router = Router();
  *       type: object
  *       required:
  *         - position
- *         - chart_type
  *       properties:
+ *         preset_id:
+ *           type: integer
+ *           nullable: true
+ *           description: Existing reusable preset ID. If provided, no new preset is created.
+ *           example: 42
  *         preset_name:
  *           type: string
  *           nullable: true
@@ -54,26 +58,26 @@ const router = Router();
  *           format: date-time
  *           nullable: true
  *           example: "2026-06-30T00:00:00Z"
- *         status:
+ *         metric:
  *           type: string
  *           nullable: true
- *           example: "active"
- *         severity:
+ *           example: "count"
+ *         group_by:
  *           type: string
  *           nullable: true
- *           example: "critical"
- *         error_code:
+ *           example: "severity"
+ *         time_bucket:
  *           type: string
  *           nullable: true
- *           example: "ERR001"
- *         vendor:
+ *           example: "day"
+ *         heatmap_mode:
  *           type: string
  *           nullable: true
- *           example: "Cisco"
- *         device_type:
+ *           example: "weekday"
+ *         table_columns:
  *           type: string
  *           nullable: true
- *           example: "router"
+ *           example: "alarm_id,severity,status"
  *     PresetResponse:
  *       type: object
  *       properties:
@@ -84,33 +88,22 @@ const router = Router();
  *           type: string
  *           nullable: true
  *           example: "Critical router alarms"
- *         position:
- *           type: integer
- *           example: 1
  *         chart_type:
  *           type: string
  *           example: "line"
- *         start_date:
- *           type: string
- *           format: date-time
- *           nullable: true
- *         end_date:
- *           type: string
- *           format: date-time
- *           nullable: true
- *         status:
+ *         metric:
  *           type: string
  *           nullable: true
- *         severity:
+ *         group_by:
  *           type: string
  *           nullable: true
- *         error_code:
+ *         time_bucket:
  *           type: string
  *           nullable: true
- *         vendor:
+ *         heatmap_mode:
  *           type: string
  *           nullable: true
- *         device_type:
+ *         table_columns:
  *           type: string
  *           nullable: true
  *     TemplateWidget:
@@ -122,6 +115,17 @@ const router = Router();
  *         preset_id:
  *           type: integer
  *           example: 42
+ *         position:
+ *           type: integer
+ *           example: 1
+ *         start_date:
+ *           type: string
+ *           format: date-time
+ *           nullable: true
+ *         end_date:
+ *           type: string
+ *           format: date-time
+ *           nullable: true
  *         time_created:
  *           type: string
  *           format: date-time
@@ -168,7 +172,7 @@ const router = Router();
  * /api/v1/templates:
  *   post:
  *     summary: Create new Dashboard Template
- *     description: Creates a new dashboard layout template along with widgets and preset configurations in an atomic PostgreSQL transaction.
+ *     description: Creates a new dashboard layout template and links widget slots to presets in an atomic PostgreSQL transaction. Existing presets referenced by preset_id are reused.
  *     tags:
  *       - Templates
  *     requestBody:
@@ -292,7 +296,7 @@ router.get(
  * /api/v1/templates/{id}:
  *   put:
  *     summary: Update dashboard template
- *     description: Updates a template name, selected cards, and synchronizes its widgets and presets (deletion + re-insertion) inside a PostgreSQL transaction.
+ *     description: Updates a template name, selected cards, and synchronizes widget links inside a PostgreSQL transaction. Existing presets referenced by preset_id are reused.
  *     tags:
  *       - Templates
  *     parameters:
@@ -347,7 +351,7 @@ router.put(
  * /api/v1/templates/{id}:
  *   delete:
  *     summary: Delete dashboard template
- *     description: Deletes a template. Associated widgets are cascade-deleted by the FK constraint; orphaned presets are deleted in the service layer before the template is removed.
+ *     description: Deletes a template. Associated widget links are cascade-deleted by the FK constraint; preset rows remain reusable.
  *     tags:
  *       - Templates
  *     parameters:
