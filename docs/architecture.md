@@ -4,15 +4,14 @@ This document describes the system architecture, major components, and responsib
 
 ## Architecture Overview
 
-The system is designed following a strict, one-way **Clean Layered Architecture** model to ensure modularity, ease of testing, and isolation of concerns:
+The backend follows a practical one-way layered structure around Express request handling. The source code contains Express route modules, but these routes are HTTP routing/adapters, not a separate business layer. Request handling moves from HTTP routing into controllers, then services, repositories, and database clients.
 
 ```mermaid
 graph TD
     classDef layer fill:#f4f4f9,stroke:#555,stroke-width:1px,rx:5px,ry:5px;
     classDef db fill:#e3f2fd,stroke:#0d47a1,stroke-width:2px,rx:8px,ry:8px;
 
-    Client([Client / Webapp]) -->|HTTP Request| Route[Route Layer]:::layer
-    Route -->|Zod Validator Middleware| Controller[Controller Layer]:::layer
+    Client([Client / Webapp]) --> Controller[Controller Layer]:::layer
     Controller -->|Delegates to| Service[Service Layer]:::layer
     Service -->|Invokes| Repository[Repository Layer]:::layer
     Repository -->|Queries| PostgreSQL[(PostgreSQL Database<br/>Metadata)]:::db
@@ -21,13 +20,13 @@ graph TD
 
 ## Major Components & Layer Responsibilities
 
-### 1. Route Layer
-* **Responsibility:** Handles mapping HTTP verbs and request URL paths to their corresponding controllers.
+### 1. Express Router / HTTP Adapter
+* **Responsibility:** Maps HTTP verbs and request URL paths to their corresponding controllers.
 * **Key Tasks:**
   * Defines routes under the `/api/v1` namespace.
   * Registers validation middleware before controller invocation.
   * Declares Swagger OpenAPI specs via JSDoc comments to act as the API contract.
-  * *Does not contain any business or query logic.*
+  * *Does not contain business logic or query logic.*
 
 ### 2. Controller Layer
 * **Responsibility:** Serves as the entry and exit point for API requests.
@@ -61,4 +60,4 @@ graph TD
 
 ## Component Interactions
 
-All component interactions are strictly downstream (one-way). Request handling flows from Route to Controller to Service to Repository to the Databases. The result is returned back up the call stack to the Controller, which responds to the client. Direct communication between repositories and controllers, or services and routes, is strictly prohibited.
+All component interactions are downstream in the current backend implementation. Request handling flows from Express Router / HTTP Adapter to Controller to Service to Repository to the Databases. The result is returned back up the call stack to the Controller, which responds to the client. Direct communication between repositories and controllers, or services and routers, is not used in the current source code.
