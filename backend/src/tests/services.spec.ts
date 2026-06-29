@@ -1,5 +1,5 @@
 import { QueryAlarmsService } from '../services/query-alarms.service.js';
-import { QueryAlarmsRepository } from '../repositories/query-alarms.repository.js';
+import { QueryAlarmsRepository, type AlarmColumn } from '../repositories/query-alarms.repository.js';
 import { SummaryService } from '../services/summary.service.js';
 import { SummaryRepository } from '../repositories/summary.repository.js';
 import { AnalyticsQueryService } from '../services/analytics-query.service.js';
@@ -107,6 +107,7 @@ describe('Service Layer Tests', () => {
         limit: 10,
         sort_by: 'timestamp' as const,
         sort_order: 'desc' as const,
+        columns: ['device_name', 'error_name'] as AlarmColumn[],
       };
 
       const result = await queryService.queryAlarms(params, metrics);
@@ -148,9 +149,11 @@ describe('Service Layer Tests', () => {
       await queryService.queryAlarms(params, metrics);
 
       expect(mockDeviceRepo.getDeviceIdsByFilters).toHaveBeenCalledWith({
+        device_name: undefined,
         device_type: ['Switch'],
         vendor: undefined,
         station: undefined,
+        station_id: undefined,
         province: undefined,
       });
       expect(mockQueryRepo.queryAlarms).toHaveBeenCalledWith(

@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import {
   ArrowDownUp,
   Check,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Columns3,
@@ -18,12 +19,14 @@ import { Button } from '../components/ui/Button';
 import { Field, Input, Select } from '../components/ui/Field';
 import {
   nettraceApi,
+  type AlarmColumn,
   type AlarmSearchField,
   type Alarm,
   type QueryAlarmsParams,
   type SortBy,
   type SortOrder,
 } from '../services/generated/nettrace-api';
+import { DatePicker } from '../features/dashboard/components/WeekPicker';
 import { cn } from '../utils/cn';
 
 type AlarmColumnKey =
@@ -39,13 +42,13 @@ type AlarmColumnKey =
   | 'device_type'
   | 'vendor_name'
   | 'station_name'
-  | 'province'
+  | 'station_province'
   | 'description';
 
 const COLUMN_OPTIONS: Array<{ key: AlarmColumnKey; label: string; sortable?: SortBy }> = [
   { key: 'alarm_id', label: 'ID' },
   { key: 'severity', label: 'Severity', sortable: 'severity' },
-  { key: 'device_name', label: 'Device' },
+  { key: 'device_name', label: 'Device name' },
   { key: 'device_id', label: 'Device ID' },
   { key: 'error_code', label: 'Error code' },
   { key: 'error_name', label: 'Error name' },
@@ -55,7 +58,7 @@ const COLUMN_OPTIONS: Array<{ key: AlarmColumnKey; label: string; sortable?: Sor
   { key: 'device_type', label: 'Device type' },
   { key: 'vendor_name', label: 'Vendor' },
   { key: 'station_name', label: 'Station' },
-  { key: 'province', label: 'Province' },
+  { key: 'station_province', label: 'Province' },
   { key: 'description', label: 'Description' },
 ];
 
@@ -67,6 +70,25 @@ const DEFAULT_COLUMNS: AlarmColumnKey[] = [
   'error_code',
   'time_created',
   'status',
+];
+
+const ALARM_DETAIL_COLUMNS: AlarmColumn[] = [
+  'alarm_id',
+  'device_id',
+  'device_name',
+  'device_type',
+  'vendor_name',
+  'station_name',
+  'station_province',
+  'error_code',
+  'error_name',
+  'error_domain',
+  'time_created',
+  'time_solved',
+  'status',
+  'severity',
+  'raw_log',
+  'description',
 ];
 
 const SORT_OPTIONS: Array<{ value: SortBy; label: string }> = [
@@ -116,7 +138,7 @@ function getAlarmCellValue(alarm: Alarm, key: AlarmColumnKey) {
   if (key === 'device_type') return alarm.device_details?.device_type ?? 'N/A';
   if (key === 'vendor_name') return alarm.device_details?.vendor_name ?? 'N/A';
   if (key === 'station_name') return alarm.device_details?.station_name ?? 'N/A';
-  if (key === 'province') return alarm.device_details?.station_province ?? 'N/A';
+  if (key === 'station_province') return alarm.device_details?.station_province ?? 'N/A';
   if (key === 'time_created') return formatDateTime(alarm.time_created);
   if (key === 'time_solved') return formatDateTime(alarm.time_solved);
   return alarm[key] ?? 'N/A';
@@ -139,6 +161,151 @@ function severityClass(severity: string) {
   return 'border-secondary/60 bg-secondary/10 text-secondary shadow-glow-secondary';
 }
 
+function MultiChoiceSelect({
+  label,
+  values,
+  onChange,
+  placeholder,
+  options,
+  isLoading = false,
+  onSelected,
+}: {
+  label: string;
+  values: string[];
+  onChange: (values: string[]) => void;
+  placeholder: string;
+  options: Array<{ value: string; label: string }>;
+  isLoading?: boolean;
+  onSelected: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const ref = useRef<HTMLDivElement>(null);
+  const searchable = options.length > 10;
+  const visibleOptions = searchable && search.trim()
+    ? options.filter((option) => option.label.toLowerCase().includes(search.trim().toLowerCase()))
+    : options;
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (ref.current && !ref.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  function toggleValue(value: string) {
+    onChange(values.includes(value) ? values.filter((item) => item !== value) : [...values, value]);
+    onSelected();
+  }
+
+  return (
+    <Field label={label} labelVariant="nested">
+      <div ref={ref} className="relative">
+        <button
+          type="button"
+          onClick={() => setOpen((current) => !current)}
+          className="flex h-10 w-full items-center justify-between gap-3 rounded border border-border bg-input px-3 text-left text-sm text-light outline-none transition hover:border-primary/60 focus-visible:border-secondary focus-visible:ring-2 focus-visible:ring-secondary/15"
+        >
+          <span className={cn('truncate', values.length === 0 && 'text-placeholder')}>
+            {values.length > 0 ? values.join(', ') : placeholder}
+          </span>
+          <ChevronDown
+            size={14}
+            className={cn('shrink-0 text-secondary transition', open && 'rotate-180')}
+          />
+        </button>
+        {open ? (
+          <div className="absolute left-0 right-0 top-full z-40 mt-2 overflow-hidden rounded-lg border border-border bg-panel p-2 shadow-2xl">
+            {searchable ? (
+              <Input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Search options..."
+                className="mb-2 h-9 text-xs"
+              />
+            ) : null}
+            <div className="max-h-52 overflow-y-auto">
+              {isLoading ? (
+                <p className="px-2 py-3 text-sm text-muted">Loading...</p>
+              ) : visibleOptions.length === 0 ? (
+                <p className="px-2 py-3 text-sm text-muted">No options found.</p>
+              ) : (
+                visibleOptions.map((option) => {
+                  const selected = values.includes(option.value);
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => toggleValue(option.value)}
+                      className={cn(
+                        'flex w-full items-center justify-between rounded px-3 py-2.5 text-left text-sm transition',
+                        selected
+                          ? 'bg-secondary/10 text-bright'
+                          : 'text-muted hover:bg-white/[0.04] hover:text-bright',
+                      )}
+                    >
+                      <span>{option.label}</span>
+                      <span
+                        className={cn(
+                          'flex h-5 w-5 items-center justify-center rounded',
+                          selected ? 'bg-secondary text-input-dark' : 'border border-white/20',
+                        )}
+                      >
+                        {selected ? <Check size={13} strokeWidth={3} /> : null}
+                      </span>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        ) : null}
+      </div>
+    </Field>
+  );
+}
+
+function MetadataSelect({
+  label,
+  values,
+  onChange,
+  optionKey,
+  placeholder,
+  onSelected,
+}: {
+  label: string;
+  values: string[];
+  onChange: (values: string[]) => void;
+  optionKey: 'deviceTypes' | 'vendors' | 'provinces';
+  placeholder: string;
+  onSelected: () => void;
+}) {
+  const optionsQuery = useQuery({
+    queryKey: ['metadata-options', optionKey],
+    queryFn: () => nettraceApi.getMetadataOptions(),
+    staleTime: 60_000,
+  });
+  const options = (optionsQuery.data?.data[optionKey] ?? []).map((option) => ({
+    value: option,
+    label: option,
+  }));
+
+  return (
+    <MultiChoiceSelect
+      label={label}
+      values={values}
+      onChange={onChange}
+      placeholder={placeholder}
+      options={options}
+      isLoading={optionsQuery.isLoading}
+      onSelected={onSelected}
+    />
+  );
+}
+
 export function AlarmExplorerPage() {
   const [columns, setColumns] = useState<AlarmColumnKey[]>(DEFAULT_COLUMNS);
   const [columnsOpen, setColumnsOpen] = useState(false);
@@ -152,7 +319,12 @@ export function AlarmExplorerPage() {
   const [severity, setSeverity] = useState('');
   const [status, setStatus] = useState('');
   const [deviceId, setDeviceId] = useState('');
-  const [deviceType, setDeviceType] = useState('');
+  const [deviceName, setDeviceName] = useState('');
+  const [deviceTypes, setDeviceTypes] = useState<string[]>([]);
+  const [vendors, setVendors] = useState<string[]>([]);
+  const [station, setStation] = useState('');
+  const [stationId, setStationId] = useState('');
+  const [provinces, setProvinces] = useState<string[]>([]);
   const [errorCode, setErrorCode] = useState('');
   const [sortBy, setSortBy] = useState<SortBy>('timestamp');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
@@ -169,20 +341,26 @@ export function AlarmExplorerPage() {
       severity: severity ? [severity] : undefined,
       status: status ? [status] : undefined,
       device_id: splitCsv(deviceId),
-      device_type: splitCsv(deviceType),
+      device_name: splitCsv(deviceName),
+      device_type: deviceTypes.length > 0 ? deviceTypes : undefined,
+      vendor: vendors.length > 0 ? vendors : undefined,
+      station: splitCsv(station),
+      station_id: splitCsv(stationId),
+      province: provinces.length > 0 ? provinces : undefined,
       error_code: splitCsv(errorCode),
       offset: page * pageSize,
       limit: pageSize,
       sort_by: sortBy,
       sort_order: sortOrder,
       include_total: true,
-      detail_level: 'full',
+      columns: Array.from(new Set<AlarmColumn>([...columns, ...ALARM_DETAIL_COLUMNS])),
       search: search.trim() || undefined,
       search_field: search.trim() ? searchField : undefined,
     }),
     [
       deviceId,
-      deviceType,
+      deviceName,
+      deviceTypes,
       errorCode,
       fromDate,
       page,
@@ -193,7 +371,11 @@ export function AlarmExplorerPage() {
       sortBy,
       sortOrder,
       status,
+      station,
+      stationId,
       toDate,
+      vendors,
+      provinces,
     ],
   );
 
@@ -208,7 +390,18 @@ export function AlarmExplorerPage() {
   const selectedAlarm = filteredRows.find((alarm) => alarm.alarm_id === selectedAlarmId) ?? null;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const filtersActive = Boolean(
-    fromDate || toDate || severity || status || deviceId || deviceType || errorCode,
+    fromDate ||
+      toDate ||
+      severity ||
+      status ||
+      deviceId ||
+      deviceName ||
+      deviceTypes.length > 0 ||
+      vendors.length > 0 ||
+      station ||
+      stationId ||
+      provinces.length > 0 ||
+      errorCode,
   );
   const sortActive = sortBy !== 'timestamp' || sortOrder !== 'desc';
 
@@ -247,7 +440,12 @@ export function AlarmExplorerPage() {
     setSeverity('');
     setStatus('');
     setDeviceId('');
-    setDeviceType('');
+    setDeviceName('');
+    setDeviceTypes([]);
+    setVendors([]);
+    setStation('');
+    setStationId('');
+    setProvinces([]);
     setErrorCode('');
     resetPaging();
   }
@@ -322,10 +520,10 @@ export function AlarmExplorerPage() {
                     <div className="absolute right-0 top-full z-30 mt-2 w-[min(42rem,calc(100vw-3rem))] rounded-lg border border-border bg-panel p-4 shadow-2xl">
                       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                         <Field label="From date" labelVariant="nested">
-                          <Input type="date" value={fromDate} onChange={(event) => { setFromDate(event.target.value); resetPaging(); }} />
+                          <DatePicker value={fromDate} onChange={(value) => { setFromDate(value); resetPaging(); }} placeholder="From date" />
                         </Field>
                         <Field label="To date" labelVariant="nested">
-                          <Input type="date" value={toDate} onChange={(event) => { setToDate(event.target.value); resetPaging(); }} />
+                          <DatePicker value={toDate} onChange={(value) => { setToDate(value); resetPaging(); }} placeholder="To date" />
                         </Field>
                         <Field label="Severity" labelVariant="nested">
                           <Select value={severity} onChange={(event) => { setSeverity(event.target.value); resetPaging(); }}>
@@ -341,18 +539,47 @@ export function AlarmExplorerPage() {
                             <option value="">Any status</option>
                             <option value="active">Active</option>
                             <option value="closed">Closed</option>
-                            <option value="acknowledged">Acknowledged</option>
                           </Select>
                         </Field>
                         <Field label="Device ID" labelVariant="nested">
                           <Input value={deviceId} onChange={(event) => { setDeviceId(event.target.value); resetPaging(); }} placeholder="DEV001, DEV002" />
                         </Field>
-                        <Field label="Device type" labelVariant="nested">
-                          <Input value={deviceType} onChange={(event) => { setDeviceType(event.target.value); resetPaging(); }} placeholder="Switch, Router" />
+                        <Field label="Device name" labelVariant="nested">
+                          <Input value={deviceName} onChange={(event) => { setDeviceName(event.target.value); resetPaging(); }} placeholder="Core switch, Access router" />
                         </Field>
                         <Field label="Error code" labelVariant="nested">
                           <Input value={errorCode} onChange={(event) => { setErrorCode(event.target.value); resetPaging(); }} placeholder="ERR_LINK_DOWN" />
                         </Field>
+                        <MetadataSelect
+                          label="Device type"
+                          values={deviceTypes}
+                          onChange={setDeviceTypes}
+                          optionKey="deviceTypes"
+                          placeholder="Any device type"
+                          onSelected={resetPaging}
+                        />
+                        <MetadataSelect
+                          label="Vendor"
+                          values={vendors}
+                          onChange={setVendors}
+                          optionKey="vendors"
+                          placeholder="Any vendor"
+                          onSelected={resetPaging}
+                        />
+                        <Field label="Station" labelVariant="nested">
+                          <Input value={station} onChange={(event) => { setStation(event.target.value); resetPaging(); }} placeholder="Hanoi Central, HCM Site" />
+                        </Field>
+                        <Field label="Station ID" labelVariant="nested">
+                          <Input value={stationId} onChange={(event) => { setStationId(event.target.value); resetPaging(); }} placeholder="ST001, ST002" />
+                        </Field>
+                        <MetadataSelect
+                          label="Province"
+                          values={provinces}
+                          onChange={setProvinces}
+                          optionKey="provinces"
+                          placeholder="Any province"
+                          onSelected={resetPaging}
+                        />
                         <Field label="Rows" labelVariant="nested">
                           <Select value={String(pageSize)} onChange={(event) => { setPageSize(Number(event.target.value)); resetPaging(); }}>
                             <option value="10">10 rows</option>

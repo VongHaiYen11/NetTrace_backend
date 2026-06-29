@@ -18,30 +18,36 @@ export class AnalyticsQueryService {
   async executeQuery(
     params: AnalyticsQueryParams & {
       filters: {
+        device_name?: string[];
         device_type?: string[];
         vendor?: string[];
         station?: string[];
+        station_id?: string[];
         province?: string[];
       };
     },
     metrics: ServiceMetrics,
   ) {
     const { filters } = params;
-    const { device_type, vendor, station, province } = filters;
+    const { device_name, device_type, vendor, station, station_id, province } = filters;
     let finalDeviceIds = filters.device_id;
 
     // 1. Resolve PostgreSQL device filters if present
     if (
       (device_type && device_type.length > 0) ||
+      (device_name && device_name.length > 0) ||
       (vendor && vendor.length > 0) ||
       (station && station.length > 0) ||
+      (station_id && station_id.length > 0) ||
       (province && province.length > 0)
     ) {
       const startPgFilter = performance.now();
       const { deviceIds } = await this.deviceRepo.getDeviceIdsByFilters({
+        device_name,
         device_type,
         vendor,
         station,
+        station_id,
         province,
       });
       metrics.postgres_query_time_ms += Math.round(performance.now() - startPgFilter);

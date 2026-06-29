@@ -3,7 +3,7 @@ export interface ServiceMetrics {
   postgres_query_time_ms: number;
   records_returned: number;
   include_total?: boolean;
-  detail_level?: 'compact' | 'full';
+  alarm_columns?: string[];
   clickhouse_rows_returned?: number;
   metadata_ids_fetched?: number;
   export_batches?: number;

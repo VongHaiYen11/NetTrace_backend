@@ -100,10 +100,12 @@ export class ExportService {
         severity?: string[];
         status?: string[];
         device_id?: string[];
+        device_name?: string[];
         error_code?: string[];
         device_type?: string[];
         vendor?: string[];
         station?: string[];
+        station_id?: string[];
         province?: string[];
         sort_by?: 'timestamp' | 'severity' | 'status';
         sort_order?: 'asc' | 'desc';
@@ -114,7 +116,7 @@ export class ExportService {
     metrics: ServiceMetrics,
   ) {
     const { format, filters, columns } = params;
-    const { device_type, vendor, station, province } = filters;
+    const { device_name, device_type, vendor, station, station_id, province } = filters;
     let finalDeviceIds = filters.device_id;
     const selectedKeys = columns && columns.length > 0 ? columns : Object.keys(COLUMN_DEFS);
     const activeCols = selectedKeys.map((key) => COLUMN_DEFS[key]).filter(Boolean);
@@ -130,15 +132,19 @@ export class ExportService {
     // 1. Resolve PostgreSQL device filters if present
     if (
       (device_type && device_type.length > 0) ||
+      (device_name && device_name.length > 0) ||
       (vendor && vendor.length > 0) ||
       (station && station.length > 0) ||
+      (station_id && station_id.length > 0) ||
       (province && province.length > 0)
     ) {
       const startPgFilter = performance.now();
       const { deviceIds } = await this.deviceRepo.getDeviceIdsByFilters({
+        device_name,
         device_type,
         vendor,
         station,
+        station_id,
         province,
       });
       metrics.postgres_query_time_ms += Math.round(performance.now() - startPgFilter);

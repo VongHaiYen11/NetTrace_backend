@@ -72,17 +72,20 @@ describe('Validation Layer Tests', () => {
       expect(result.success).toBe(false);
     });
 
-    it('should parse performance controls with backward-compatible defaults', () => {
+    it('should parse performance controls and selected columns', () => {
       const defaults = QueryAlarmsSchema.parse({});
       expect(defaults.include_total).toBe(true);
-      expect(defaults.detail_level).toBe('full');
+      expect(defaults.columns).toBeUndefined();
 
       const parsed = QueryAlarmsSchema.parse({
         include_total: 'false',
-        detail_level: 'compact',
+        columns: 'time_created,device_name,description',
       });
       expect(parsed.include_total).toBe(false);
-      expect(parsed.detail_level).toBe('compact');
+      expect(parsed.columns).toEqual(['time_created', 'device_name', 'description']);
+
+      const invalid = QueryAlarmsSchema.safeParse({ columns: 'time_created,password' });
+      expect(invalid.success).toBe(false);
     });
 
     it('should parse alarm search parameters for one whitelisted field', () => {
@@ -197,8 +200,8 @@ describe('Validation Layer Tests', () => {
       expect(parsed.limit).toBe(12);
     });
 
-    it('should default metadata option limit', () => {
-      expect(MetadataOptionsSchema.parse({}).limit).toBe(20);
+    it('should allow metadata options without a limit', () => {
+      expect(MetadataOptionsSchema.parse({}).limit).toBeUndefined();
     });
   });
 

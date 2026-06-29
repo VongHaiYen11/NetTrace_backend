@@ -24,9 +24,11 @@ export const CommonAnalyticsFilterSchema = z.object({
   device_id: QueryArraySchema,
   error_code: QueryArraySchema,
   // Federated postgres filters:
+  device_name: QueryArraySchema,
   device_type: QueryArraySchema,
   vendor: QueryArraySchema,
   station: QueryArraySchema,
+  station_id: QueryArraySchema,
   province: QueryArraySchema,
 });
 

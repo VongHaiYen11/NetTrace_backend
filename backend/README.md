@@ -107,7 +107,7 @@ Rules:
 | ClickHouse timeout | 30 seconds |
 | Dynamic sort | Whitelisted fields only |
 
-Heavy analytics run in ClickHouse. Metadata enrichment is done in Node.js with hash maps and PostgreSQL batch lookups. Requests can cover more than 90 days; services split those ranges into bounded ClickHouse queries and merge or stream the results before responding.
+Heavy analytics run in ClickHouse. Metadata enrichment is done in Node.js with hash maps and PostgreSQL batch lookups. Alarm tables use a `columns` query parameter so ClickHouse only selects fields the client needs. Requests can cover more than 90 days; services split those ranges into bounded ClickHouse queries and merge or stream the results before responding.
 
 ## Verification
 

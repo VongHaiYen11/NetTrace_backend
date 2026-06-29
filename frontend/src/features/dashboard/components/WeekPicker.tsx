@@ -10,6 +10,7 @@ interface WeekPickerProps {
 interface DatePickerProps {
   value: string;
   onChange: (value: string) => void;
+  placeholder?: string;
 }
 
 const dayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -232,7 +233,7 @@ export function WeekPicker({ value, onChange }: WeekPickerProps) {
   );
 }
 
-export function DatePicker({ value, onChange }: DatePickerProps) {
+export function DatePicker({ value, onChange, placeholder = 'Select date' }: DatePickerProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const selectedDate = useMemo(() => parseIsoDate(value), [value]);
@@ -279,7 +280,9 @@ export function DatePicker({ value, onChange }: DatePickerProps) {
         )}
         onClick={() => setOpen((current) => !current)}
       >
-        <span>{labelFormatter.format(selectedDate)}</span>
+        <span className={cn(!value && 'text-placeholder')}>
+          {value ? labelFormatter.format(selectedDate) : placeholder}
+        </span>
         <CalendarDays className="h-4 w-4 text-secondary" aria-hidden="true" />
       </button>
 

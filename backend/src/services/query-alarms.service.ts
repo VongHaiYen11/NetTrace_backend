@@ -2,6 +2,7 @@ import {
   QueryAlarmsRepository,
   QueryAlarmsParams,
   AlarmRecord,
+  AlarmColumn,
 } from '../repositories/query-alarms.repository.js';
 import { DeviceRepository, DeviceMetadata } from '../repositories/device.repository.js';
 import { ErrorRepository, ErrorMetadata } from '../repositories/error.repository.js';
@@ -12,6 +13,34 @@ import { TtlMapCache } from './metadata-cache.js';
 const deviceMetadataCache = new TtlMapCache<DeviceMetadata>(config.performance.metadataCacheTtlMs);
 const errorMetadataCache = new TtlMapCache<ErrorMetadata>(config.performance.metadataCacheTtlMs);
 
+const DEFAULT_ALARM_COLUMNS: AlarmColumn[] = [
+  'alarm_id',
+  'error_code',
+  'device_id',
+  'time_created',
+  'time_solved',
+  'status',
+  'severity',
+];
+
+const DEVICE_METADATA_COLUMNS = new Set<AlarmColumn>([
+  'device_name',
+  'device_type',
+  'station_name',
+  'station_province',
+  'vendor_name',
+]);
+
+const ERROR_METADATA_COLUMNS = new Set<AlarmColumn>(['error_name', 'error_domain']);
+
+function getRequestedColumns(columns?: AlarmColumn[]) {
+  return columns && columns.length > 0 ? columns : DEFAULT_ALARM_COLUMNS;
+}
+
+function hasAnyColumn(columns: AlarmColumn[], targets: Set<AlarmColumn>) {
+  return columns.some((column) => targets.has(column));
+}
+
 export class QueryAlarmsService {
   constructor(
     private readonly queryAlarmsRepo: QueryAlarmsRepository,
@@ -21,18 +50,21 @@ export class QueryAlarmsService {
 
   async queryAlarms(
     params: QueryAlarmsParams & {
+      device_name?: string[];
       device_type?: string[];
       vendor?: string[];
       station?: string[];
+      station_id?: string[];
       province?: string[];
     },
     metrics: ServiceMetrics,
   ) {
-    const { device_type, vendor, station, province } = params;
+    const { device_name, device_type, vendor, station, station_id, province } = params;
     let finalDeviceIds = params.device_id;
     let finalErrorCodes = params.error_code;
+    const requestedColumns = getRequestedColumns(params.columns);
     metrics.include_total = params.include_total ?? true;
-    metrics.detail_level = params.detail_level ?? 'full';
+    metrics.alarm_columns = requestedColumns;
 
     if (
       params.search &&
@@ -86,15 +118,19 @@ export class QueryAlarmsService {
     // 1. Resolve PostgreSQL device filters if present
     if (
       (device_type && device_type.length > 0) ||
+      (device_name && device_name.length > 0) ||
       (vendor && vendor.length > 0) ||
       (station && station.length > 0) ||
+      (station_id && station_id.length > 0) ||
       (province && province.length > 0)
     ) {
       const startPgFilter = performance.now();
       const { deviceIds } = await this.deviceRepo.getDeviceIdsByFilters({
+        device_name,
         device_type,
         vendor,
         station,
+        station_id,
         province,
       });
       metrics.postgres_query_time_ms += Math.round(performance.now() - startPgFilter);
@@ -129,7 +165,7 @@ export class QueryAlarmsService {
       sort_by: params.sort_by,
       sort_order: params.sort_order,
       include_total: params.include_total,
-      detail_level: params.detail_level,
+      columns: params.columns,
       search:
         params.search &&
         params.search_field !== 'device_name' &&
@@ -183,8 +219,14 @@ export class QueryAlarmsService {
     }
 
     // 3. Extract unique IDs from alarms result set
-    const resultDeviceIds = [...new Set(pagedAlarms.map((a) => a.device_id))];
-    const resultErrorCodes = [...new Set(pagedAlarms.map((a) => a.error_code))];
+    const shouldEnrichDevices = hasAnyColumn(requestedColumns, DEVICE_METADATA_COLUMNS);
+    const shouldEnrichErrors = hasAnyColumn(requestedColumns, ERROR_METADATA_COLUMNS);
+    const resultDeviceIds = shouldEnrichDevices
+      ? [...new Set(pagedAlarms.map((a) => a.device_id).filter(Boolean))]
+      : [];
+    const resultErrorCodes = shouldEnrichErrors
+      ? [...new Set(pagedAlarms.map((a) => a.error_code).filter(Boolean))]
+      : [];
     const missingDeviceIds = resultDeviceIds.filter((id) => !deviceMetadataCache.get(id));
     const missingErrorCodes = resultErrorCodes.filter((code) => !errorMetadataCache.get(code));
 
@@ -221,9 +263,9 @@ export class QueryAlarmsService {
     const enrichedAlarms = pagedAlarms.map((alarm) => ({
       alarm_id: alarm.alarm_id,
       error_code: alarm.error_code,
-      error_details: errorMap[alarm.error_code.toLowerCase()] || null,
+      error_details: alarm.error_code ? errorMap[alarm.error_code.toLowerCase()] || null : null,
       device_id: alarm.device_id,
-      device_details: deviceMap[alarm.device_id.toLowerCase()] || null,
+      device_details: alarm.device_id ? deviceMap[alarm.device_id.toLowerCase()] || null : null,
       time_created: alarm.time_created,
       time_solved: alarm.time_solved,
       status: alarm.status,

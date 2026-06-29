@@ -18,9 +18,11 @@ export class HeatmapService {
         status?: string[];
         device_id?: string[];
         error_code?: string[];
+        device_name?: string[];
         device_type?: string[];
         vendor?: string[];
         station?: string[];
+        station_id?: string[];
         province?: string[];
       };
       from_time?: Date;
@@ -29,9 +31,11 @@ export class HeatmapService {
       status?: string[];
       device_id?: string[];
       error_code?: string[];
+      device_name?: string[];
       device_type?: string[];
       vendor?: string[];
       station?: string[];
+      station_id?: string[];
       province?: string[];
     },
     metrics: ServiceMetrics,
@@ -45,9 +49,11 @@ export class HeatmapService {
     const status = filters.status || params.status;
     const device_id = filters.device_id || params.device_id;
     const error_code = filters.error_code || params.error_code;
+    const device_name = filters.device_name || params.device_name;
     const device_type = filters.device_type || params.device_type;
     const vendor = filters.vendor || params.vendor;
     const station = filters.station || params.station;
+    const station_id = filters.station_id || params.station_id;
     const province = filters.province || params.province;
 
     if (!from_time || !to_time) {
@@ -59,15 +65,19 @@ export class HeatmapService {
     // 1. Resolve PostgreSQL device filters if present
     if (
       (device_type && device_type.length > 0) ||
+      (device_name && device_name.length > 0) ||
       (vendor && vendor.length > 0) ||
       (station && station.length > 0) ||
+      (station_id && station_id.length > 0) ||
       (province && province.length > 0)
     ) {
       const startPgFilter = performance.now();
       const { deviceIds } = await this.deviceRepo.getDeviceIdsByFilters({
+        device_name,
         device_type,
         vendor,
         station,
+        station_id,
         province,
       });
       metrics.postgres_query_time_ms += Math.round(performance.now() - startPgFilter);

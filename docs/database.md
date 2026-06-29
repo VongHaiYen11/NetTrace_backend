@@ -196,6 +196,25 @@ CREATE INDEX idx_preset_time_bucket ON preset(time_bucket);
        └─ cascade delete removes widget links only
 ```
 
+## 🔄 Data Reload And Freshness Scenarios
+
+The frontend intentionally re-reads database-backed configuration and metadata at the moments where another page, drawer, or user action may have changed it.
+
+| Data / Table | Source | When It Is Read Again |
+| --- | --- | --- |
+| Alarm rows | ClickHouse `alarm` | Alarm Explorer refetches when filters, search, sort, page, page size, or selected columns change. Dashboard table widgets refetch when their date range, selected table columns, page size, total-record limit, or page changes. |
+| Summary KPI data | ClickHouse `alarm` | Dashboard KPI widgets refetch when dashboard filters or widget date ranges change. Long date ranges are internally split into smaller ClickHouse windows. |
+| Chart analytics data | ClickHouse `alarm` | Dashboard chart widgets refetch when widget metric, grouping, bucket, date range, or dashboard filters change. |
+| Heatmap data | ClickHouse `alarm` | Heatmap widgets refetch when heatmap mode, selected week/year, date range, or dashboard filters change. Calendar heatmaps are merged from chunked requests when needed. |
+| Export rows | ClickHouse `alarm` plus PostgreSQL enrichment | Export reads data only when the user submits an export. The selected export columns determine which metadata enrichment is needed. |
+| Metadata filter values | PostgreSQL `device`, `vendor`, `station` | Export and Alarm Explorer filter dropdowns call `GET /api/v1/metadata/options`. If no `limit` is sent, all matching values are returned; text search can narrow large option lists. Station and device-name filters are text inputs because they can be high-cardinality. |
+| Device metadata enrichment | PostgreSQL `device`, `vendor`, `station` | Alarm rows, exports, and analytics resolve device IDs to metadata only when filters or selected columns require metadata fields such as device name, type, vendor, station, or province. |
+| Error metadata enrichment | PostgreSQL error metadata table | Alarm rows and exports resolve error codes to metadata only when selected columns or search require error name/domain. |
+| Templates | PostgreSQL `template` | Templates & Presets page loads templates through React Query and invalidates them after template create/update/delete. General Settings drawer reloads template list every time the drawer opens. |
+| Template details / widgets | PostgreSQL `template`, `widget`, `preset` | General Settings drawer fetches template detail after loading each saved template so the latest widget links, positions, date ranges, and preset configs are used. After create/update, the frontend reads the saved template detail again before updating local UI state. |
+| Presets | PostgreSQL `preset` plus `widget` usage links | Templates & Presets page loads presets through React Query and invalidates them after preset create/update/delete or template changes. General Settings drawer reloads presets every time the drawer opens. Dashboard preset options refetch on window focus and while an active template exists. |
+| Widget links | PostgreSQL `widget` | Widget links are read through template detail. Updating a template replaces its widget links, and deleting a template cascade-deletes those links. Preset deletion checks widget usage before allowing deletion. |
+
 ## Core Design Decisions
 
 ### 1. Database-Level Isolation (Federation Principle)

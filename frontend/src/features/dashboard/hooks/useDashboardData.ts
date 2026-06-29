@@ -53,7 +53,7 @@ export function useDashboardData(filters: DashboardFilters) {
         limit: 25,
         sort_by: queryFilters.sort_by ?? 'timestamp',
         sort_order: queryFilters.sort_order ?? 'desc',
-        detail_level: 'compact',
+        columns: ['alarm_id', 'time_created', 'time_solved', 'status', 'severity', 'error_code', 'device_id'],
       }),
   });
 

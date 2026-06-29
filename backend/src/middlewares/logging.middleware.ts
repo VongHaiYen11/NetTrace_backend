@@ -47,7 +47,7 @@ export function loggingMiddleware(req: Request, res: Response, next: NextFunctio
       execution_time_ms: durationMs,
       records_returned: metrics.records_returned,
       include_total: metrics.include_total,
-      detail_level: metrics.detail_level,
+      alarm_columns: metrics.alarm_columns,
       clickhouse_rows_returned: metrics.clickhouse_rows_returned,
       metadata_ids_fetched: metrics.metadata_ids_fetched,
       export_batches: metrics.export_batches,

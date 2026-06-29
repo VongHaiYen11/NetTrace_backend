@@ -202,12 +202,14 @@ const MAX_TABLE_RECORD_LIMIT = 200;
 const MAX_TABLE_TOTAL_RECORDS = 1000;
 
 function normalizeTablePageSize(value: unknown) {
+  if (value === '') return DEFAULT_TABLE_RECORD_LIMIT;
   const numericValue = Number(value);
   if (!Number.isFinite(numericValue)) return DEFAULT_TABLE_RECORD_LIMIT;
   return Math.min(MAX_TABLE_RECORD_LIMIT, Math.max(1, Math.trunc(numericValue)));
 }
 
 function normalizeTableRecordLimit(value: unknown) {
+  if (value === '') return DEFAULT_TABLE_TOTAL_RECORDS;
   const numericValue = Number(value);
   if (!Number.isFinite(numericValue)) return DEFAULT_TABLE_TOTAL_RECORDS;
   return Math.min(MAX_TABLE_TOTAL_RECORDS, Math.max(1, Math.trunc(numericValue)));
@@ -506,8 +508,8 @@ function isWidgetSameAsPreset(widget: DashboardWidgetConfig, preset: PresetSumma
     timeBucket: widget.timeBucket,
     heatmapMode: widget.heatmapMode,
     tableColumns: widget.tableColumns,
-    tablePageSize: widget.tablePageSize,
-    tableRecordLimit: widget.tableRecordLimit,
+    tablePageSize: normalizeTablePageSize(widget.tablePageSize),
+    tableRecordLimit: normalizeTableRecordLimit(widget.tableRecordLimit),
   });
   const presetFields = normalizePresetFieldsByChartType({
     chartType,
@@ -580,8 +582,8 @@ export function buildTemplateWidgetInputs(
             timeBucket: widget.timeBucket,
             heatmapMode: widget.heatmapMode,
             tableColumns: widget.tableColumns,
-            tablePageSize: widget.tablePageSize,
-            tableRecordLimit: widget.tableRecordLimit,
+            tablePageSize: normalizeTablePageSize(widget.tablePageSize),
+            tableRecordLimit: normalizeTableRecordLimit(widget.tableRecordLimit),
           }),
         };
       }
@@ -607,8 +609,8 @@ export function buildTemplateWidgetInputs(
         timeBucket: widget.timeBucket,
         heatmapMode: widget.heatmapMode,
         tableColumns: widget.tableColumns,
-        tablePageSize: widget.tablePageSize,
-        tableRecordLimit: widget.tableRecordLimit,
+        tablePageSize: normalizeTablePageSize(widget.tablePageSize),
+        tableRecordLimit: normalizeTableRecordLimit(widget.tableRecordLimit),
       }),
     };
   });
@@ -2029,7 +2031,14 @@ export function GeneralSettingsDrawer({
                                       onChange={(event) =>
                                         setDetailDraftWidgets((current) =>
                                           updateWidget(current, selectedSlot.id, {
-                                            tablePageSize: normalizeTablePageSize(event.target.value),
+                                            tablePageSize: event.target.value === '' ? '' : Number(event.target.value),
+                                          }),
+                                        )
+                                      }
+                                      onBlur={() =>
+                                        setDetailDraftWidgets((current) =>
+                                          updateWidget(current, selectedSlot.id, {
+                                            tablePageSize: normalizeTablePageSize(selectedSlot.tablePageSize),
                                           }),
                                         )
                                       }
@@ -2044,7 +2053,14 @@ export function GeneralSettingsDrawer({
                                       onChange={(event) =>
                                         setDetailDraftWidgets((current) =>
                                           updateWidget(current, selectedSlot.id, {
-                                            tableRecordLimit: normalizeTableRecordLimit(event.target.value),
+                                            tableRecordLimit: event.target.value === '' ? '' : Number(event.target.value),
+                                          }),
+                                        )
+                                      }
+                                      onBlur={() =>
+                                        setDetailDraftWidgets((current) =>
+                                          updateWidget(current, selectedSlot.id, {
+                                            tableRecordLimit: normalizeTableRecordLimit(selectedSlot.tableRecordLimit),
                                           }),
                                         )
                                       }

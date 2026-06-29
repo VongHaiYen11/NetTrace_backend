@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
-import { MoreHorizontal, RadioTower, TrendingUp, AlertTriangle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, MoreHorizontal, RadioTower, TrendingUp, AlertTriangle } from 'lucide-react';
 import {
   Area,
   AreaChart,
@@ -139,6 +139,19 @@ function formatDisplayHeatmapDate(value: string) {
   } catch {
     return value;
   }
+}
+
+function formatDateRangeBadge(startDate?: string, endDate?: string) {
+  const formatDateOnly = (value?: string) => {
+    if (!value) return 'N/A';
+    try {
+      return format(parseISO(value.slice(0, 10)), 'dd/MM/yyyy');
+    } catch {
+      return value.slice(0, 10) || 'N/A';
+    }
+  };
+
+  return `${formatDateOnly(startDate)} - ${formatDateOnly(endDate)}`;
 }
 
 function getCurrentIsoDate() {
@@ -502,7 +515,7 @@ export function DashboardWidget({ id, config, layoutContext, onSettingsClick }: 
         sort_by: 'timestamp',
         sort_order: 'desc',
         include_total: true,
-        detail_level: 'compact',
+        columns: visibleTableColumns,
       }),
     enabled: isTable,
   });
@@ -853,21 +866,23 @@ export function DashboardWidget({ id, config, layoutContext, onSettingsClick }: 
     const totalRecords = Math.min(matchingRecords, tableRecordLimit);
     const totalPages = Math.max(1, Math.ceil(totalRecords / tablePageSize));
     const currentPage = Math.min(tablePageIndex + 1, totalPages);
+    const showingStart = totalRecords === 0 ? 0 : tablePageIndex * tablePageSize + 1;
+    const showingEnd = Math.min((tablePageIndex + 1) * tablePageSize, totalRecords);
     const canGoPrevious = tablePageIndex > 0;
     const canGoNext = tablePageIndex + 1 < totalPages;
     if (rawAlarms.length === 0) {
       renderContent = <StateBlock title="No alarms" description="No matching alarms found." />;
     } else {
       renderContent = (
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col">
           <div className={`overflow-auto ${tableHeightClass}`}>
-            <table className="w-full min-w-full border-separate border-spacing-0 text-left text-sm">
+            <table className="min-w-max border-separate border-spacing-0 text-left text-sm">
               <thead>
                 <tr>
                   {visibleTableColumns.map((column) => (
                     <th
                       key={column}
-                      className="sticky top-0 z-10 border-b border-white/10 bg-panel-light px-3 py-3 font-mono text-xs font-semibold uppercase text-muted"
+                      className="sticky top-0 z-10 whitespace-nowrap border-b border-white/10 bg-panel-light px-3 py-3 font-mono text-xs font-semibold uppercase text-muted"
                     >
                       {tableColumnLabels[column]}
                     </th>
@@ -880,7 +895,7 @@ export function DashboardWidget({ id, config, layoutContext, onSettingsClick }: 
                     {visibleTableColumns.map((column) => (
                       <td
                         key={column}
-                        className="max-w-[18rem] truncate border-b border-white/10 px-3 py-3 text-medium"
+                        className="max-w-[18rem] truncate whitespace-nowrap border-b border-white/10 px-3 py-3 text-medium"
                       >
                         {renderAlarmTableCell(alarm, column)}
                       </td>
@@ -890,26 +905,27 @@ export function DashboardWidget({ id, config, layoutContext, onSettingsClick }: 
               </tbody>
             </table>
           </div>
-          <div className="flex items-center justify-between gap-3 border-t border-white/10 pt-3 font-mono text-xs text-muted">
+          <div className="flex items-center justify-between border-t border-white/10 px-4 py-3 text-xs text-muted">
             <span>
-              Page {currentPage} / {totalPages} · {totalRecords.toLocaleString('vi-VN')} records
+              Showing {showingStart}-{showingEnd} of {totalRecords}
             </span>
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                className="h-9 rounded border border-border px-3 font-bold text-muted transition hover:border-secondary hover:text-secondary disabled:cursor-not-allowed disabled:opacity-45"
+                className="rounded p-1 text-muted transition hover:bg-white/5 hover:text-white disabled:opacity-40"
                 disabled={!canGoPrevious}
                 onClick={() => setTablePageIndex((page) => Math.max(0, page - 1))}
               >
-                Prev
+                <ChevronLeft size={16} />
               </button>
+              <span>Page {currentPage} / {totalPages}</span>
               <button
                 type="button"
-                className="h-9 rounded border border-border px-3 font-bold text-muted transition hover:border-secondary hover:text-secondary disabled:cursor-not-allowed disabled:opacity-45"
+                className="rounded p-1 text-muted transition hover:bg-white/5 hover:text-white disabled:opacity-40"
                 disabled={!canGoNext}
                 onClick={() => setTablePageIndex((page) => page + 1)}
               >
-                Next
+                <ChevronRight size={16} />
               </button>
             </div>
           </div>
@@ -921,12 +937,17 @@ export function DashboardWidget({ id, config, layoutContext, onSettingsClick }: 
   return (
     <Card className="h-full">
       <CardHeader>
-        <div className="flex items-center justify-between">
-          <h2 className="text-xl font-bold">{config.title}</h2>
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h2 className="truncate text-xl font-bold">{config.title}</h2>
+            <span className="mt-2 inline-flex max-w-full rounded border border-white/10 bg-white/[0.03] px-2 py-1 font-mono text-[11px] font-semibold text-muted">
+              {formatDateRangeBadge(config.startDate, config.endDate)}
+            </span>
+          </div>
           <button
             type="button"
             onClick={onSettingsClick}
-            className="p-1 rounded hover:bg-white/10 text-muted"
+            className="rounded p-1 text-muted hover:bg-white/10"
           >
             <MoreHorizontal size={20} />
           </button>

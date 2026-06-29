@@ -4,7 +4,6 @@ import {
   Check,
   ChevronDown,
   Download,
-  FileArchive,
   FileJson,
   FileSpreadsheet,
   FileText,
@@ -23,6 +22,7 @@ import {
   type SortBy,
   type SortOrder,
 } from '../services/generated/nettrace-api';
+import { DatePicker } from '../features/dashboard/components/WeekPicker';
 import { cn } from '../utils/cn';
 
 type ExportFormat = ExportRequest['format'];
@@ -92,7 +92,6 @@ const SEVERITY_OPTIONS = [
 const STATUS_OPTIONS = [
   { value: 'active', label: 'Active' },
   { value: 'closed', label: 'Closed' },
-  { value: 'acknowledged', label: 'Acknowledged' },
 ];
 
 const FORMAT_EXTENSION: Record<ExportFormat, string> = {
@@ -100,6 +99,12 @@ const FORMAT_EXTENSION: Record<ExportFormat, string> = {
   xlsx: 'xlsx',
   json: 'json',
 };
+
+function normalizeExportLimit(value: unknown) {
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) return 1000;
+  return Math.max(1, Math.trunc(numericValue));
+}
 
 function splitCsv(value: string) {
   const values = value
@@ -115,10 +120,12 @@ function buildFilters(values: {
   severities: string[];
   statuses: string[];
   deviceId: string;
+  deviceName: string;
   errorCode: string;
   deviceTypes: string[];
   vendors: string[];
-  stations: string[];
+  station: string;
+  stationId: string;
   provinces: string[];
 }) {
   const filters: CommonFilters = {
@@ -127,10 +134,12 @@ function buildFilters(values: {
     severity: values.severities.length > 0 ? values.severities : undefined,
     status: values.statuses.length > 0 ? values.statuses : undefined,
     device_id: splitCsv(values.deviceId),
+    device_name: splitCsv(values.deviceName),
     error_code: splitCsv(values.errorCode),
     device_type: values.deviceTypes.length > 0 ? values.deviceTypes : undefined,
     vendor: values.vendors.length > 0 ? values.vendors : undefined,
-    station: values.stations.length > 0 ? values.stations : undefined,
+    station: splitCsv(values.station),
+    station_id: splitCsv(values.stationId),
     province: values.provinces.length > 0 ? values.provinces : undefined,
   };
 
@@ -153,7 +162,12 @@ function MultiChoiceSelect({
   isLoading?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
   const ref = useRef<HTMLDivElement>(null);
+  const searchable = options.length > 10;
+  const visibleOptions = searchable && search.trim()
+    ? options.filter((option) => option.label.toLowerCase().includes(search.trim().toLowerCase()))
+    : options;
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -188,6 +202,14 @@ function MultiChoiceSelect({
 
         {open ? (
           <div className="absolute left-0 right-0 top-full z-40 mt-2 overflow-hidden rounded-lg border border-border bg-panel p-2 shadow-2xl">
+            {searchable ? (
+              <Input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Search options..."
+                className="mb-2 h-9 text-xs"
+              />
+            ) : null}
             {values.length > 0 ? (
               <div className="mb-2 flex flex-wrap gap-2 border-b border-white/10 p-1 pb-3">
                 {values.map((value) => (
@@ -206,10 +228,10 @@ function MultiChoiceSelect({
             <div className="max-h-52 overflow-y-auto">
               {isLoading ? (
                 <p className="px-2 py-3 text-sm text-muted">Loading...</p>
-              ) : options.length === 0 ? (
+              ) : visibleOptions.length === 0 ? (
                 <p className="px-2 py-3 text-sm text-muted">No options found.</p>
               ) : (
-                options.map((option) => {
+                visibleOptions.map((option) => {
                   const selected = values.includes(option.value);
                   return (
                     <button
@@ -259,7 +281,7 @@ function MetadataSelect({
 }) {
   const optionsQuery = useQuery({
     queryKey: ['metadata-options', optionKey],
-    queryFn: () => nettraceApi.getMetadataOptions({ limit: 50 }),
+    queryFn: () => nettraceApi.getMetadataOptions(),
     staleTime: 60_000,
   });
   const options = (optionsQuery.data?.data[optionKey] ?? []).map((option) => ({
@@ -287,14 +309,16 @@ export function ExportPage() {
   const [severities, setSeverities] = useState<string[]>([]);
   const [statuses, setStatuses] = useState<string[]>([]);
   const [deviceId, setDeviceId] = useState('');
+  const [deviceName, setDeviceName] = useState('');
   const [errorCode, setErrorCode] = useState('');
   const [deviceTypes, setDeviceTypes] = useState<string[]>([]);
   const [vendors, setVendors] = useState<string[]>([]);
-  const [stations, setStations] = useState<string[]>([]);
+  const [station, setStation] = useState('');
+  const [stationId, setStationId] = useState('');
   const [provinces, setProvinces] = useState<string[]>([]);
   const [sortBy, setSortBy] = useState<SortBy>('timestamp');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
-  const [limit, setLimit] = useState(1000);
+  const [limit, setLimit] = useState<number | ''>(1000);
   const [exporting, setExporting] = useState(false);
   const activeFormat = FORMAT_OPTIONS.find((item) => item.value === format) ?? FORMAT_OPTIONS[0];
   const ActiveFormatIcon = activeFormat.icon;
@@ -321,15 +345,17 @@ export function ExportPage() {
           severities,
           statuses,
           deviceId,
+          deviceName,
           errorCode,
           deviceTypes,
           vendors,
-          stations,
+          station,
+          stationId,
           provinces,
         }),
         sort_by: sortBy,
         sort_order: sortOrder,
-        limit,
+        limit: normalizeExportLimit(limit),
       },
     };
 
@@ -453,27 +479,18 @@ export function ExportPage() {
             <h2 className="text-xl font-bold text-bright">Filters</h2>
             <div className="mt-5 grid gap-4 md:grid-cols-3">
               <Field label="From date">
-                <Input
-                  type="date"
-                  value={fromDate}
-                  onChange={(e) => setFromDate(e.target.value)}
-                  className="h-10 text-sm"
-                />
+                <DatePicker value={fromDate} onChange={setFromDate} />
               </Field>
               <Field label="To date">
-                <Input
-                  type="date"
-                  value={toDate}
-                  onChange={(e) => setToDate(e.target.value)}
-                  className="h-10 text-sm"
-                />
+                <DatePicker value={toDate} onChange={setToDate} />
               </Field>
               <Field label="Limit">
                 <Input
                   type="number"
                   min={1}
                   value={limit}
-                  onChange={(e) => setLimit(Number(e.target.value) || 1)}
+                  onChange={(e) => setLimit(e.target.value === '' ? '' : Number(e.target.value))}
+                  onBlur={() => setLimit((current) => normalizeExportLimit(current))}
                 />
               </Field>
             </div>
@@ -515,6 +532,13 @@ export function ExportPage() {
                   placeholder="DEV001, DEV002"
                 />
               </Field>
+              <Field label="Device name" hint="Separate multiple values with commas.">
+                <Input
+                  value={deviceName}
+                  onChange={(e) => setDeviceName(e.target.value)}
+                  placeholder="Core switch, Access router"
+                />
+              </Field>
               <Field label="Error code" hint="Separate multiple values with commas.">
                 <Input
                   value={errorCode}
@@ -536,13 +560,20 @@ export function ExportPage() {
                 optionKey="vendors"
                 placeholder="Any vendor"
               />
-              <MetadataSelect
-                label="Station"
-                values={stations}
-                onChange={setStations}
-                optionKey="stations"
-                placeholder="Any station"
-              />
+              <Field label="Station" hint="Separate multiple values with commas.">
+                <Input
+                  value={station}
+                  onChange={(e) => setStation(e.target.value)}
+                  placeholder="Hanoi Central, HCM Site"
+                />
+              </Field>
+              <Field label="Station ID" hint="Separate multiple values with commas.">
+                <Input
+                  value={stationId}
+                  onChange={(e) => setStationId(e.target.value)}
+                  placeholder="ST001, ST002"
+                />
+              </Field>
               <MetadataSelect
                 label="Province"
                 values={provinces}
@@ -576,7 +607,7 @@ export function ExportPage() {
                 { label: 'Format', value: format.toUpperCase(), accent: true },
                 { label: 'Columns', value: columns.length.toString() },
                 { label: 'Sort', value: `${sortBy} / ${sortOrder}` },
-                { label: 'Limit', value: limit.toLocaleString() },
+                { label: 'Limit', value: normalizeExportLimit(limit).toLocaleString() },
               ].map((item) => (
                 <div
                   key={item.label}

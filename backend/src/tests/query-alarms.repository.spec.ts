@@ -33,7 +33,7 @@ describe('QueryAlarmsRepository performance query shape', () => {
     expect(executeClickhouseQuery).toHaveBeenCalledTimes(1);
   });
 
-  it('should omit large columns for compact detail level', async () => {
+  it('should select only requested direct columns plus required row fields', async () => {
     const repo = new QueryAlarmsRepository();
 
     await repo.queryAlarms({
@@ -44,12 +44,34 @@ describe('QueryAlarmsRepository performance query shape', () => {
       sort_by: 'timestamp',
       sort_order: 'desc',
       include_total: false,
-      detail_level: 'compact',
+      columns: ['time_created', 'status'],
     });
 
     const query = (executeClickhouseQuery as jest.Mock).mock.calls[0][0] as string;
+    expect(query).toContain('alarm_id');
+    expect(query).toContain('time_created');
+    expect(query).toContain('status');
     expect(query).not.toContain('raw_log');
     expect(query).not.toContain('description');
+  });
+
+  it('should include required ID columns for requested metadata columns', async () => {
+    const repo = new QueryAlarmsRepository();
+
+    await repo.queryAlarms({
+      from_time: new Date('2026-06-01T00:00:00Z'),
+      to_time: new Date('2026-06-02T00:00:00Z'),
+      offset: 0,
+      limit: 10,
+      sort_by: 'timestamp',
+      sort_order: 'desc',
+      include_total: false,
+      columns: ['device_name', 'error_name'],
+    });
+
+    const query = (executeClickhouseQuery as jest.Mock).mock.calls[0][0] as string;
+    expect(query).toContain('device_id');
+    expect(query).toContain('error_code');
   });
 
   it('should use normalized filter columns instead of lower(column)', async () => {

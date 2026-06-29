@@ -205,9 +205,8 @@ const router = Router();
  *         schema:
  *           type: integer
  *           minimum: 1
- *           maximum: 100
- *           default: 20
- *         description: Maximum options returned per category.
+ *           maximum: 1000
+ *         description: Optional maximum options returned per category. If omitted, all matching options are returned.
  *     responses:
  *       200:
  *         description: Metadata options.
@@ -296,10 +295,26 @@ router.get(
  *           type: string
  *         description: Comma-separated device IDs.
  *       - in: query
+ *         name: device_name
+ *         schema:
+ *           type: string
+ *         description: Comma-separated device names resolved through PostgreSQL metadata.
+ *       - in: query
+ *         name: station_id
+ *         schema:
+ *           type: string
+ *         description: Comma-separated station IDs resolved through PostgreSQL device metadata.
+ *       - in: query
  *         name: error_code
  *         schema:
  *           type: string
  *         description: Comma-separated error codes.
+ *       - in: query
+ *         name: columns
+ *         schema:
+ *           type: string
+ *           example: time_created,error_name,status,severity,device_name,description
+ *         description: Comma-separated response columns. Metadata display columns automatically include the required IDs for enrichment.
  *       - in: query
  *         name: search
  *         schema:

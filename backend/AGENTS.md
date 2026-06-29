@@ -257,7 +257,27 @@ All Analytics APIs must share the common Filter DTO to leverage code reuse. Do n
   severity?: string[]; // List of severities
   status?: string[];   // List of statuses
   device_id?: string[];// List of devices to filter
+  device_name?: string[];// Device names resolved through PostgreSQL metadata
+  station_id?: string[];// Station IDs resolved through PostgreSQL device metadata
   error_code?: string[];// List of error codes to filter
+  columns?: (        // Alarm response columns selected by the client
+    | "alarm_id"
+    | "time_created"
+    | "time_solved"
+    | "status"
+    | "severity"
+    | "error_code"
+    | "error_name"
+    | "error_domain"
+    | "device_id"
+    | "device_name"
+    | "device_type"
+    | "station_name"
+    | "station_province"
+    | "vendor_name"
+    | "raw_log"
+    | "description"
+  )[];
   search?: string;      // Case-insensitive text search for detail alarm queries
   search_field?:        // Exactly one whitelisted field for Alarm Explorer search
     | "alarm_id"
@@ -274,12 +294,14 @@ All Analytics APIs must share the common Filter DTO to leverage code reuse. Do n
   device_type?: string[];
   vendor?: string[];
   station?: string[];
+  station_id?: string[];
   province?: string[];
 }
 ```
 
 * **Default Time Window:** If omitted by the client: `to_time = now()`, `from_time = now() - 7 days`.
 * **Long Time Ranges:** Public requests may cover more than 90 days. Services must split them into internal ClickHouse windows of at most **90 days**, then merge or stream the combined result.
+* **Alarm Column Projection:** `GET /api/v1/alarms` uses `columns` to select only fields required by the client. Metadata display columns (`device_name`, `vendor_name`, `error_name`, etc.) must automatically select the ClickHouse IDs needed for PostgreSQL enrichment. Do not use a hidden compact/full mode.
 * **Alarm Explorer Search:** `GET /api/v1/alarms` supports backend search through `search` and exactly one `search_field`. ClickHouse-native fields are searched in ClickHouse; `device_name`, `device_type`, and `error_name` must be resolved through PostgreSQL first and then applied as `device_id` / `error_code` filters in ClickHouse. Do not implement page-only search for Alarm Explorer.
 
 ---
@@ -303,7 +325,8 @@ Cung cấp dữ liệu phục vụ phân tích, thống kê, và truy vấn thô
 * **Parameters:**
   * Time Filter: `from_time`, `to_time`
   * Alarm Filter: `severity`, `status`, `error_code`
-  * Device Filter: `device_id`, `device_type`, `vendor`, `station`, `province`
+  * Device Filter: `device_id`, `device_name`, `device_type`, `vendor`, `station`, `station_id`, `province`
+  * Response Projection: `columns` (comma-separated alarm/table columns; metadata columns add required IDs internally)
   * Sorting: `sort_by` (`timestamp`, `severity`, `status`), `sort_order` (`asc`, `desc`)
   * Pagination: `offset` (number, default 0), `limit` (max 1000)
 * **Pagination (Offset SQL):**
@@ -541,7 +564,7 @@ GROUP BY day;
   * `provinces`
 * **Query Parameters:**
   * `search` optional, max 100 characters.
-  * `limit` optional, 1-100, defaults to 20 per category.
+  * `limit` optional, 1-1000. If omitted, return all matching values per category.
 * **Requirements:**
   * Must use Zod validation.
   * Must keep response inside the standard success envelope.

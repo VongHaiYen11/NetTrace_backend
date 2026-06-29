@@ -1,5 +1,5 @@
 export type Severity = 'critical' | 'major' | 'minor' | 'warning' | 'info' | string;
-export type AlarmStatus = 'active' | 'closed' | 'acknowledged' | string;
+export type AlarmStatus = 'active' | 'closed' | string;
 export type SortBy = 'timestamp' | 'severity' | 'status';
 export type SortOrder = 'asc' | 'desc';
 export type AlarmSearchField =
@@ -13,6 +13,23 @@ export type AlarmSearchField =
   | 'status'
   | 'description'
   | 'raw_log';
+export type AlarmColumn =
+  | 'alarm_id'
+  | 'time_created'
+  | 'time_solved'
+  | 'status'
+  | 'severity'
+  | 'error_code'
+  | 'error_name'
+  | 'error_domain'
+  | 'device_id'
+  | 'device_name'
+  | 'device_type'
+  | 'station_name'
+  | 'station_province'
+  | 'vendor_name'
+  | 'raw_log'
+  | 'description';
 export type Metric = 'count' | 'avg_duration' | 'max_duration' | 'affected_devices';
 export type GroupBy =
   | 'severity'
@@ -90,9 +107,11 @@ export interface CommonFilters {
   status?: string[];
   device_id?: string[];
   error_code?: string[];
+  device_name?: string[];
   device_type?: string[];
   vendor?: string[];
   station?: string[];
+  station_id?: string[];
   province?: string[];
 }
 
@@ -102,7 +121,7 @@ export interface QueryAlarmsParams extends CommonFilters {
   sort_by?: SortBy;
   sort_order?: SortOrder;
   include_total?: boolean;
-  detail_level?: 'compact' | 'full';
+  columns?: AlarmColumn[];
   search?: string;
   search_field?: AlarmSearchField;
 }
@@ -233,23 +252,7 @@ export interface MetadataFilterOptions {
   provinces: string[];
 }
 
-export type ExportColumn =
-  | 'alarm_id'
-  | 'time_created'
-  | 'time_solved'
-  | 'status'
-  | 'severity'
-  | 'error_code'
-  | 'error_name'
-  | 'error_domain'
-  | 'device_id'
-  | 'device_name'
-  | 'device_type'
-  | 'station_name'
-  | 'station_province'
-  | 'vendor_name'
-  | 'raw_log'
-  | 'description';
+export type ExportColumn = AlarmColumn;
 
 export interface ExportRequest {
   format: 'csv' | 'xlsx' | 'json';
@@ -277,9 +280,11 @@ function buildQuery(filters: QueryAlarmsParams | CommonFilters = {}) {
   appendArrayParam(params, 'status', filters.status);
   appendArrayParam(params, 'device_id', filters.device_id);
   appendArrayParam(params, 'error_code', filters.error_code);
+  appendArrayParam(params, 'device_name', filters.device_name);
   appendArrayParam(params, 'device_type', filters.device_type);
   appendArrayParam(params, 'vendor', filters.vendor);
   appendArrayParam(params, 'station', filters.station);
+  appendArrayParam(params, 'station_id', filters.station_id);
   appendArrayParam(params, 'province', filters.province);
 
   const alarmFilters = filters as QueryAlarmsParams;
@@ -290,7 +295,7 @@ function buildQuery(filters: QueryAlarmsParams | CommonFilters = {}) {
   if (alarmFilters.include_total !== undefined) {
     params.set('include_total', String(alarmFilters.include_total));
   }
-  if (alarmFilters.detail_level) params.set('detail_level', alarmFilters.detail_level);
+  appendArrayParam(params, 'columns', alarmFilters.columns);
   if (alarmFilters.search) params.set('search', alarmFilters.search);
   if (alarmFilters.search_field) params.set('search_field', alarmFilters.search_field);
   return params.toString();

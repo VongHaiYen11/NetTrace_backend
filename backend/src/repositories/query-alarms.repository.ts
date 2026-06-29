@@ -25,7 +25,7 @@ export interface QueryAlarmsParams {
   sort_by: 'timestamp' | 'severity' | 'status';
   sort_order: 'asc' | 'desc';
   include_total?: boolean;
-  detail_level?: 'compact' | 'full';
+  columns?: AlarmColumn[];
   search?: string;
   search_field?:
     | 'alarm_id'
@@ -40,6 +40,81 @@ export interface QueryAlarmsParams {
     | 'raw_log';
 }
 
+export type AlarmColumn =
+  | 'alarm_id'
+  | 'time_created'
+  | 'time_solved'
+  | 'status'
+  | 'severity'
+  | 'error_code'
+  | 'error_name'
+  | 'error_domain'
+  | 'device_id'
+  | 'device_name'
+  | 'device_type'
+  | 'station_name'
+  | 'station_province'
+  | 'vendor_name'
+  | 'raw_log'
+  | 'description';
+
+const DEFAULT_ALARM_COLUMNS: AlarmColumn[] = [
+  'alarm_id',
+  'error_code',
+  'device_id',
+  'time_created',
+  'time_solved',
+  'status',
+  'severity',
+];
+
+const DIRECT_COLUMN_MAP: Partial<Record<AlarmColumn, keyof AlarmRecord>> = {
+  alarm_id: 'alarm_id',
+  error_code: 'error_code',
+  device_id: 'device_id',
+  time_created: 'time_created',
+  time_solved: 'time_solved',
+  status: 'status',
+  severity: 'severity',
+  raw_log: 'raw_log',
+  description: 'description',
+};
+
+const DEVICE_METADATA_COLUMNS = new Set<AlarmColumn>([
+  'device_name',
+  'device_type',
+  'station_name',
+  'station_province',
+  'vendor_name',
+]);
+
+const ERROR_METADATA_COLUMNS = new Set<AlarmColumn>(['error_name', 'error_domain']);
+
+function resolveSelectedColumns(params: QueryAlarmsParams): string {
+  const requestedColumns = params.columns && params.columns.length > 0
+    ? params.columns
+    : DEFAULT_ALARM_COLUMNS;
+  const selected = new Set<keyof AlarmRecord>();
+
+  requestedColumns.forEach((column) => {
+    const directColumn = DIRECT_COLUMN_MAP[column];
+    if (directColumn) selected.add(directColumn);
+    if (DEVICE_METADATA_COLUMNS.has(column)) selected.add('device_id');
+    if (ERROR_METADATA_COLUMNS.has(column)) selected.add('error_code');
+  });
+
+  selected.add('alarm_id');
+
+  if (params.sort_by === 'timestamp') selected.add('time_created');
+  if (params.sort_by === 'severity') selected.add('severity');
+  if (params.sort_by === 'status') selected.add('status');
+
+  if (params.search && params.search_field === 'description') selected.add('description');
+  if (params.search && params.search_field === 'raw_log') selected.add('raw_log');
+
+  return Array.from(selected).join(',\n        ');
+}
+
 export class QueryAlarmsRepository {
   async queryAlarms(
     params: QueryAlarmsParams,
@@ -52,7 +127,6 @@ export class QueryAlarmsRepository {
       sort_by,
       sort_order,
       include_total = true,
-      detail_level = 'full',
     } = params;
 
     const fromStr = formatDate(from_time);
@@ -106,28 +180,7 @@ export class QueryAlarmsRepository {
     const orderColumn = sortFieldMap[sort_by] || 'time_created';
     const orderDirection = sort_order === 'asc' ? 'ASC' : 'DESC';
 
-    const selectColumns =
-      detail_level === 'compact'
-        ? `
-        alarm_id,
-        error_code,
-        device_id,
-        time_created,
-        time_solved,
-        status,
-        severity
-      `
-        : `
-        alarm_id,
-        error_code,
-        device_id,
-        time_created,
-        time_solved,
-        status,
-        severity,
-        raw_log,
-        description
-      `;
+    const selectColumns = resolveSelectedColumns(params);
 
     const dataQuery = `
       SELECT 

@@ -63,8 +63,8 @@ interface PresetDraft {
   timeBucket: string;
   heatmapMode: 'weekday' | 'calendar';
   tableColumns: string[];
-  tablePageSize: number;
-  tableRecordLimit: number;
+  tablePageSize: number | '';
+  tableRecordLimit: number | '';
 }
 
 type PresetDeleteDialog =
@@ -85,12 +85,14 @@ const MAX_TABLE_PAGE_SIZE = 200;
 const MAX_TABLE_RECORD_LIMIT = 1000;
 
 function normalizeTablePageSize(value: unknown) {
+  if (value === '') return DEFAULT_TABLE_PAGE_SIZE;
   const numericValue = Number(value);
   if (!Number.isFinite(numericValue)) return DEFAULT_TABLE_PAGE_SIZE;
   return Math.min(MAX_TABLE_PAGE_SIZE, Math.max(1, Math.trunc(numericValue)));
 }
 
 function normalizeTableRecordLimit(value: unknown) {
+  if (value === '') return DEFAULT_TABLE_RECORD_LIMIT;
   const numericValue = Number(value);
   if (!Number.isFinite(numericValue)) return DEFAULT_TABLE_RECORD_LIMIT;
   return Math.min(MAX_TABLE_RECORD_LIMIT, Math.max(1, Math.trunc(numericValue)));
@@ -713,8 +715,8 @@ export function TemplatesPage() {
           timeBucket: presetDraft.timeBucket,
           heatmapMode: presetDraft.heatmapMode,
           tableColumns: presetDraft.tableColumns,
-          tablePageSize: presetDraft.tablePageSize,
-          tableRecordLimit: presetDraft.tableRecordLimit,
+          tablePageSize: normalizeTablePageSize(presetDraft.tablePageSize),
+          tableRecordLimit: normalizeTableRecordLimit(presetDraft.tableRecordLimit),
         }),
       };
 
@@ -1352,7 +1354,13 @@ export function TemplatesPage() {
                                 onChange={(event) =>
                                   setPresetDraft((current) => ({
                                     ...current,
-                                    tablePageSize: normalizeTablePageSize(event.target.value),
+                                    tablePageSize: event.target.value === '' ? '' : Number(event.target.value),
+                                  }))
+                                }
+                                onBlur={() =>
+                                  setPresetDraft((current) => ({
+                                    ...current,
+                                    tablePageSize: normalizeTablePageSize(current.tablePageSize),
                                   }))
                                 }
                               />
@@ -1366,7 +1374,13 @@ export function TemplatesPage() {
                                 onChange={(event) =>
                                   setPresetDraft((current) => ({
                                     ...current,
-                                    tableRecordLimit: normalizeTableRecordLimit(event.target.value),
+                                    tableRecordLimit: event.target.value === '' ? '' : Number(event.target.value),
+                                  }))
+                                }
+                                onBlur={() =>
+                                  setPresetDraft((current) => ({
+                                    ...current,
+                                    tableRecordLimit: normalizeTableRecordLimit(current.tableRecordLimit),
                                   }))
                                 }
                               />

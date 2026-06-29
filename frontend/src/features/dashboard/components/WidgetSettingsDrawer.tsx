@@ -45,8 +45,8 @@ export interface WidgetSettingsValues {
   info2: boolean;
   info3: boolean;
   tableColumns?: ExportColumn[];
-  tablePageSize?: number;
-  tableRecordLimit?: number;
+  tablePageSize?: number | '';
+  tableRecordLimit?: number | '';
   preset: string;
   startDate: string;
   endDate: string;
@@ -93,12 +93,14 @@ const MAX_TABLE_RECORD_LIMIT = 200;
 const MAX_TABLE_TOTAL_RECORDS = 1000;
 
 function normalizeTablePageSize(value: unknown) {
+  if (value === '') return DEFAULT_TABLE_RECORD_LIMIT;
   const numericValue = Number(value);
   if (!Number.isFinite(numericValue)) return DEFAULT_TABLE_RECORD_LIMIT;
   return Math.min(MAX_TABLE_RECORD_LIMIT, Math.max(1, Math.trunc(numericValue)));
 }
 
 function normalizeTableRecordLimit(value: unknown) {
+  if (value === '') return DEFAULT_TABLE_TOTAL_RECORDS;
   const numericValue = Number(value);
   if (!Number.isFinite(numericValue)) return DEFAULT_TABLE_TOTAL_RECORDS;
   return Math.min(MAX_TABLE_TOTAL_RECORDS, Math.max(1, Math.trunc(numericValue)));
@@ -593,7 +595,10 @@ export function WidgetSettingsDrawer({
                         max={MAX_TABLE_RECORD_LIMIT}
                         value={tablePageSize}
                         onChange={(event) =>
-                          setValue('tablePageSize', normalizeTablePageSize(event.target.value))
+                          setValue('tablePageSize', event.target.value === '' ? '' : Number(event.target.value))
+                        }
+                        onBlur={() =>
+                          setValue('tablePageSize', normalizeTablePageSize(watch('tablePageSize')))
                         }
                       />
                     </Field>
@@ -604,7 +609,10 @@ export function WidgetSettingsDrawer({
                         max={MAX_TABLE_TOTAL_RECORDS}
                         value={tableRecordLimit}
                         onChange={(event) =>
-                          setValue('tableRecordLimit', normalizeTableRecordLimit(event.target.value))
+                          setValue('tableRecordLimit', event.target.value === '' ? '' : Number(event.target.value))
+                        }
+                        onBlur={() =>
+                          setValue('tableRecordLimit', normalizeTableRecordLimit(watch('tableRecordLimit')))
                         }
                       />
                     </Field>

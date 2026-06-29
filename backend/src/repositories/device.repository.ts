@@ -64,9 +64,11 @@ export class DeviceRepository {
    * Fetches distinct device IDs matching metadata filters.
    */
   async getDeviceIdsByFilters(filters: {
+    device_name?: string[];
     device_type?: string[];
     vendor?: string[];
     station?: string[];
+    station_id?: string[];
     province?: string[];
   }): Promise<{ deviceIds: string[]; durationMs: number }> {
     const conditions: string[] = [];
@@ -74,6 +76,10 @@ export class DeviceRepository {
     const params: unknown[] = [];
     let paramIndex = 1;
 
+    if (filters.device_name && filters.device_name.length > 0) {
+      conditions.push(`LOWER(d.name) = ANY($${paramIndex++})`);
+      params.push(filters.device_name.map((s) => s.toLowerCase()));
+    }
     if (filters.device_type && filters.device_type.length > 0) {
       conditions.push(`LOWER(d.device_type) = ANY($${paramIndex++})`);
       params.push(filters.device_type.map((s) => s.toLowerCase()));
@@ -82,6 +88,10 @@ export class DeviceRepository {
       joins.push('INNER JOIN vendor v ON d.vendor_id = v.vendor_id');
       conditions.push(`LOWER(v.name) = ANY($${paramIndex++})`);
       params.push(filters.vendor.map((s) => s.toLowerCase()));
+    }
+    if (filters.station_id && filters.station_id.length > 0) {
+      conditions.push(`LOWER(d.station_id) = ANY($${paramIndex++})`);
+      params.push(filters.station_id.map((s) => s.toLowerCase()));
     }
 
     const needsStation =
@@ -173,7 +183,7 @@ export class DeviceRepository {
     search?: string;
     limit?: number;
   }): Promise<{ options: DeviceFilterOptions; durationMs: number }> {
-    const limit = params.limit ?? 20;
+    const limit = params.limit ?? null;
     const search = params.search ? `%${params.search.toLowerCase()}%` : null;
     const query = `
       WITH options AS (
@@ -203,7 +213,7 @@ export class DeviceRepository {
       )
       SELECT category, value
       FROM ranked
-      WHERE rank <= $2
+      WHERE ($2::int IS NULL OR rank <= $2)
       ORDER BY category, value
     `;
 

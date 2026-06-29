@@ -135,7 +135,7 @@ The heatmap response is already aggregated and does not return raw alarm rows.
 | Explicit column projection | Avoids `SELECT *` and reduces I/O, memory, and network transfer |
 | Time range chunking | Splits long public ranges into 90-day ClickHouse windows to protect ClickHouse and API latency |
 | Sort whitelist | Prevents unsafe dynamic SQL and keeps query plans predictable |
-| Optional compact detail level | Excludes large text columns when the UI does not need full details |
+| Client-selected alarm columns | Lets alarm tables request only the fields they render; metadata display columns automatically include required IDs for enrichment |
 
 ### PostgreSQL Techniques
 
@@ -170,18 +170,18 @@ Returns paginated alarm records.
 Supports:
 
 - `from_time`, `to_time`
-- `severity`, `status`, `device_id`, `error_code`
-- federated metadata filters: `device_type`, `vendor`, `station`, `province`
+- `severity`, `status`, `device_id`, `device_name`, `error_code`
+- federated metadata filters: `device_type`, `vendor`, `station`, `station_id`, `province`
 - backend search with `search` and one `search_field`
 - `offset`, `limit`
 - `sort_by`, `sort_order`
 - `include_total=false` to skip count
-- `detail_level=compact` to omit large text columns
+- `columns=...` to select response columns and avoid fetching unused large text fields
 
 Example:
 
 ```bash
-curl -X GET "http://localhost:3000/api/v1/alarms?limit=20&offset=0&severity=critical"
+curl -X GET "http://localhost:3000/api/v1/alarms?limit=20&offset=0&severity=critical&columns=time_created,error_name,status,severity,device_name,description"
 ```
 
 #### `GET /api/v1/analytics/summary`
@@ -245,11 +245,12 @@ Returns searchable PostgreSQL metadata option lists:
 - `vendors`
 - `stations`
 - `provinces`
+- omit `limit` to return all matching values; pass `limit` only for bounded lists
 
 Example:
 
 ```bash
-curl -X GET "http://localhost:3000/api/v1/metadata/options?search=core&limit=10"
+curl -X GET "http://localhost:3000/api/v1/metadata/options?search=core"
 ```
 
 #### `POST /api/v1/export`
