@@ -17,6 +17,7 @@ import { format, parseISO } from 'date-fns';
 import { Card, CardContent, CardHeader } from '../../../components/ui/Card';
 import { StateBlock } from '../../../components/shared/StateBlock';
 import type { AnalyticsRow } from '../../../services/generated/nettrace-api';
+import { groupSmallPieSlices } from '../utils/pieData';
 
 interface AnalyticsChartsProps {
   trend?: AnalyticsRow[];
@@ -99,10 +100,10 @@ export function AnalyticsCharts({
     name: rowLabel(row),
     value: row.value,
   }));
-  const severityData = (severity ?? []).map((row) => ({
+  const severityData = groupSmallPieSlices((severity ?? []).map((row) => ({
     name: String(row.severity ?? 'Unknown'),
     value: row.value,
-  }));
+  })));
   const pieColors = ['#ff2d85', '#00f5d4', '#f8e231', '#7c3aed', '#38bdf8', '#f97316'];
 
   return (

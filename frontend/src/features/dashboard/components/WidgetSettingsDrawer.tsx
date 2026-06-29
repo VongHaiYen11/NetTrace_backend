@@ -2,9 +2,11 @@ import { format, parseISO } from 'date-fns';
 import { BarChart3, Check, Eye, EyeOff, Grid, Maximize2, Minimize2, PenLine, PieChart, Table, TrendingUp, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
+import { toast } from 'sonner';
 import { Button } from '../../../components/ui/Button';
 import { Field, Input, Select } from '../../../components/ui/Field';
 import type { ExportColumn, GroupBy, Metric, TimeBucket } from '../../../services/generated/nettrace-api';
+import { ALARM_COLUMN_OPTIONS, DEFAULT_TABLE_COLUMNS } from '../../../constants/alarmColumns';
 import { DatePicker, WeekPicker, getWeekRangeForDateValue } from './WeekPicker';
 
 type HeatmapMode = 'weekday' | 'calendar';
@@ -59,38 +61,34 @@ export interface WidgetPresetOption {
   values: WidgetSettingsValues;
 }
 
-const tableColumnOptions: Array<{ value: ExportColumn; label: string }> = [
-  { value: 'alarm_id', label: 'Alarm ID' },
-  { value: 'time_created', label: 'Time created' },
-  { value: 'time_solved', label: 'Time solved' },
-  { value: 'status', label: 'Status' },
-  { value: 'severity', label: 'Severity' },
-  { value: 'error_code', label: 'Error code' },
-  { value: 'error_name', label: 'Error name' },
-  { value: 'error_domain', label: 'Error domain' },
-  { value: 'device_id', label: 'Device ID' },
-  { value: 'device_name', label: 'Device name' },
-  { value: 'device_type', label: 'Device type' },
-  { value: 'station_name', label: 'Station name' },
-  { value: 'station_province', label: 'Province' },
-  { value: 'vendor_name', label: 'Vendor name' },
-  { value: 'raw_log', label: 'Raw log' },
-  { value: 'description', label: 'Description' },
-];
-
-const defaultTableColumns: ExportColumn[] = [
-  'time_created',
-  'error_name',
-  'status',
-  'severity',
-  'device_name',
-  'description',
-];
+const tableColumnOptions = ALARM_COLUMN_OPTIONS;
+const defaultTableColumns: ExportColumn[] = DEFAULT_TABLE_COLUMNS;
 
 const DEFAULT_TABLE_RECORD_LIMIT = 15;
 const DEFAULT_TABLE_TOTAL_RECORDS = 200;
 const MAX_TABLE_RECORD_LIMIT = 200;
 const MAX_TABLE_TOTAL_RECORDS = 1000;
+
+function getBlankCustomSettingsPatch(): Partial<WidgetSettingsValues> {
+  return {
+    title: '',
+    preset: 'custom',
+    chartType: 'line',
+    metric: 'count',
+    groupBy: 'none',
+    timeBucket: 'day',
+    heatmapMode: 'weekday',
+    info1: true,
+    info2: true,
+    info3: true,
+    tableColumns: defaultTableColumns,
+    tablePageSize: DEFAULT_TABLE_RECORD_LIMIT,
+    tableRecordLimit: DEFAULT_TABLE_TOTAL_RECORDS,
+    startDate: '',
+    endDate: '',
+    layoutSpan: 1,
+  };
+}
 
 function normalizeTablePageSize(value: unknown) {
   if (value === '') return DEFAULT_TABLE_RECORD_LIMIT;
@@ -208,16 +206,21 @@ export function WidgetSettingsDrawer({
 
   function onSubmit(values: WidgetSettingsValues) {
     const selectedGroup = values.groupBy ?? initialValues.groupBy;
+    const requiresDateRange = !widgetKind.startsWith('kpi');
+    if (requiresDateRange && (!values.startDate || !values.endDate)) {
+      toast.error('Choose a start date and end date before saving this widget.');
+      return;
+    }
     const calendarRange = values.chartType === 'heatmap' && values.heatmapMode === 'calendar'
-      ? getYearDateRange(getYearFromDate(values.startDate || initialValues.startDate))
+      ? getYearDateRange(getYearFromDate(values.startDate))
       : null;
     const weekRange = values.chartType === 'heatmap' && values.heatmapMode === 'weekday'
-      ? getWeekRangeForDateValue(values.startDate || initialValues.startDate)
+      ? getWeekRangeForDateValue(values.startDate)
       : null;
     const normalizedValues = {
       ...values,
-      startDate: calendarRange?.startDate ?? weekRange?.startDate ?? (values.startDate || initialValues.startDate || '2026-06-01'),
-      endDate: calendarRange?.endDate ?? weekRange?.endDate ?? (values.endDate || initialValues.endDate || '2026-06-30'),
+      startDate: calendarRange?.startDate ?? weekRange?.startDate ?? values.startDate,
+      endDate: calendarRange?.endDate ?? weekRange?.endDate ?? values.endDate,
       metric: values.metric ?? initialValues.metric,
       timeBucket: values.timeBucket ?? initialValues.timeBucket,
       heatmapMode: values.heatmapMode ?? initialValues.heatmapMode ?? 'weekday',
@@ -375,7 +378,10 @@ export function WidgetSettingsDrawer({
   function applyPreset(presetId: string) {
     const preset = presets.find((option) => option.id === presetId);
     if (!preset) {
-      setValue('preset', presetId);
+      reset({
+        ...getValues(),
+        ...getBlankCustomSettingsPatch(),
+      });
       return;
     }
     const currentValues = getValues();

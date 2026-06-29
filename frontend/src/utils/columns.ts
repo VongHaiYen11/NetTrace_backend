@@ -17,6 +17,14 @@ const exportColumnMap: Record<ExportColumn, string> = {
   vendor_name: 'n',
   raw_log: 'o',
   description: 'p',
+  error_description: 'q',
+  error_default_severity: 'r',
+  vendor_id: 's',
+  station_id: 't',
+  vendor_country: 'u',
+  ip_address: 'v',
+  longitude: 'w',
+  latitude: 'x',
 };
 
 const reverseExportColumnMap = Object.fromEntries(

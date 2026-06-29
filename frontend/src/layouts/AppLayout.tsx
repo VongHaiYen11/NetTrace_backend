@@ -111,21 +111,7 @@ export function AppLayout() {
             })}
           </nav>
 
-          <div className="mt-8 border-t border-white/10 pt-5">
-            <div
-              className={cn(
-                'flex items-start rounded border border-white/10 bg-white/[0.03] p-3',
-                sidebarOpen ? 'gap-3' : 'justify-center',
-              )}
-              title={!sidebarOpen ? 'API source' : undefined}
-            >
-              <Settings2 className="mt-0.5 text-muted" size={17} />
-              <div className={cn(!sidebarOpen && 'hidden')}>
-                <p className="text-sm font-medium">API source</p>
-                <p className="mt-1 text-xs leading-5 text-muted">Backend OpenAPI routes at /api/v1.</p>
-              </div>
-            </div>
-          </div>
+          
         </aside>
 
         <main className="min-w-0 flex-1 transition-[width] duration-200">

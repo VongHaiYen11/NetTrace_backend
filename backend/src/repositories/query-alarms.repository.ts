@@ -49,12 +49,20 @@ export type AlarmColumn =
   | 'error_code'
   | 'error_name'
   | 'error_domain'
+  | 'error_description'
+  | 'error_default_severity'
   | 'device_id'
   | 'device_name'
   | 'device_type'
+  | 'vendor_id'
   | 'station_name'
+  | 'station_id'
   | 'station_province'
   | 'vendor_name'
+  | 'vendor_country'
+  | 'ip_address'
+  | 'longitude'
+  | 'latitude'
   | 'raw_log'
   | 'description';
 
@@ -83,12 +91,23 @@ const DIRECT_COLUMN_MAP: Partial<Record<AlarmColumn, keyof AlarmRecord>> = {
 const DEVICE_METADATA_COLUMNS = new Set<AlarmColumn>([
   'device_name',
   'device_type',
+  'vendor_id',
   'station_name',
+  'station_id',
   'station_province',
   'vendor_name',
+  'vendor_country',
+  'ip_address',
+  'longitude',
+  'latitude',
 ]);
 
-const ERROR_METADATA_COLUMNS = new Set<AlarmColumn>(['error_name', 'error_domain']);
+const ERROR_METADATA_COLUMNS = new Set<AlarmColumn>([
+  'error_name',
+  'error_domain',
+  'error_description',
+  'error_default_severity',
+]);
 
 function resolveSelectedColumns(params: QueryAlarmsParams): string {
   const requestedColumns = params.columns && params.columns.length > 0

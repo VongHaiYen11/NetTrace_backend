@@ -26,12 +26,23 @@ const DEFAULT_ALARM_COLUMNS: AlarmColumn[] = [
 const DEVICE_METADATA_COLUMNS = new Set<AlarmColumn>([
   'device_name',
   'device_type',
+  'vendor_id',
   'station_name',
+  'station_id',
   'station_province',
   'vendor_name',
+  'vendor_country',
+  'ip_address',
+  'longitude',
+  'latitude',
 ]);
 
-const ERROR_METADATA_COLUMNS = new Set<AlarmColumn>(['error_name', 'error_domain']);
+const ERROR_METADATA_COLUMNS = new Set<AlarmColumn>([
+  'error_name',
+  'error_domain',
+  'error_description',
+  'error_default_severity',
+]);
 
 function getRequestedColumns(columns?: AlarmColumn[]) {
   return columns && columns.length > 0 ? columns : DEFAULT_ALARM_COLUMNS;

@@ -24,6 +24,7 @@ NetTrace helps NOC operators inspect, analyze, visualize, and export high-volume
 ### Dashboard Analytics
 - Show KPI cards for total alarms, active alarms, closed alarms, critical alarms, and affected devices.
 - Render configurable line, bar, pie, table, and heatmap widgets.
+- Keep pie chart legends readable by showing the top 5 categories and grouping the rest as `Other`.
 - Support long date ranges by splitting backend ClickHouse queries into 90-day internal chunks.
 - Support weekday and calendar heatmap views.
 

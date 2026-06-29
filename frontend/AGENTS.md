@@ -57,6 +57,7 @@ src/
   - `pie`: keep `metric`, `group_by`.
   - `table`: keep only `table_columns`.
   - `heatmap`: keep only `heatmap_mode`.
+- Pie charts must render the top 5 categories by value and group remaining categories into `Other`.
 - Deleting a template removes widget links but keeps presets.
 - Deleting a preset must be blocked when it is used by any template.
 

@@ -269,12 +269,20 @@ All Analytics APIs must share the common Filter DTO to leverage code reuse. Do n
     | "error_code"
     | "error_name"
     | "error_domain"
+    | "error_description"
+    | "error_default_severity"
     | "device_id"
     | "device_name"
     | "device_type"
+    | "vendor_id"
     | "station_name"
+    | "station_id"
     | "station_province"
     | "vendor_name"
+    | "vendor_country"
+    | "ip_address"
+    | "longitude"
+    | "latitude"
     | "raw_log"
     | "description"
   )[];
@@ -309,6 +317,7 @@ All Analytics APIs must share the common Filter DTO to leverage code reuse. Do n
 ## 📌 API Design Principles
 
 * **Reuse APIs:** One API endpoint should serve multiple chart types (e.g., Distribution API returning percentages can render Pie, Donut, Bar, or Treemap charts).
+* **Pie Chart Presentation:** Pie charts are capped in the frontend: display the top 5 categories by value and combine remaining categories into `Other`. The backend should keep returning raw grouped rows.
 * **ClickHouse First:** All heavy computations (count, group by, duration calculations, analytics) must execute on ClickHouse.
 * **Offset-based Pagination:** Use offset-based pagination via limit and offset parameters (e.g., `LIMIT :limit OFFSET :offset`).
 * **Partition Pruning:** The from_time and to_time filters are mandatory for all analytics APIs to leverage ClickHouse partition pruning. Long public ranges must still be queried as smaller time chunks.

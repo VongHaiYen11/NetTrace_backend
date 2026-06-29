@@ -43,6 +43,18 @@ const COLUMN_DEFS: Record<string, ColumnDef> = {
     width: 15,
     getValue: (r, d, e) => e.domain || 'N/A',
   },
+  error_description: {
+    key: 'error_description',
+    header: 'Error Description',
+    width: 40,
+    getValue: (r, d, e) => e.description || 'N/A',
+  },
+  error_default_severity: {
+    key: 'error_default_severity',
+    header: 'Error Default Severity',
+    width: 20,
+    getValue: (r, d, e) => e.default_severity || 'N/A',
+  },
   device_id: { key: 'device_id', header: 'Device ID', width: 15, getValue: (r) => r.device_id },
   device_name: {
     key: 'device_name',
@@ -56,11 +68,23 @@ const COLUMN_DEFS: Record<string, ColumnDef> = {
     width: 15,
     getValue: (r, d) => d.device_type || 'N/A',
   },
+  vendor_id: {
+    key: 'vendor_id',
+    header: 'Vendor ID',
+    width: 15,
+    getValue: (r, d) => d.vendor_id || 'N/A',
+  },
   station_name: {
     key: 'station_name',
     header: 'Station Name',
     width: 20,
     getValue: (r, d) => d.station_name || 'N/A',
+  },
+  station_id: {
+    key: 'station_id',
+    header: 'Station ID',
+    width: 15,
+    getValue: (r, d) => d.station_id || 'N/A',
   },
   station_province: {
     key: 'station_province',
@@ -73,6 +97,30 @@ const COLUMN_DEFS: Record<string, ColumnDef> = {
     header: 'Vendor Name',
     width: 15,
     getValue: (r, d) => d.vendor_name || 'N/A',
+  },
+  vendor_country: {
+    key: 'vendor_country',
+    header: 'Vendor Country',
+    width: 18,
+    getValue: (r, d) => d.vendor_country || 'N/A',
+  },
+  ip_address: {
+    key: 'ip_address',
+    header: 'IP Address',
+    width: 18,
+    getValue: (r, d) => d.ip_address || 'N/A',
+  },
+  longitude: {
+    key: 'longitude',
+    header: 'Longitude',
+    width: 15,
+    getValue: (r, d) => d.longitude ?? 'N/A',
+  },
+  latitude: {
+    key: 'latitude',
+    header: 'Latitude',
+    width: 15,
+    getValue: (r, d) => d.latitude ?? 'N/A',
   },
   raw_log: { key: 'raw_log', header: 'Raw Log', width: 40, getValue: (r) => r.raw_log },
   description: {
@@ -121,12 +169,24 @@ export class ExportService {
     const selectedKeys = columns && columns.length > 0 ? columns : Object.keys(COLUMN_DEFS);
     const activeCols = selectedKeys.map((key) => COLUMN_DEFS[key]).filter(Boolean);
     const needsDeviceMetadata = activeCols.some((col) =>
-      ['device_name', 'device_type', 'station_name', 'station_province', 'vendor_name'].includes(
-        col.key,
-      ),
+      [
+        'device_name',
+        'device_type',
+        'vendor_id',
+        'station_name',
+        'station_id',
+        'station_province',
+        'vendor_name',
+        'vendor_country',
+        'ip_address',
+        'longitude',
+        'latitude',
+      ].includes(col.key),
     );
     const needsErrorMetadata = activeCols.some((col) =>
-      ['error_name', 'error_domain'].includes(col.key),
+      ['error_name', 'error_domain', 'error_description', 'error_default_severity'].includes(
+        col.key,
+      ),
     );
 
     // 1. Resolve PostgreSQL device filters if present

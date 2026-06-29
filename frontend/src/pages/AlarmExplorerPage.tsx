@@ -27,40 +27,25 @@ import {
   type SortOrder,
 } from '../services/generated/nettrace-api';
 import { DatePicker } from '../features/dashboard/components/WeekPicker';
+import { ALARM_COLUMN_OPTIONS } from '../constants/alarmColumns';
 import { cn } from '../utils/cn';
 
-type AlarmColumnKey =
-  | 'alarm_id'
-  | 'severity'
-  | 'device_name'
-  | 'device_id'
-  | 'error_code'
-  | 'error_name'
-  | 'time_created'
-  | 'time_solved'
-  | 'status'
-  | 'device_type'
-  | 'vendor_name'
-  | 'station_name'
-  | 'station_province'
-  | 'description';
+type AlarmColumnKey = AlarmColumn;
 
 const COLUMN_OPTIONS: Array<{ key: AlarmColumnKey; label: string; sortable?: SortBy }> = [
-  { key: 'alarm_id', label: 'ID' },
-  { key: 'severity', label: 'Severity', sortable: 'severity' },
-  { key: 'device_name', label: 'Device name' },
-  { key: 'device_id', label: 'Device ID' },
-  { key: 'error_code', label: 'Error code' },
-  { key: 'error_name', label: 'Error name' },
-  { key: 'time_created', label: 'Created', sortable: 'timestamp' },
-  { key: 'time_solved', label: 'Solved' },
-  { key: 'status', label: 'Status', sortable: 'status' },
-  { key: 'device_type', label: 'Device type' },
-  { key: 'vendor_name', label: 'Vendor' },
-  { key: 'station_name', label: 'Station' },
-  { key: 'station_province', label: 'Province' },
-  { key: 'description', label: 'Description' },
-];
+  ...ALARM_COLUMN_OPTIONS.map((option) => ({
+    key: option.value,
+    label: option.label,
+  })),
+].map((option) => ({
+  ...option,
+  sortable:
+    option.key === 'time_created'
+      ? 'timestamp'
+      : option.key === 'severity' || option.key === 'status'
+        ? option.key
+        : undefined,
+}));
 
 const DEFAULT_COLUMNS: AlarmColumnKey[] = [
   'alarm_id',
@@ -72,24 +57,7 @@ const DEFAULT_COLUMNS: AlarmColumnKey[] = [
   'status',
 ];
 
-const ALARM_DETAIL_COLUMNS: AlarmColumn[] = [
-  'alarm_id',
-  'device_id',
-  'device_name',
-  'device_type',
-  'vendor_name',
-  'station_name',
-  'station_province',
-  'error_code',
-  'error_name',
-  'error_domain',
-  'time_created',
-  'time_solved',
-  'status',
-  'severity',
-  'raw_log',
-  'description',
-];
+const ALARM_DETAIL_COLUMNS: AlarmColumn[] = ALARM_COLUMN_OPTIONS.map((option) => option.value);
 
 const SORT_OPTIONS: Array<{ value: SortBy; label: string }> = [
   { value: 'timestamp', label: 'Created time' },
@@ -135,13 +103,26 @@ function formatDateTime(value?: string | null) {
 function getAlarmCellValue(alarm: Alarm, key: AlarmColumnKey) {
   if (key === 'device_name') return alarm.device_details?.name ?? alarm.device_id;
   if (key === 'error_name') return alarm.error_details?.name ?? alarm.error_code;
+  if (key === 'error_domain') return alarm.error_details?.domain ?? 'N/A';
+  if (key === 'error_description') return alarm.error_details?.description ?? 'N/A';
+  if (key === 'error_default_severity') return alarm.error_details?.default_severity ?? 'N/A';
   if (key === 'device_type') return alarm.device_details?.device_type ?? 'N/A';
+  if (key === 'vendor_id') return alarm.device_details?.vendor_id ?? 'N/A';
   if (key === 'vendor_name') return alarm.device_details?.vendor_name ?? 'N/A';
+  if (key === 'vendor_country') return alarm.device_details?.vendor_country ?? 'N/A';
+  if (key === 'station_id') return alarm.device_details?.station_id ?? 'N/A';
   if (key === 'station_name') return alarm.device_details?.station_name ?? 'N/A';
   if (key === 'station_province') return alarm.device_details?.station_province ?? 'N/A';
+  if (key === 'ip_address') return alarm.device_details?.ip_address ?? 'N/A';
+  if (key === 'longitude') return alarm.device_details?.longitude ?? 'N/A';
+  if (key === 'latitude') return alarm.device_details?.latitude ?? 'N/A';
   if (key === 'time_created') return formatDateTime(alarm.time_created);
   if (key === 'time_solved') return formatDateTime(alarm.time_solved);
   return alarm[key] ?? 'N/A';
+}
+
+function isLongDetailField(key: AlarmColumnKey) {
+  return key === 'raw_log' || key === 'description' || key === 'error_description';
 }
 
 function severityClass(severity: string) {
@@ -665,6 +646,24 @@ export function AlarmExplorerPage() {
                   </Button>
                   {columnsOpen ? (
                     <div className="absolute right-0 top-full z-30 mt-2 w-64 rounded-lg border border-border bg-panel p-2 shadow-2xl">
+                      <div className="mb-2 flex gap-2 border-b border-white/10 pb-2">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-8 flex-1 text-xs"
+                          onClick={() => setColumns([])}
+                        >
+                          Deselect all
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          className="h-8 flex-1 text-xs"
+                          onClick={() => setColumns(COLUMN_OPTIONS.map((column) => column.key))}
+                        >
+                          Select all
+                        </Button>
+                      </div>
                       {COLUMN_OPTIONS.map((column) => {
                         const checked = columns.includes(column.key);
                         return (
@@ -810,46 +809,39 @@ export function AlarmExplorerPage() {
                       {selectedAlarm.severity}
                     </span>
                   </div>
-                  <p className="mt-3 text-sm leading-6 text-medium">
-                    {selectedAlarm.description ?? selectedAlarm.error_details?.description ?? 'No description.'}
-                  </p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4 text-sm">
-                  {[
-                    ['Device', selectedAlarm.device_details?.name ?? selectedAlarm.device_id],
-                    ['Error code', selectedAlarm.error_code],
-                    ['Created', formatDateTime(selectedAlarm.time_created)],
-                    ['Solved', formatDateTime(selectedAlarm.time_solved)],
-                    ['Status', selectedAlarm.status],
-                    ['Type', selectedAlarm.device_details?.device_type ?? 'N/A'],
-                    ['Vendor', selectedAlarm.device_details?.vendor_name ?? 'N/A'],
-                    ['Station', selectedAlarm.device_details?.station_name ?? 'N/A'],
-                    ['Province', selectedAlarm.device_details?.station_province ?? 'N/A'],
-                    ['Domain', selectedAlarm.error_details?.domain ?? 'N/A'],
-                  ].map(([label, value]) => (
-                    <div key={label}>
-                      <p className="font-mono text-[11px] uppercase text-placeholder">{label}</p>
-                      <p className="mt-1 break-words font-semibold text-bright">{value}</p>
-                    </div>
-                  ))}
-                </div>
+                  {COLUMN_OPTIONS.map((column) => {
+                    const value = getAlarmCellValue(selectedAlarm, column.key);
+                    const valueText = value === null || value === undefined || value === '' ? 'N/A' : String(value);
+                    const longField = isLongDetailField(column.key);
 
-                <div>
-                  <div className="mb-2 flex items-center justify-between">
-                    <p className="font-mono text-xs font-bold uppercase text-muted">Raw system log</p>
-                    <button
-                      type="button"
-                      onClick={copyRawLog}
-                      className="inline-flex items-center gap-1 text-xs font-semibold text-secondary hover:text-secondary-light"
-                    >
-                      <Copy size={13} />
-                      Copy
-                    </button>
-                  </div>
-                  <pre className="max-h-72 overflow-auto rounded border border-secondary/15 bg-panel p-4 font-mono text-xs leading-5 text-secondary">
-                    {selectedAlarm.raw_log || 'No raw log available.'}
-                  </pre>
+                    return (
+                      <div key={column.key} className={cn(longField && 'col-span-2')}>
+                        <div className="mb-1 flex items-center justify-between gap-2">
+                          <p className="font-mono text-[11px] uppercase text-placeholder">{column.label}</p>
+                          {column.key === 'raw_log' ? (
+                            <button
+                              type="button"
+                              onClick={copyRawLog}
+                              className="inline-flex items-center gap-1 text-xs font-semibold text-secondary hover:text-secondary-light"
+                            >
+                              <Copy size={13} />
+                              Copy
+                            </button>
+                          ) : null}
+                        </div>
+                        {longField ? (
+                          <pre className="max-h-44 overflow-auto whitespace-pre-wrap break-words rounded border border-secondary/15 bg-panel p-3 font-mono text-xs leading-5 text-secondary">
+                            {valueText}
+                          </pre>
+                        ) : (
+                          <p className="break-words font-semibold text-bright">{valueText}</p>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </aside>

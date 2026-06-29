@@ -23,6 +23,7 @@ import {
   type SortOrder,
 } from '../services/generated/nettrace-api';
 import { DatePicker } from '../features/dashboard/components/WeekPicker';
+import { ALARM_COLUMN_OPTIONS, DEFAULT_EXPORT_COLUMNS } from '../constants/alarmColumns';
 import { cn } from '../utils/cn';
 
 type ExportFormat = ExportRequest['format'];
@@ -53,34 +54,8 @@ const FORMAT_OPTIONS: Array<{
     },
   ];
 
-const COLUMN_OPTIONS: Array<{ value: ExportColumn; label: string }> = [
-  { value: 'alarm_id', label: 'Alarm ID' },
-  { value: 'time_created', label: 'Time created' },
-  { value: 'time_solved', label: 'Time solved' },
-  { value: 'status', label: 'Status' },
-  { value: 'severity', label: 'Severity' },
-  { value: 'error_code', label: 'Error code' },
-  { value: 'error_name', label: 'Error name' },
-  { value: 'error_domain', label: 'Error domain' },
-  { value: 'device_id', label: 'Device ID' },
-  { value: 'device_name', label: 'Device name' },
-  { value: 'device_type', label: 'Device type' },
-  { value: 'station_name', label: 'Station name' },
-  { value: 'station_province', label: 'Province' },
-  { value: 'vendor_name', label: 'Vendor name' },
-  { value: 'raw_log', label: 'Raw log' },
-  { value: 'description', label: 'Description' },
-];
-
-const DEFAULT_COLUMNS: ExportColumn[] = [
-  'alarm_id',
-  'time_created',
-  'severity',
-  'status',
-  'device_id',
-  'error_code',
-  'description',
-];
+const COLUMN_OPTIONS = ALARM_COLUMN_OPTIONS;
+const DEFAULT_COLUMNS: ExportColumn[] = DEFAULT_EXPORT_COLUMNS;
 
 const SEVERITY_OPTIONS = [
   { value: 'critical', label: 'Critical' },

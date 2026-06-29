@@ -24,6 +24,8 @@ import { Badge } from '../../../components/ui/Badge';
 import { StateBlock } from '../../../components/shared/StateBlock';
 import { nettraceApi } from '../../../services/generated/nettrace-api';
 import { cn } from '../../../utils/cn';
+import { DEFAULT_TABLE_COLUMNS, alarmColumnLabels } from '../../../constants/alarmColumns';
+import { groupSmallPieSlices } from '../utils/pieData';
 import type {
   AnalyticsRow,
   Alarm,
@@ -336,33 +338,8 @@ function getTableRecordLimit(value: unknown) {
   return Math.min(MAX_TABLE_TOTAL_RECORDS, Math.max(1, Math.trunc(numericValue)));
 }
 
-const tableColumnLabels: Record<ExportColumn, string> = {
-  alarm_id: 'Alarm ID',
-  time_created: 'Time',
-  time_solved: 'Solved',
-  status: 'Status',
-  severity: 'Severity',
-  error_code: 'Error code',
-  error_name: 'Error name',
-  error_domain: 'Domain',
-  device_id: 'Device ID',
-  device_name: 'Device name',
-  device_type: 'Device type',
-  station_name: 'Station',
-  station_province: 'Province',
-  vendor_name: 'Vendor',
-  raw_log: 'Raw log',
-  description: 'Description',
-};
-
-const defaultTableColumns: ExportColumn[] = [
-  'time_created',
-  'error_name',
-  'status',
-  'severity',
-  'device_name',
-  'description',
-];
+const tableColumnLabels: Record<ExportColumn, string> = alarmColumnLabels;
+const defaultTableColumns: ExportColumn[] = DEFAULT_TABLE_COLUMNS;
 
 function renderAlarmTableCell(alarm: Alarm, column: ExportColumn) {
   if (column === 'time_created') {
@@ -380,11 +357,19 @@ function renderAlarmTableCell(alarm: Alarm, column: ExportColumn) {
   }
   if (column === 'error_name') return alarm.error_details?.name ?? alarm.description ?? alarm.error_code;
   if (column === 'error_domain') return alarm.error_details?.domain ?? 'N/A';
+  if (column === 'error_description') return alarm.error_details?.description ?? 'N/A';
+  if (column === 'error_default_severity') return alarm.error_details?.default_severity ?? 'N/A';
   if (column === 'device_name') return alarm.device_details?.name ?? alarm.device_id;
   if (column === 'device_type') return alarm.device_details?.device_type ?? 'N/A';
+  if (column === 'vendor_id') return alarm.device_details?.vendor_id ?? 'N/A';
+  if (column === 'vendor_country') return alarm.device_details?.vendor_country ?? 'N/A';
+  if (column === 'station_id') return alarm.device_details?.station_id ?? 'N/A';
   if (column === 'station_name') return alarm.device_details?.station_name ?? 'N/A';
   if (column === 'station_province') return alarm.device_details?.station_province ?? 'N/A';
   if (column === 'vendor_name') return alarm.device_details?.vendor_name ?? 'N/A';
+  if (column === 'ip_address') return alarm.device_details?.ip_address ?? 'N/A';
+  if (column === 'longitude') return alarm.device_details?.longitude ?? 'N/A';
+  if (column === 'latitude') return alarm.device_details?.latitude ?? 'N/A';
   return alarm[column] ?? 'N/A';
 }
 
@@ -684,10 +669,10 @@ export function DashboardWidget({ id, config, layoutContext, onSettingsClick }: 
     }
   } else if (isPie) {
     const rawSeverity = analyticsQuery.data?.data ?? [];
-    const severityData = rawSeverity.map((row) => ({
+    const severityData = groupSmallPieSlices(rawSeverity.map((row) => ({
       name: getRowGroupLabel(row, config.groupBy),
       value: row.value,
-    }));
+    })));
     const pieColors = ['#ff2d85', '#00f5d4', '#f8e231', '#7c3aed', '#38bdf8', '#f97316'];
 
     if (severityData.length === 0) {

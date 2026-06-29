@@ -314,6 +314,7 @@ router.get(
  *         schema:
  *           type: string
  *           example: time_created,error_name,status,severity,device_name,description
+ *           enum: [alarm_id, time_created, time_solved, status, severity, error_code, error_name, error_domain, error_description, error_default_severity, device_id, device_name, device_type, vendor_id, vendor_name, vendor_country, station_id, station_name, station_province, ip_address, longitude, latitude, raw_log, description]
  *         description: Comma-separated response columns. Metadata display columns automatically include the required IDs for enrichment.
  *       - in: query
  *         name: search
@@ -604,6 +605,7 @@ router.post('/analytics/heatmap', validateBody(HeatmapSchema), heatmapController
  *                 type: array
  *                 items:
  *                   type: string
+ *                   enum: [alarm_id, time_created, time_solved, status, severity, error_code, error_name, error_domain, error_description, error_default_severity, device_id, device_name, device_type, vendor_id, vendor_name, vendor_country, station_id, station_name, station_province, ip_address, longitude, latitude, raw_log, description]
  *                 example: ["alarm_id", "severity"]
  *               filters:
  *                 type: object

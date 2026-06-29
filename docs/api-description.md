@@ -178,6 +178,9 @@ Supports:
 - `include_total=false` to skip count
 - `columns=...` to select response columns and avoid fetching unused large text fields
 
+Supported `columns` values:
+`alarm_id`, `time_created`, `time_solved`, `status`, `severity`, `error_code`, `error_name`, `error_domain`, `error_description`, `error_default_severity`, `device_id`, `device_name`, `device_type`, `vendor_id`, `vendor_name`, `vendor_country`, `station_id`, `station_name`, `station_province`, `ip_address`, `longitude`, `latitude`, `raw_log`, `description`.
+
 Example:
 
 ```bash
@@ -203,6 +206,8 @@ curl -X GET "http://localhost:3000/api/v1/analytics/summary?severity=critical"
 #### `POST /api/v1/analytics/query`
 
 Generic aggregation endpoint for chart widgets.
+
+Pie chart clients display the top 5 grouped categories by value and combine remaining categories into `Other`; this endpoint still returns raw grouped rows.
 
 Example:
 

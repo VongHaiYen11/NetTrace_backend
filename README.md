@@ -13,7 +13,7 @@ High-volume alarm analytics, dashboard templates, reusable widget presets, and e
 
 </div>
 
-NetTrace is a NOC alarm analytics workspace with a React frontend and an Express API. The backend federates ClickHouse alarm events with PostgreSQL metadata and dashboard configuration tables; the frontend renders dashboards, alarm exploration, exports, templates, and reusable widget presets.
+NetTrace is a NOC alarm analytics workspace with a React frontend and an Express API. The backend federates ClickHouse alarm events with PostgreSQL metadata and dashboard configuration tables; the frontend renders dashboards, alarm exploration, exports, templates, and reusable widget presets. Pie charts keep legends readable by showing the top 5 categories and grouping the rest as `Other`.
 
 ## Quick Links
 

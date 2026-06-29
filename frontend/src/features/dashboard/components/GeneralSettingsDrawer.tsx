@@ -35,6 +35,7 @@ import {
 } from '../../../services/generated/nettrace-api';
 import { cn } from '../../../utils/cn';
 import { decodeTableColumns } from '../../../utils/columns';
+import { ALARM_COLUMN_OPTIONS, DEFAULT_TABLE_COLUMNS } from '../../../constants/alarmColumns';
 import { normalizePresetFieldsByChartType } from '../../../utils/presetPayload';
 import type { WidgetKind, WidgetSettingsValues } from './WidgetSettingsDrawer';
 import { DatePicker, WeekPicker, getWeekRangeForDateValue } from './WeekPicker';
@@ -168,33 +169,8 @@ const chartTypeOptions = [
   { value: 'table', label: 'Data table', icon: Table },
 ] as const;
 
-const tableColumnOptions: Array<{ value: ExportColumn; label: string }> = [
-  { value: 'alarm_id', label: 'Alarm ID' },
-  { value: 'time_created', label: 'Time created' },
-  { value: 'time_solved', label: 'Time solved' },
-  { value: 'status', label: 'Status' },
-  { value: 'severity', label: 'Severity' },
-  { value: 'error_code', label: 'Error code' },
-  { value: 'error_name', label: 'Error name' },
-  { value: 'error_domain', label: 'Error domain' },
-  { value: 'device_id', label: 'Device ID' },
-  { value: 'device_name', label: 'Device name' },
-  { value: 'device_type', label: 'Device type' },
-  { value: 'station_name', label: 'Station name' },
-  { value: 'station_province', label: 'Province' },
-  { value: 'vendor_name', label: 'Vendor name' },
-  { value: 'raw_log', label: 'Raw log' },
-  { value: 'description', label: 'Description' },
-];
-
-const defaultTableColumns: ExportColumn[] = [
-  'time_created',
-  'error_name',
-  'status',
-  'severity',
-  'device_name',
-  'description',
-];
+const tableColumnOptions = ALARM_COLUMN_OPTIONS;
+const defaultTableColumns: ExportColumn[] = DEFAULT_TABLE_COLUMNS;
 
 const DEFAULT_TABLE_RECORD_LIMIT = 15;
 const DEFAULT_TABLE_TOTAL_RECORDS = 200;
@@ -258,6 +234,27 @@ function normalizeChartPatch(
     return { chartType, groupBy: 'none', heatmapMode, layoutSpan: 2, ...dateRange };
   }
   return { chartType, groupBy: 'none', layoutSpan: 2 };
+}
+
+function getBlankCustomWidgetPatch(): Partial<DashboardWidgetConfig> {
+  return {
+    title: '',
+    preset: 'custom',
+    chartType: 'line',
+    metric: 'count',
+    groupBy: 'none',
+    timeBucket: 'day',
+    heatmapMode: 'weekday',
+    info1: true,
+    info2: true,
+    info3: true,
+    tableColumns: defaultTableColumns,
+    tablePageSize: DEFAULT_TABLE_RECORD_LIMIT,
+    tableRecordLimit: DEFAULT_TABLE_TOTAL_RECORDS,
+    layoutSpan: 1,
+    startDate: '',
+    endDate: '',
+  };
 }
 
 function withVisibleChartCount(widgets: DashboardWidgetConfig[], count: LayoutCount) {
@@ -383,6 +380,14 @@ function getChartWidgets(widgets: DashboardWidgetConfig[]) {
 
 function getVisibleChartWidgets(widgets: DashboardWidgetConfig[]) {
   return getChartWidgets(widgets).filter((widget) => widget.visible);
+}
+
+function hasCompleteDateRange(widget: DashboardWidgetConfig) {
+  return Boolean(widget.startDate && widget.endDate);
+}
+
+function getMissingDateRangeSlot(widgets: DashboardWidgetConfig[]) {
+  return getVisibleChartWidgets(widgets).find((widget) => !hasCompleteDateRange(widget));
 }
 
 function getHiddenChartWidgets(widgets: DashboardWidgetConfig[]) {
@@ -954,7 +959,9 @@ export function GeneralSettingsDrawer({
   const layoutCount = detailLayoutCount;
   const chartWidgets = getChartWidgets(detailDraftWidgets);
   const visibleChartWidgets = getVisibleChartWidgets(detailDraftWidgets);
-  const allDetailWidgetSlotsComplete = visibleChartWidgets.length === detailLayoutCount;
+  const missingDateRangeSlot = getMissingDateRangeSlot(detailDraftWidgets);
+  const allDetailWidgetSlotsComplete =
+    visibleChartWidgets.length === detailLayoutCount && !missingDateRangeSlot;
   const selectedEmptySlot = selectedSlotId?.startsWith('empty:')
     ? Number(selectedSlotId.replace('empty:', ''))
     : null;
@@ -1126,6 +1133,14 @@ export function GeneralSettingsDrawer({
     }
 
     const normalizedWidgets = draftWidgets.map(normalizeWidgetTitle);
+    const missingDateSlot = getMissingDateRangeSlot(normalizedWidgets);
+    if (missingDateSlot) {
+      toast.error(`Choose a start date and end date for slot ${missingDateSlot.layoutOrder}.`);
+      openDetailModal();
+      setSelectedSlotId(missingDateSlot.id);
+      setDetailStep('widget');
+      return;
+    }
     if (templateDirty) {
       const saved = await updateTemplateFromDraft(
         normalizedWidgets,
@@ -1282,6 +1297,14 @@ export function GeneralSettingsDrawer({
   }
 
   async function saveDetailModal() {
+    const missingDateSlot = getMissingDateRangeSlot(detailDraftWidgets);
+    if (missingDateSlot) {
+      toast.error(`Choose a start date and end date for slot ${missingDateSlot.layoutOrder}.`);
+      setSelectedSlotId(missingDateSlot.id);
+      setDetailStep('widget');
+      return;
+    }
+
     if (detailMode === 'create') {
       if (!allDetailWidgetSlotsComplete) return;
       const createdTemplate = await createTemplateFromDraft(detailDraftWidgets, detailLayoutCount);
@@ -1860,7 +1883,13 @@ export function GeneralSettingsDrawer({
                                 value={selectedSlot.preset.startsWith('preset:') ? selectedSlot.preset.replace('preset:', '') : ''}
                                 onChange={(event) => {
                                   const presetId = Number(event.target.value);
-                                  if (presetId) applyDetailPreset(selectedSlot.id, presetId);
+                                  if (presetId) {
+                                    applyDetailPreset(selectedSlot.id, presetId);
+                                    return;
+                                  }
+                                  setDetailDraftWidgets((current) =>
+                                    updateWidget(current, selectedSlot.id, getBlankCustomWidgetPatch()),
+                                  );
                                 }}
                               >
                                 <option value="">Custom configuration</option>
@@ -2270,10 +2299,16 @@ export function GeneralSettingsDrawer({
                   <Button
                     className="h-11 px-6 disabled:cursor-not-allowed disabled:border-border-muted disabled:bg-input-dark disabled:text-placeholder disabled:opacity-100"
                     onClick={saveDetailModal}
-                    disabled={creatingTemplate || (detailMode === 'create' && !allDetailWidgetSlotsComplete)}
+                    disabled={
+                      creatingTemplate ||
+                      Boolean(missingDateRangeSlot) ||
+                      (detailMode === 'create' && visibleChartWidgets.length !== detailLayoutCount)
+                    }
                     title={
-                      detailMode === 'create' && !allDetailWidgetSlotsComplete
-                        ? `Complete all ${detailLayoutCount} widget slots before creating the template.`
+                      missingDateRangeSlot
+                        ? `Choose a start date and end date for slot ${missingDateRangeSlot.layoutOrder}.`
+                        : detailMode === 'create' && visibleChartWidgets.length !== detailLayoutCount
+                          ? `Complete all ${detailLayoutCount} widget slots before creating the template.`
                         : undefined
                     }
                   >
