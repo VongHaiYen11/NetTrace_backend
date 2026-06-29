@@ -39,7 +39,7 @@ NetTrace helps NOC operators inspect, analyze, visualize, and export high-volume
 - Block preset deletion while a template widget still uses the preset.
 
 ### Export
-- Export filtered alarm data as CSV, XLSX, JSON, or PDF.
+- Export filtered alarm data as CSV, XLSX, or JSON.
 - Allow users to choose export columns.
 - Use streaming formats for large CSV/XLSX/JSON exports.
 
@@ -80,7 +80,6 @@ NetTrace helps NOC operators inspect, analyze, visualize, and export high-volume
 6. **Export Filtered Evidence**
    - User chooses filters, columns, and export format.
    - System streams the export when the format is CSV, XLSX, or JSON.
-   - PDF export is used for bounded review reports.
 
 ## Non-Functional Requirements
 

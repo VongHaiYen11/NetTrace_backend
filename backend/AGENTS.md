@@ -533,21 +533,19 @@ GROUP BY day;
 
 #### 1.5. Export API
 * **Endpoint:** `POST /api/v1/export`
-* **Purpose:** Exports filtered alarm records to CSV, Excel, JSON, or compact PDF.
+* **Purpose:** Exports filtered alarm records to CSV, Excel, or JSON.
 * **Formats:**
   * `csv`
   * `xlsx`
   * `json`
-  * `pdf`
 * **Requirements:**
   * Must use streaming for CSV, XLSX, and JSON outputs.
-  * PDF output is for bounded review reports; use practical limits and do not treat it as the massive dataset format.
   * Do not load large volume datasets into RAM.
   * Support exporting massive datasets.
 * **Request Body Schema:**
   ```json
   {
-    "format": "csv" | "xlsx" | "json" | "pdf",
+    "format": "csv" | "xlsx" | "json",
     "columns": ["alarm_id", "severity", "status", "device_name", "error_name", "..."], // Optional. If omitted, exports all columns.
     "filters": {
       // Common Analytics Filter Contract:

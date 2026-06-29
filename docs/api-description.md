@@ -13,7 +13,7 @@ All endpoints are mounted under `/api/v1`.
 | Analytics query | `POST /analytics/query` | Generic aggregation for line, bar, pie, top-N, and grouped charts |
 | Heatmap | `POST /analytics/heatmap` | Weekday/hour or calendar-style alarm density |
 | Metadata options | `GET /metadata/options` | Searchable device type, vendor, station, and province values |
-| Export | `POST /export` | CSV, XLSX, JSON, or PDF export with selected columns |
+| Export | `POST /export` | CSV, XLSX, or JSON export with selected columns |
 | Templates | `GET/POST/PUT/DELETE /templates` | Dashboard template metadata and widget links |
 | Presets | `GET/POST/PUT/DELETE /presets` | Reusable widget preset management |
 
@@ -120,7 +120,6 @@ The heatmap response is already aggregated and does not return raw alarm rows.
 - CSV, XLSX, and JSON are streamed to avoid loading the full export in memory.
 - XLSX uses `exceljs`.
 - PostgreSQL metadata is resolved only when selected export columns require enrichment.
-- PDF is intended for bounded review reports, not unlimited massive exports.
 
 ## Retrieval Performance Techniques
 
@@ -267,7 +266,6 @@ Formats:
 - `csv`
 - `xlsx`
 - `json`
-- `pdf`
 
 Example:
 

@@ -48,7 +48,7 @@ Swagger UI is mounted at `/api-docs` when the server is running.
 | Logging | Pino |
 | OLAP | ClickHouse via `@clickhouse/client` |
 | OLTP | PostgreSQL via `pg` |
-| Export | `exceljs`, streaming CSV/JSON writers, compact PDF output |
+| Export | `exceljs`, streaming CSV/JSON/XLSX writers |
 | Docs | Swagger JSDoc, Swagger UI |
 | Tests | Jest, ts-jest |
 

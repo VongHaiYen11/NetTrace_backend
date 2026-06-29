@@ -67,7 +67,7 @@ src/
 | --- | --- |
 | Dashboard | KPI cards, chart/table/heatmap widgets, widget settings, template application. Pie charts show the top 5 categories and group the rest as `Other`. |
 | Alarm Explorer | Backend-backed search, filters, sort, pagination, alarm details |
-| Export | Filtered CSV/XLSX/JSON/PDF export with selected columns |
+| Export | Filtered CSV/XLSX/JSON export with selected columns |
 | Templates | Template CRUD, reusable preset CRUD, widget/KPI count filters |
 
 ## API Rules
