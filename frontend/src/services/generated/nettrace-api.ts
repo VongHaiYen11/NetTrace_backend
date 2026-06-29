@@ -165,6 +165,8 @@ export interface PresetSummary {
   time_bucket: string | null;
   heatmap_mode: string | null;
   table_columns: string | null;
+  table_page_size: number | null;
+  table_record_limit: number | null;
   template_id?: number | null;
   template_name?: string | null;
 }
@@ -196,6 +198,8 @@ export interface TemplateWidgetInput {
   time_bucket?: string | null;
   heatmap_mode?: string | null;
   table_columns?: string | null;
+  table_page_size?: number | null;
+  table_record_limit?: number | null;
 }
 
 export interface CreateTemplateRequest {
@@ -218,6 +222,8 @@ export interface CreatePresetRequest {
   time_bucket?: string | null;
   heatmap_mode?: string | null;
   table_columns?: string | null;
+  table_page_size?: number | null;
+  table_record_limit?: number | null;
 }
 
 export interface MetadataFilterOptions {

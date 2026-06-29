@@ -43,7 +43,7 @@ export function Field({ label, children, hint, labelVariant = 'section' }: Field
 }
 
 export function Input({ className, ...props }: InputHTMLAttributes<HTMLInputElement>) {
-  const isDateInput = props.type === 'date';
+  const isDateInput = props.type === 'date' || props.type === 'week';
 
   return (
     <input

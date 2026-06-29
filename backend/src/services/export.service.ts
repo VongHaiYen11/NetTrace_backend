@@ -3,7 +3,7 @@ import ExcelJS from 'exceljs';
 import { QueryAlarmsRepository } from '../repositories/query-alarms.repository.js';
 import { DeviceRepository } from '../repositories/device.repository.js';
 import { ErrorRepository } from '../repositories/error.repository.js';
-import { ServiceMetrics } from './shared.js';
+import { ServiceMetrics, splitDateRangeIntoChunks } from './shared.js';
 
 interface ColumnDef {
   key: string;
@@ -160,18 +160,46 @@ export class ExportService {
       }
     }
 
-    // 2. Fetch ClickHouse stream
-    const clickhouseStream = await this.queryAlarmsRepo.queryAlarmsStream({
-      from_time: filters.from_time,
-      to_time: filters.to_time,
-      severity: filters.severity,
-      status: filters.status,
-      device_id: finalDeviceIds,
-      error_code: filters.error_code,
-      sort_by: filters.sort_by,
-      sort_order: filters.sort_order,
-      limit: filters.limit,
-    });
+    // 2. Split long date ranges into bounded ClickHouse stream queries.
+    const dateChunks = splitDateRangeIntoChunks(filters.from_time, filters.to_time);
+    const orderedDateChunks =
+      (filters.sort_by ?? 'timestamp') === 'timestamp' && (filters.sort_order ?? 'desc') === 'desc'
+        ? [...dateChunks].reverse()
+        : dateChunks;
+    metrics.time_range_chunks = dateChunks.length;
+    const streamRows = async function* (service: ExportService) {
+      let remainingLimit = filters.limit;
+
+      for (const dateChunk of orderedDateChunks) {
+        if (remainingLimit !== undefined && remainingLimit <= 0) return;
+
+        const clickhouseStream = await service.queryAlarmsRepo.queryAlarmsStream({
+          from_time: dateChunk.from_time,
+          to_time: dateChunk.to_time,
+          severity: filters.severity,
+          status: filters.status,
+          device_id: finalDeviceIds,
+          error_code: filters.error_code,
+          sort_by: filters.sort_by,
+          sort_order: filters.sort_order,
+          limit: remainingLimit,
+        });
+
+        for await (const chunk of clickhouseStream as AsyncIterable<Buffer>) {
+          const rows = service.parseJsonRows(chunk);
+          if (rows.length === 0) continue;
+
+          if (remainingLimit !== undefined) {
+            const boundedRows = rows.slice(0, remainingLimit);
+            remainingLimit -= boundedRows.length;
+            yield boundedRows;
+            if (remainingLimit <= 0) return;
+          } else {
+            yield rows;
+          }
+        }
+      }
+    };
 
     const deviceMap: Record<string, any> = {};
     const errorMap: Record<string, any> = {};
@@ -185,8 +213,7 @@ export class ExportService {
       res.write('\ufeff');
       res.write(activeCols.map((col) => escapeCsvRef(col.header)).join(',') + '\n');
 
-      for await (const chunk of clickhouseStream as AsyncIterable<Buffer>) {
-        const rows = this.parseJsonRows(chunk);
+      for await (const rows of streamRows(this)) {
         if (rows.length === 0) continue;
         await this.enrichBatch(rows, {
           needsDeviceMetadata,
@@ -213,8 +240,7 @@ export class ExportService {
       res.write('[');
       let isFirstRecord = true;
 
-      for await (const chunk of clickhouseStream as AsyncIterable<Buffer>) {
-        const rows = this.parseJsonRows(chunk);
+      for await (const rows of streamRows(this)) {
         if (rows.length === 0) continue;
         await this.enrichBatch(rows, {
           needsDeviceMetadata,
@@ -253,8 +279,7 @@ export class ExportService {
         width: col.width,
       }));
 
-      for await (const chunk of clickhouseStream as AsyncIterable<Buffer>) {
-        const rows = this.parseJsonRows(chunk);
+      for await (const rows of streamRows(this)) {
         if (rows.length === 0) continue;
         await this.enrichBatch(rows, {
           needsDeviceMetadata,

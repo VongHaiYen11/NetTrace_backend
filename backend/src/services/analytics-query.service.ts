@@ -3,7 +3,7 @@ import {
   AnalyticsQueryParams,
 } from '../repositories/analytics-query.repository.js';
 import { DeviceRepository, DeviceMetadata } from '../repositories/device.repository.js';
-import { ServiceMetrics } from './shared.js';
+import { ServiceMetrics, splitDateRangeIntoChunks } from './shared.js';
 import { config } from '../configs/database.config.js';
 import { TtlMapCache } from './metadata-cache.js';
 
@@ -89,9 +89,27 @@ export class AnalyticsQueryService {
       metrics.federated_fanout_limit = clickhouseParams.limit;
     }
 
-    const { rows, durationMs } = await this.analyticsQueryRepo.executeQuery(clickhouseParams);
-    metrics.clickhouse_query_time_ms += durationMs;
-    metrics.clickhouse_rows_returned = (metrics.clickhouse_rows_returned ?? 0) + rows.length;
+    const chunks = splitDateRangeIntoChunks(filters.from_time, filters.to_time);
+    metrics.time_range_chunks = chunks.length;
+    const chunkResults = await Promise.all(
+      chunks.map((chunk) =>
+        this.analyticsQueryRepo.executeQuery({
+          ...clickhouseParams,
+          filters: {
+            ...clickhouseParams.filters,
+            from_time: chunk.from_time,
+            to_time: chunk.to_time,
+          },
+        }),
+      ),
+    );
+    const rawRows = chunkResults.flatMap((result) => {
+      metrics.clickhouse_query_time_ms += result.durationMs;
+      metrics.clickhouse_rows_returned =
+        (metrics.clickhouse_rows_returned ?? 0) + result.rows.length;
+      return result.rows;
+    });
+    const rows = this.mergeAnalyticsRows(rawRows, params.metric);
 
     if (rows.length === 0) {
       metrics.records_returned += 0;
@@ -207,5 +225,47 @@ export class AnalyticsQueryService {
     const slicedResult = result.slice(0, params.limit);
     metrics.records_returned += slicedResult.length;
     return slicedResult;
+  }
+
+  private mergeAnalyticsRows(
+    rows: Record<string, unknown>[],
+    metric: AnalyticsQueryParams['metric'],
+  ): Record<string, unknown>[] {
+    const byKey = new Map<
+      string,
+      { keys: Record<string, unknown>; value: number; count: number; max: number }
+    >();
+
+    rows.forEach((row) => {
+      const keys = Object.fromEntries(
+        Object.entries(row).filter(([key]) => key !== 'value'),
+      ) as Record<string, unknown>;
+      const key = JSON.stringify(keys);
+      const value = Number(row.value ?? 0);
+      const current = byKey.get(key) ?? { keys, value: 0, count: 0, max: -Infinity };
+      current.value += value;
+      current.count += 1;
+      current.max = Math.max(current.max, value);
+      byKey.set(key, current);
+    });
+
+    return Array.from(byKey.values())
+      .map((entry) => {
+        let value = entry.value;
+        if (metric === 'avg_duration') {
+          value = entry.value / entry.count;
+        } else if (metric === 'max_duration') {
+          value = entry.max;
+        }
+
+        return {
+          ...entry.keys,
+          value:
+            metric === 'count' || metric === 'affected_devices'
+              ? Math.round(value)
+              : Math.round(value * 100) / 100,
+        };
+      })
+      .sort((a, b) => Number(b.value) - Number(a.value));
   }
 }

@@ -77,22 +77,6 @@ src/
 - Invalidate TanStack Query caches after mutations that affect templates or presets.
 - `VITE_API_BASE_URL` is the only frontend API base URL switch.
 
-## Dashboard, Templates, And Presets
-
-| Entity | Frontend Meaning |
-| --- | --- |
-| Template | Saved dashboard layout snapshot and KPI selection |
-| Preset | Reusable widget configuration only |
-| Widget | Template slot link, date range, and layout position |
-
-Rules:
-
-- Reusing an unchanged preset saves only `preset_id` plus widget slot fields.
-- Changing a reused preset creates a new preset; unchanged names get the next suffix such as `Preset Name 1`.
-- Preset payloads are normalized by chart type so unused columns are saved as `NULL`.
-- Deleting a template removes widget links but keeps presets.
-- Deleting a preset is blocked when the preset is still used by a template.
-
 ## Design Notes
 
 - The implemented style is a dark NOC-focused interface with neon accent tokens.

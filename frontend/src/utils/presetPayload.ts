@@ -10,6 +10,8 @@ interface PresetFieldInput {
   timeBucket?: string | null;
   heatmapMode?: string | null;
   tableColumns?: ExportColumn[] | string[] | string | null;
+  tablePageSize?: number | null;
+  tableRecordLimit?: number | null;
 }
 
 function normalizeTableColumns(value: PresetFieldInput['tableColumns']) {
@@ -24,6 +26,8 @@ export function normalizePresetFieldsByChartType(input: PresetFieldInput) {
   const timeBucket = input.timeBucket || null;
   const heatmapMode = input.heatmapMode || null;
   const tableColumns = normalizeTableColumns(input.tableColumns);
+  const tablePageSize = input.tablePageSize ?? null;
+  const tableRecordLimit = input.tableRecordLimit ?? null;
 
   switch (input.chartType) {
     case 'line':
@@ -33,6 +37,8 @@ export function normalizePresetFieldsByChartType(input: PresetFieldInput) {
         time_bucket: timeBucket,
         heatmap_mode: null,
         table_columns: null,
+        table_page_size: null,
+        table_record_limit: null,
       };
     case 'bar':
       return {
@@ -41,6 +47,8 @@ export function normalizePresetFieldsByChartType(input: PresetFieldInput) {
         time_bucket: groupBy ? null : timeBucket,
         heatmap_mode: null,
         table_columns: null,
+        table_page_size: null,
+        table_record_limit: null,
       };
     case 'pie':
       return {
@@ -49,6 +57,8 @@ export function normalizePresetFieldsByChartType(input: PresetFieldInput) {
         time_bucket: null,
         heatmap_mode: null,
         table_columns: null,
+        table_page_size: null,
+        table_record_limit: null,
       };
     case 'table':
       return {
@@ -57,6 +67,8 @@ export function normalizePresetFieldsByChartType(input: PresetFieldInput) {
         time_bucket: null,
         heatmap_mode: null,
         table_columns: tableColumns,
+        table_page_size: tablePageSize,
+        table_record_limit: tableRecordLimit,
       };
     case 'heatmap':
       return {
@@ -65,6 +77,8 @@ export function normalizePresetFieldsByChartType(input: PresetFieldInput) {
         time_bucket: null,
         heatmap_mode: heatmapMode,
         table_columns: null,
+        table_page_size: null,
+        table_record_limit: null,
       };
   }
 }

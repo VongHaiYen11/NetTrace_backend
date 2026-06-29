@@ -24,7 +24,7 @@ NetTrace helps NOC operators inspect, analyze, visualize, and export high-volume
 ### Dashboard Analytics
 - Show KPI cards for total alarms, active alarms, closed alarms, critical alarms, and affected devices.
 - Render configurable line, bar, pie, table, and heatmap widgets.
-- Use a 90-day maximum query range to protect ClickHouse performance.
+- Support long date ranges by splitting backend ClickHouse queries into 90-day internal chunks.
 - Support weekday and calendar heatmap views.
 
 ### Templates And Presets
@@ -87,7 +87,7 @@ NetTrace helps NOC operators inspect, analyze, visualize, and export high-volume
 - Validate API inputs with Zod.
 - Use raw parameterized SQL; do not introduce an ORM.
 - Do not join ClickHouse and PostgreSQL directly at the database level.
-- Keep time ranges within the 90-day limit.
+- Split long time ranges into bounded ClickHouse query chunks before merging or streaming results.
 - Use frontend generated API types and avoid invented DTOs.
 - Preserve existing dark NOC-oriented UI style and design tokens.
 

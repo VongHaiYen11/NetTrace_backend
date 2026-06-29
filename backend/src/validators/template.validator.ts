@@ -12,6 +12,8 @@ export const WidgetSchema = z.object({
   time_bucket: z.string().max(50).optional().nullable(),
   heatmap_mode: z.string().max(100).optional().nullable(),
   table_columns: z.string().max(500).optional().nullable(),
+  table_page_size: z.number().int().min(1).max(200).optional().nullable(),
+  table_record_limit: z.number().int().min(1).max(1000).optional().nullable(),
 }).superRefine((widget, ctx) => {
   if (!widget.preset_id && !widget.chart_type) {
     ctx.addIssue({

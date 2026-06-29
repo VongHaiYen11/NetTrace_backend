@@ -63,6 +63,8 @@ interface PresetDraft {
   timeBucket: string;
   heatmapMode: 'weekday' | 'calendar';
   tableColumns: string[];
+  tablePageSize: number;
+  tableRecordLimit: number;
 }
 
 type PresetDeleteDialog =
@@ -75,6 +77,23 @@ type TemplateModalState =
 
 function createTemplateDraftWidgets(): DashboardWidgetConfig[] {
   return [];
+}
+
+const DEFAULT_TABLE_PAGE_SIZE = 15;
+const DEFAULT_TABLE_RECORD_LIMIT = 200;
+const MAX_TABLE_PAGE_SIZE = 200;
+const MAX_TABLE_RECORD_LIMIT = 1000;
+
+function normalizeTablePageSize(value: unknown) {
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) return DEFAULT_TABLE_PAGE_SIZE;
+  return Math.min(MAX_TABLE_PAGE_SIZE, Math.max(1, Math.trunc(numericValue)));
+}
+
+function normalizeTableRecordLimit(value: unknown) {
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) return DEFAULT_TABLE_RECORD_LIMIT;
+  return Math.min(MAX_TABLE_RECORD_LIMIT, Math.max(1, Math.trunc(numericValue)));
 }
 
 function getTemplateWidgets(template: TemplateSummary) {
@@ -517,6 +536,8 @@ export function TemplatesPage() {
     timeBucket: 'day',
     heatmapMode: 'weekday',
     tableColumns: defaultTableColumns,
+    tablePageSize: DEFAULT_TABLE_PAGE_SIZE,
+    tableRecordLimit: DEFAULT_TABLE_RECORD_LIMIT,
   });
 
   // ── Filter / sort templates ─────────────────────────────────────────────────
@@ -658,6 +679,8 @@ export function TemplatesPage() {
         timeBucket: preset.time_bucket || 'day',
         heatmapMode: (preset.heatmap_mode as 'weekday' | 'calendar') || 'weekday',
         tableColumns: decodeTableColumns(preset.table_columns) || defaultTableColumns,
+        tablePageSize: preset.table_page_size ?? DEFAULT_TABLE_PAGE_SIZE,
+        tableRecordLimit: preset.table_record_limit ?? DEFAULT_TABLE_RECORD_LIMIT,
       });
       setPresetHeatmapMode((preset.heatmap_mode as 'weekday' | 'calendar') || 'weekday');
     } else {
@@ -669,6 +692,8 @@ export function TemplatesPage() {
         timeBucket: 'day',
         heatmapMode: 'weekday',
         tableColumns: defaultTableColumns,
+        tablePageSize: DEFAULT_TABLE_PAGE_SIZE,
+        tableRecordLimit: DEFAULT_TABLE_RECORD_LIMIT,
       });
       setPresetHeatmapMode('weekday');
     }
@@ -688,6 +713,8 @@ export function TemplatesPage() {
           timeBucket: presetDraft.timeBucket,
           heatmapMode: presetDraft.heatmapMode,
           tableColumns: presetDraft.tableColumns,
+          tablePageSize: presetDraft.tablePageSize,
+          tableRecordLimit: presetDraft.tableRecordLimit,
         }),
       };
 
@@ -1315,6 +1342,36 @@ export function TemplatesPage() {
                           Table columns
                         </p>
                         <div className="space-y-3">
+                          <div className="grid gap-3 sm:grid-cols-2">
+                            <Field label="Records per page" labelVariant="nested">
+                              <Input
+                                type="number"
+                                min={1}
+                                max={MAX_TABLE_PAGE_SIZE}
+                                value={presetDraft.tablePageSize}
+                                onChange={(event) =>
+                                  setPresetDraft((current) => ({
+                                    ...current,
+                                    tablePageSize: normalizeTablePageSize(event.target.value),
+                                  }))
+                                }
+                              />
+                            </Field>
+                            <Field label="Number of records" labelVariant="nested">
+                              <Input
+                                type="number"
+                                min={1}
+                                max={MAX_TABLE_RECORD_LIMIT}
+                                value={presetDraft.tableRecordLimit}
+                                onChange={(event) =>
+                                  setPresetDraft((current) => ({
+                                    ...current,
+                                    tableRecordLimit: normalizeTableRecordLimit(event.target.value),
+                                  }))
+                                }
+                              />
+                            </Field>
+                          </div>
                           <div className="flex flex-wrap gap-2">
                             <Button
                               type="button"

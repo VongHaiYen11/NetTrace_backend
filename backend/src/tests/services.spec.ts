@@ -222,6 +222,7 @@ describe('Service Layer Tests', () => {
           criticalAlarms: 5,
           affectedDevices: 3,
         },
+        affectedDeviceIds: ['device-1', 'device-2', 'device-3'],
         durationMs: 15,
       });
 

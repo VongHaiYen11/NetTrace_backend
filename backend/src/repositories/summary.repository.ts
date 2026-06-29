@@ -18,8 +18,14 @@ export interface SummaryResult {
   affectedDevices: number;
 }
 
+export interface SummaryQueryResult {
+  summary: SummaryResult;
+  affectedDeviceIds: string[];
+  durationMs: number;
+}
+
 export class SummaryRepository {
-  async getSummary(params: SummaryParams): Promise<{ summary: SummaryResult; durationMs: number }> {
+  async getSummary(params: SummaryParams): Promise<SummaryQueryResult> {
     const { from_time, to_time } = params;
 
     const fromStr = formatDate(from_time);
@@ -49,7 +55,8 @@ export class SummaryRepository {
         countIf(lower(status) = 'active') as active_alarms,
         countIf(lower(status) = 'archived') as closed_alarms,
         countIf(lower(severity) = 'critical') as critical_alarms,
-        uniqExact(device_id) as affected_devices
+        uniqExact(device_id) as affected_devices,
+        groupUniqArray(device_id) as affected_device_ids
       FROM alarm
       ${prewhereClause}
     `;
@@ -60,6 +67,7 @@ export class SummaryRepository {
       closed_alarms: string;
       critical_alarms: string;
       affected_devices: string;
+      affected_device_ids: string[] | string;
     }>(query, queryParams);
 
     const summary: SummaryResult = {
@@ -79,6 +87,20 @@ export class SummaryRepository {
       summary.affectedDevices = parseInt(row.affected_devices, 10);
     }
 
-    return { summary, durationMs };
+    const affectedDeviceIds =
+      rows.length > 0 ? this.parseAffectedDeviceIds(rows[0].affected_device_ids) : [];
+
+    return { summary, affectedDeviceIds, durationMs };
+  }
+
+  private parseAffectedDeviceIds(value: string[] | string) {
+    if (Array.isArray(value)) return value;
+    if (!value) return [];
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed.map(String) : [];
+    } catch {
+      return [];
+    }
   }
 }

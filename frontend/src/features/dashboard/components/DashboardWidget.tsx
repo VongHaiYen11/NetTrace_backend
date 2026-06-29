@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { useEffect, useState } from 'react';
 import { MoreHorizontal, RadioTower, TrendingUp, AlertTriangle } from 'lucide-react';
 import {
   Area,
@@ -144,6 +145,27 @@ function getCurrentIsoDate() {
   return new Date().toISOString().slice(0, 10);
 }
 
+function getWeekRangeForDateValue(value?: string) {
+  const start = new Date(`${value?.slice(0, 10) || getCurrentIsoDate()}T00:00:00.000Z`);
+  const day = start.getUTCDay() || 7;
+  start.setUTCDate(start.getUTCDate() - day + 1);
+  start.setUTCHours(0, 0, 0, 0);
+  const end = new Date(start);
+  end.setUTCDate(start.getUTCDate() + 6);
+  end.setUTCHours(23, 59, 59, 999);
+  return {
+    from_time: start.toISOString(),
+    to_time: end.toISOString(),
+  };
+}
+
+function getWidgetDateFilters(startDate?: string, endDate?: string) {
+  return {
+    from_time: startDate || undefined,
+    to_time: endDate || undefined,
+  };
+}
+
 function addDays(date: Date, days: number) {
   const nextDate = new Date(date);
   nextDate.setDate(nextDate.getDate() + days);
@@ -284,6 +306,23 @@ const tableHeightClassByMode: Record<NonNullable<DashboardWidgetProps['layoutCon
   roomy: 'max-h-[520px]',
 };
 
+const DEFAULT_TABLE_RECORD_LIMIT = 15;
+const DEFAULT_TABLE_TOTAL_RECORDS = 200;
+const MAX_TABLE_RECORD_LIMIT = 200;
+const MAX_TABLE_TOTAL_RECORDS = 1000;
+
+function getTablePageSize(value: unknown) {
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) return DEFAULT_TABLE_RECORD_LIMIT;
+  return Math.min(MAX_TABLE_RECORD_LIMIT, Math.max(1, Math.trunc(numericValue)));
+}
+
+function getTableRecordLimit(value: unknown) {
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) return DEFAULT_TABLE_TOTAL_RECORDS;
+  return Math.min(MAX_TABLE_TOTAL_RECORDS, Math.max(1, Math.trunc(numericValue)));
+}
+
 const tableColumnLabels: Record<ExportColumn, string> = {
   alarm_id: 'Alarm ID',
   time_created: 'Time',
@@ -357,18 +396,26 @@ export function DashboardWidget({ id, config, layoutContext, onSettingsClick }: 
   const visibleTableColumns = config.tableColumns && config.tableColumns.length > 0
     ? config.tableColumns
     : defaultTableColumns;
+  const tablePageSize = getTablePageSize(config.tablePageSize ?? config.tableRecordLimit);
+  const tableRecordLimit = getTableRecordLimit(config.tableRecordLimit);
+  const [tablePageIndex, setTablePageIndex] = useState(0);
+  const tableQueryOffset = tablePageIndex * tablePageSize;
+  const tableQueryLimit = Math.max(1, Math.min(tablePageSize, tableRecordLimit - tableQueryOffset));
 
   const dateFilters =
     isHeatmap && config.heatmapMode === 'calendar'
       ? getCalendarYearRange(config.startDate)
-      : {
-          from_time: config.startDate,
-          to_time: config.endDate,
-        };
+      : isHeatmap && config.heatmapMode === 'weekday'
+        ? getWeekRangeForDateValue(config.startDate)
+      : getWidgetDateFilters(config.startDate, config.endDate);
   const heatmapFilterChunks =
     isHeatmap && config.heatmapMode === 'calendar'
       ? getCalendarYearChunks(config.startDate)
       : [dateFilters];
+
+  useEffect(() => {
+    setTablePageIndex(0);
+  }, [id, dateFilters.from_time, dateFilters.to_time, visibleTableColumns.join(','), tablePageSize, tableRecordLimit]);
   const settingSummary = [
     chartTypeLabels[config.chartType],
     !isSummary && isAnalyticsChart ? metricLabels[config.metric] : null,
@@ -376,7 +423,7 @@ export function DashboardWidget({ id, config, layoutContext, onSettingsClick }: 
     !isSummary && shouldBucketByTime ? `theo ${timeBucketLabels[config.timeBucket]}` : null,
     !isSummary && isHeatmap ? heatmapModeLabels[config.heatmapMode] : null,
     !isSummary && isHeatmap && config.heatmapMode === 'calendar'
-      ? `Year ${dateFilters.from_time.slice(0, 4)}`
+      ? `Year ${(dateFilters.from_time ?? getCurrentIsoDate()).slice(0, 4)}`
       : `${config.startDate} - ${config.endDate}`,
   ].filter(Boolean).join(' · ');
 
@@ -446,14 +493,15 @@ export function DashboardWidget({ id, config, layoutContext, onSettingsClick }: 
   });
 
   const alarmsQuery = useQuery({
-    queryKey: ['alarms', id, dateFilters, visibleTableColumns],
+    queryKey: ['alarms', id, dateFilters, visibleTableColumns, tablePageSize, tableRecordLimit, tablePageIndex],
     queryFn: () =>
       nettraceApi.queryAlarms({
         ...dateFilters,
-        offset: 0,
-        limit: 15,
+        offset: tableQueryOffset,
+        limit: tableQueryLimit,
         sort_by: 'timestamp',
         sort_order: 'desc',
+        include_total: true,
         detail_level: 'compact',
       }),
     enabled: isTable,
@@ -702,7 +750,7 @@ export function DashboardWidget({ id, config, layoutContext, onSettingsClick }: 
           left: 36,
           right: 24,
           bottom: 22,
-          range: [dateFilters.from_time, dateFilters.to_time],
+          range: [dateFilters.from_time ?? getCurrentIsoDate(), dateFilters.to_time ?? getCurrentIsoDate()],
           cellSize: ['auto', 18],
           splitLine: { lineStyle: { color: '#2b2740', width: 1 } },
           itemStyle: { color: '#151421', borderColor: '#0c0b14', borderWidth: 2 },
@@ -799,39 +847,72 @@ export function DashboardWidget({ id, config, layoutContext, onSettingsClick }: 
     }
   } else if (isTable) {
     const rawAlarms = alarmsQuery.data?.data ?? [];
+    const matchingRecords = typeof alarmsQuery.data?.meta?.total === 'number'
+      ? alarmsQuery.data.meta.total
+      : rawAlarms.length;
+    const totalRecords = Math.min(matchingRecords, tableRecordLimit);
+    const totalPages = Math.max(1, Math.ceil(totalRecords / tablePageSize));
+    const currentPage = Math.min(tablePageIndex + 1, totalPages);
+    const canGoPrevious = tablePageIndex > 0;
+    const canGoNext = tablePageIndex + 1 < totalPages;
     if (rawAlarms.length === 0) {
       renderContent = <StateBlock title="No alarms" description="No matching alarms found." />;
     } else {
       renderContent = (
-        <div className={`overflow-auto ${tableHeightClass}`}>
-          <table className="w-full min-w-full border-separate border-spacing-0 text-left text-sm">
-            <thead>
-              <tr>
-                {visibleTableColumns.map((column) => (
-                  <th
-                    key={column}
-                    className="sticky top-0 z-10 border-b border-white/10 bg-panel-light px-3 py-3 font-mono text-xs font-semibold uppercase text-muted"
-                  >
-                    {tableColumnLabels[column]}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {rawAlarms.map((alarm) => (
-                <tr key={alarm.alarm_id} className="hover:bg-white/[0.03]">
+        <div className="flex flex-col gap-3">
+          <div className={`overflow-auto ${tableHeightClass}`}>
+            <table className="w-full min-w-full border-separate border-spacing-0 text-left text-sm">
+              <thead>
+                <tr>
                   {visibleTableColumns.map((column) => (
-                    <td
+                    <th
                       key={column}
-                      className="max-w-[18rem] truncate border-b border-white/10 px-3 py-3 text-medium"
+                      className="sticky top-0 z-10 border-b border-white/10 bg-panel-light px-3 py-3 font-mono text-xs font-semibold uppercase text-muted"
                     >
-                      {renderAlarmTableCell(alarm, column)}
-                    </td>
+                      {tableColumnLabels[column]}
+                    </th>
                   ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {rawAlarms.map((alarm) => (
+                  <tr key={alarm.alarm_id} className="hover:bg-white/[0.03]">
+                    {visibleTableColumns.map((column) => (
+                      <td
+                        key={column}
+                        className="max-w-[18rem] truncate border-b border-white/10 px-3 py-3 text-medium"
+                      >
+                        {renderAlarmTableCell(alarm, column)}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="flex items-center justify-between gap-3 border-t border-white/10 pt-3 font-mono text-xs text-muted">
+            <span>
+              Page {currentPage} / {totalPages} · {totalRecords.toLocaleString('vi-VN')} records
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                className="h-9 rounded border border-border px-3 font-bold text-muted transition hover:border-secondary hover:text-secondary disabled:cursor-not-allowed disabled:opacity-45"
+                disabled={!canGoPrevious}
+                onClick={() => setTablePageIndex((page) => Math.max(0, page - 1))}
+              >
+                Prev
+              </button>
+              <button
+                type="button"
+                className="h-9 rounded border border-border px-3 font-bold text-muted transition hover:border-secondary hover:text-secondary disabled:cursor-not-allowed disabled:opacity-45"
+                disabled={!canGoNext}
+                onClick={() => setTablePageIndex((page) => page + 1)}
+              >
+                Next
+              </button>
+            </div>
+          </div>
         </div>
       );
     }

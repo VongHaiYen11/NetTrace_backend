@@ -5,6 +5,7 @@ import { useForm } from 'react-hook-form';
 import { Button } from '../../../components/ui/Button';
 import { Field, Input, Select } from '../../../components/ui/Field';
 import type { ExportColumn, GroupBy, Metric, TimeBucket } from '../../../services/generated/nettrace-api';
+import { DatePicker, WeekPicker, getWeekRangeForDateValue } from './WeekPicker';
 
 type HeatmapMode = 'weekday' | 'calendar';
 
@@ -44,6 +45,8 @@ export interface WidgetSettingsValues {
   info2: boolean;
   info3: boolean;
   tableColumns?: ExportColumn[];
+  tablePageSize?: number;
+  tableRecordLimit?: number;
   preset: string;
   startDate: string;
   endDate: string;
@@ -83,6 +86,23 @@ const defaultTableColumns: ExportColumn[] = [
   'device_name',
   'description',
 ];
+
+const DEFAULT_TABLE_RECORD_LIMIT = 15;
+const DEFAULT_TABLE_TOTAL_RECORDS = 200;
+const MAX_TABLE_RECORD_LIMIT = 200;
+const MAX_TABLE_TOTAL_RECORDS = 1000;
+
+function normalizeTablePageSize(value: unknown) {
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) return DEFAULT_TABLE_RECORD_LIMIT;
+  return Math.min(MAX_TABLE_RECORD_LIMIT, Math.max(1, Math.trunc(numericValue)));
+}
+
+function normalizeTableRecordLimit(value: unknown) {
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) return DEFAULT_TABLE_TOTAL_RECORDS;
+  return Math.min(MAX_TABLE_TOTAL_RECORDS, Math.max(1, Math.trunc(numericValue)));
+}
 
 interface WidgetSettingsDrawerProps {
   isOpen: boolean;
@@ -140,6 +160,10 @@ function getYearDateRange(yearValue: string) {
   };
 }
 
+function toDateInputValue(value: string) {
+  return value?.slice(0, 10) || '';
+}
+
 export function WidgetSettingsDrawer({
   isOpen,
   onClose,
@@ -168,6 +192,8 @@ export function WidgetSettingsDrawer({
   const info2 = watch('info2');
   const info3 = watch('info3');
   const tableColumns = watch('tableColumns') ?? defaultTableColumns;
+  const tablePageSize = watch('tablePageSize') ?? watch('tableRecordLimit') ?? DEFAULT_TABLE_RECORD_LIMIT;
+  const tableRecordLimit = watch('tableRecordLimit') ?? DEFAULT_TABLE_TOTAL_RECORDS;
   const layoutSpan = watch('layoutSpan') || 1;
 
   // Reset form when active widget changes or drawer opens
@@ -183,10 +209,13 @@ export function WidgetSettingsDrawer({
     const calendarRange = values.chartType === 'heatmap' && values.heatmapMode === 'calendar'
       ? getYearDateRange(getYearFromDate(values.startDate || initialValues.startDate))
       : null;
+    const weekRange = values.chartType === 'heatmap' && values.heatmapMode === 'weekday'
+      ? getWeekRangeForDateValue(values.startDate || initialValues.startDate)
+      : null;
     const normalizedValues = {
       ...values,
-      startDate: calendarRange?.startDate ?? (values.startDate || initialValues.startDate || '2026-06-01'),
-      endDate: calendarRange?.endDate ?? (values.endDate || initialValues.endDate || '2026-06-30'),
+      startDate: calendarRange?.startDate ?? weekRange?.startDate ?? (values.startDate || initialValues.startDate || '2026-06-01'),
+      endDate: calendarRange?.endDate ?? weekRange?.endDate ?? (values.endDate || initialValues.endDate || '2026-06-30'),
       metric: values.metric ?? initialValues.metric,
       timeBucket: values.timeBucket ?? initialValues.timeBucket,
       heatmapMode: values.heatmapMode ?? initialValues.heatmapMode ?? 'weekday',
@@ -196,6 +225,12 @@ export function WidgetSettingsDrawer({
             ? values.tableColumns
             : defaultTableColumns
           : values.tableColumns,
+      tableRecordLimit: values.chartType === 'table'
+        ? normalizeTableRecordLimit(values.tableRecordLimit)
+        : values.tableRecordLimit,
+      tablePageSize: values.chartType === 'table'
+        ? normalizeTablePageSize(values.tablePageSize ?? values.tableRecordLimit)
+        : values.tablePageSize,
       groupBy: values.chartType === 'line' || values.chartType === 'table' || values.chartType === 'heatmap'
         ? 'none'
         : values.chartType === 'pie' && selectedGroup === 'none'
@@ -292,6 +327,11 @@ export function WidgetSettingsDrawer({
     if (type === 'heatmap' && !selectedHeatmapMode) {
       setValue('heatmapMode', 'weekday');
     }
+    if (type === 'heatmap' && (selectedHeatmapMode || 'weekday') === 'weekday') {
+      const range = getWeekRangeForDateValue(startDate || initialValues.startDate);
+      setValue('startDate', range.startDate);
+      setValue('endDate', range.endDate);
+    }
   }
 
   function selectHeatmapMode(mode: HeatmapMode) {
@@ -300,7 +340,19 @@ export function WidgetSettingsDrawer({
       const range = getYearDateRange(getYearFromDate(startDate));
       setValue('startDate', range.startDate);
       setValue('endDate', range.endDate);
+    } else {
+      const range = getWeekRangeForDateValue(startDate || initialValues.startDate);
+      setValue('startDate', range.startDate);
+      setValue('endDate', range.endDate);
     }
+  }
+
+  function selectStartDate(value: string) {
+    setValue('startDate', value);
+  }
+
+  function selectEndDate(value: string) {
+    setValue('endDate', value);
   }
 
   function selectCalendarYear(year: string) {
@@ -533,6 +585,30 @@ export function WidgetSettingsDrawer({
               </span>
               {!isKpiWidget && selectedChartType === 'table' ? (
                 <>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <Field label="Records per page" labelVariant="nested">
+                      <Input
+                        type="number"
+                        min={1}
+                        max={MAX_TABLE_RECORD_LIMIT}
+                        value={tablePageSize}
+                        onChange={(event) =>
+                          setValue('tablePageSize', normalizeTablePageSize(event.target.value))
+                        }
+                      />
+                    </Field>
+                    <Field label="Number of records" labelVariant="nested">
+                      <Input
+                        type="number"
+                        min={1}
+                        max={MAX_TABLE_TOTAL_RECORDS}
+                        value={tableRecordLimit}
+                        onChange={(event) =>
+                          setValue('tableRecordLimit', normalizeTableRecordLimit(event.target.value))
+                        }
+                      />
+                    </Field>
+                  </div>
                   <div className="flex flex-wrap gap-2">
                     <Button size="sm" variant="ghost" onClick={() => setValue('tableColumns', defaultTableColumns)}>
                       Default
@@ -627,6 +703,23 @@ export function WidgetSettingsDrawer({
                     </Field>
                   </div>
                 </>
+              ) : selectedChartType === 'heatmap' && selectedHeatmapMode === 'weekday' ? (
+                <>
+                  <span className="font-mono text-base font-black tracking-normal text-medium">
+                    Week
+                  </span>
+                  <div className="space-y-3">
+                    <Field label="" labelVariant="nested">
+                      <WeekPicker
+                        value={startDate || initialValues.startDate}
+                        onChange={(range) => {
+                          setValue('startDate', range.startDate);
+                          setValue('endDate', range.endDate);
+                        }}
+                      />
+                    </Field>
+                  </div>
+                </>
               ) : (
                 <>
                   <span className="font-mono text-base font-black tracking-normal text-medium">
@@ -634,17 +727,15 @@ export function WidgetSettingsDrawer({
                   </span>
                   <div className="space-y-3">
                     <Field label="Start date" labelVariant="nested">
-                      <Input
-                        type="date"
-                        value={startDate || initialValues.startDate}
-                        onChange={(event) => setValue('startDate', event.target.value)}
+                      <DatePicker
+                        value={toDateInputValue(startDate || initialValues.startDate)}
+                        onChange={selectStartDate}
                       />
                     </Field>
                     <Field label="End date" labelVariant="nested">
-                      <Input
-                        type="date"
-                        value={endDate || initialValues.endDate}
-                        onChange={(event) => setValue('endDate', event.target.value)}
+                      <DatePicker
+                        value={toDateInputValue(endDate || initialValues.endDate)}
+                        onChange={selectEndDate}
                       />
                     </Field>
                   </div>

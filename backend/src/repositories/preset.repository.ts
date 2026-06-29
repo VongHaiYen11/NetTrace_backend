@@ -10,6 +10,8 @@ export interface Preset {
   time_bucket: string | null;
   heatmap_mode: string | null;
   table_columns: string | null;
+  table_page_size?: number | null;
+  table_record_limit?: number | null;
   template_id?: number | null;
   template_name?: string | null;
 }
@@ -22,9 +24,9 @@ export class PresetRepository {
   async createPreset(preset: Omit<Preset, 'preset_id'>, client?: pg.PoolClient): Promise<Preset> {
     const executor = this.getQueryExecutor(client);
     const query = `
-      INSERT INTO preset (preset_name, chart_type, metric, group_by, time_bucket, heatmap_mode, table_columns)
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
-      RETURNING preset_id, preset_name, chart_type, metric, group_by, time_bucket, heatmap_mode, table_columns
+      INSERT INTO preset (preset_name, chart_type, metric, group_by, time_bucket, heatmap_mode, table_columns, table_page_size, table_record_limit)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      RETURNING preset_id, preset_name, chart_type, metric, group_by, time_bucket, heatmap_mode, table_columns, table_page_size, table_record_limit
     `;
     const res = await executor.query(query, [
       preset.preset_name,
@@ -34,6 +36,8 @@ export class PresetRepository {
       preset.time_bucket,
       preset.heatmap_mode,
       preset.table_columns,
+      preset.table_page_size,
+      preset.table_record_limit,
     ]);
     return res.rows[0];
   }
@@ -42,9 +46,9 @@ export class PresetRepository {
     const executor = this.getQueryExecutor(client);
     const query = `
       UPDATE preset
-      SET preset_name = $2, chart_type = $3, metric = $4, group_by = $5, time_bucket = $6, heatmap_mode = $7, table_columns = $8
+      SET preset_name = $2, chart_type = $3, metric = $4, group_by = $5, time_bucket = $6, heatmap_mode = $7, table_columns = $8, table_page_size = $9, table_record_limit = $10
       WHERE preset_id = $1
-      RETURNING preset_id, preset_name, chart_type, metric, group_by, time_bucket, heatmap_mode, table_columns
+      RETURNING preset_id, preset_name, chart_type, metric, group_by, time_bucket, heatmap_mode, table_columns, table_page_size, table_record_limit
     `;
     const res = await executor.query(query, [
       id,
@@ -55,6 +59,8 @@ export class PresetRepository {
       preset.time_bucket,
       preset.heatmap_mode,
       preset.table_columns,
+      preset.table_page_size,
+      preset.table_record_limit,
     ]);
     return res.rows[0] || null;
   }
@@ -62,7 +68,7 @@ export class PresetRepository {
   async getPresetById(id: number, client?: pg.PoolClient): Promise<Preset | null> {
     const executor = this.getQueryExecutor(client);
     const query = `
-      SELECT preset_id, preset_name, chart_type, metric, group_by, time_bucket, heatmap_mode, table_columns
+      SELECT preset_id, preset_name, chart_type, metric, group_by, time_bucket, heatmap_mode, table_columns, table_page_size, table_record_limit
       FROM preset
       WHERE preset_id = $1
     `;
@@ -74,7 +80,7 @@ export class PresetRepository {
     const query = `
       SELECT
         p.preset_id, p.preset_name, p.chart_type,
-        p.metric, p.group_by, p.time_bucket, p.heatmap_mode, p.table_columns,
+        p.metric, p.group_by, p.time_bucket, p.heatmap_mode, p.table_columns, p.table_page_size, p.table_record_limit,
         (
           SELECT t.template_id
           FROM widget w
@@ -123,6 +129,8 @@ export class PresetRepository {
         p.time_bucket,
         p.heatmap_mode,
         p.table_columns,
+        p.table_page_size,
+        p.table_record_limit,
         t.template_id,
         t.name AS template_name
       FROM preset p

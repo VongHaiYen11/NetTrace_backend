@@ -57,6 +57,16 @@ const router = Router();
  *               table_columns:
  *                 type: string
  *                 nullable: true
+ *               table_page_size:
+ *                 type: integer
+ *                 nullable: true
+ *                 maximum: 200
+ *                 description: Records shown per page for table presets.
+ *               table_record_limit:
+ *                 type: integer
+ *                 nullable: true
+ *                 maximum: 1000
+ *                 description: Maximum records taken from the selected range for table presets.
  *     responses:
  *       201: { description: Preset created successfully }
  *   put:
@@ -95,6 +105,16 @@ const router = Router();
  *               table_columns:
  *                 type: string
  *                 nullable: true
+ *               table_page_size:
+ *                 type: integer
+ *                 nullable: true
+ *                 maximum: 200
+ *                 description: Records shown per page for table presets.
+ *               table_record_limit:
+ *                 type: integer
+ *                 nullable: true
+ *                 maximum: 1000
+ *                 description: Maximum records taken from the selected range for table presets.
  *     responses:
  *       200: { description: Preset updated successfully }
  *       404: { description: Preset not found }

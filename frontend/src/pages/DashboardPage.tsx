@@ -110,6 +110,20 @@ function normalizePresetTableColumns(value: string | null | undefined) {
   return decodeTableColumns(value);
 }
 
+function getCurrentWeekRange() {
+  const start = new Date();
+  const day = start.getUTCDay() || 7;
+  start.setUTCDate(start.getUTCDate() - day + 1);
+  start.setUTCHours(0, 0, 0, 0);
+  const end = new Date(start);
+  end.setUTCDate(start.getUTCDate() + 6);
+  end.setUTCHours(23, 59, 59, 999);
+  return {
+    startDate: start.toISOString(),
+    endDate: end.toISOString(),
+  };
+}
+
   const widgetPresets = useQuery({
     queryKey: ['dashboard-widget-presets'],
     queryFn: async () => {
@@ -117,6 +131,7 @@ function normalizePresetTableColumns(value: string | null | undefined) {
       const presets = await nettraceApi.listPresets({ limit: 1000, offset: 0 });
       const options: WidgetPresetOption[] = presets.data.map((preset) => {
         const chartType = normalizePresetChartType(preset.chart_type);
+        const weekRange = getCurrentWeekRange();
         return {
           id: `preset:${preset.preset_id}`,
           label: `${preset.preset_name ?? `Preset ${preset.preset_id}`} · ${preset.template_name ?? 'Unassigned'}`,
@@ -129,12 +144,14 @@ function normalizePresetTableColumns(value: string | null | undefined) {
             timeBucket: normalizePresetTimeBucket(preset.time_bucket) as any,
             heatmapMode: normalizePresetHeatmapMode(preset.heatmap_mode) as any,
             tableColumns: normalizePresetTableColumns(preset.table_columns),
+            tablePageSize: preset.table_page_size ?? 15,
+            tableRecordLimit: preset.table_record_limit ?? 200,
             info1: true,
             info2: true,
             info3: true,
             preset: `preset:${preset.preset_id}`,
-            startDate: '',
-            endDate: '',
+            startDate: weekRange.startDate,
+            endDate: weekRange.endDate,
           },
         };
       });

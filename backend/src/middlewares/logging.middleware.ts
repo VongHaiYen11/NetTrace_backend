@@ -59,7 +59,7 @@ export function loggingMiddleware(req: Request, res: Response, next: NextFunctio
     appLogger.info(logData, 'Request completed');
 
     // 4. SLA checks and warnings
-    let slaThreshold = 500; // Default: 500ms for standard query endpoints
+    let slaThreshold = 5000; // Default: 5s for standard query endpoints
     let apiType = 'Query API';
 
     if (

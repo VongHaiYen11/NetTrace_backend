@@ -58,17 +58,6 @@ export function validateTimeRange(fromStr?: string, toStr?: string) {
     };
   }
 
-  const diffMs = to.getTime() - from.getTime();
-  const diffDays = diffMs / (1000 * 60 * 60 * 24);
-
-  if (diffDays > 90) {
-    return {
-      isValid: false,
-      code: 'TIME_RANGE_EXCEEDED',
-      message: 'Time range cannot exceed 90 days',
-    };
-  }
-
   return {
     isValid: true,
     from,

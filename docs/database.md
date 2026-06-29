@@ -120,7 +120,7 @@ CREATE INDEX idx_station_latitude ON station(latitude);
 These tables support saving customized configurations of KPI cards and widgets.
 
 ```sql
-CREATE TABLE Template (
+CREATE TABLE template (
     template_id SERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     selected_cards TEXT, 
@@ -129,7 +129,7 @@ CREATE TABLE Template (
     number_of_widgets INT
 );
 
-CREATE TABLE Preset (
+CREATE TABLE preset (
     preset_id SERIAL PRIMARY KEY,
     preset_name VARCHAR(255),
     chart_type VARCHAR(100),
@@ -137,10 +137,12 @@ CREATE TABLE Preset (
     group_by VARCHAR(50),
     time_bucket VARCHAR(50),
     heatmap_mode VARCHAR(100),
-    table_columns VARCHAR(500)
+    table_columns VARCHAR(500),
+    table_page_size INT,
+    table_record_limit INT
 );
 
-CREATE TABLE Widget (
+CREATE TABLE widget (
     widget_id SERIAL PRIMARY KEY,
     template_id INT NOT NULL,
     preset_id INT NOT NULL,
@@ -150,18 +152,18 @@ CREATE TABLE Widget (
     time_created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     time_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_widget_template FOREIGN KEY (template_id) 
-        REFERENCES Template(template_id) ON DELETE CASCADE,
+        REFERENCES template(template_id) ON DELETE CASCADE,
     CONSTRAINT fk_widget_preset FOREIGN KEY (preset_id)
-        REFERENCES Preset(preset_id) ON DELETE CASCADE
+        REFERENCES preset(preset_id) ON DELETE CASCADE
 );
 
 -- Performance Indexes
-CREATE INDEX idx_widget_template ON Widget(template_id);
-CREATE INDEX idx_widget_preset ON Widget(preset_id);
-CREATE INDEX idx_widget_position ON Widget(position);
-CREATE INDEX idx_preset_metric ON Preset(metric);
-CREATE INDEX idx_preset_group_by ON Preset(group_by);
-CREATE INDEX idx_preset_time_bucket ON Preset(time_bucket);
+CREATE INDEX idx_widget_template ON widget(template_id);
+CREATE INDEX idx_widget_preset ON widget(preset_id);
+CREATE INDEX idx_widget_position ON widget(position);
+CREATE INDEX idx_preset_metric ON preset(metric);
+CREATE INDEX idx_preset_group_by ON preset(group_by);
+CREATE INDEX idx_preset_time_bucket ON preset(time_bucket);
 ```
 
 ### Purpose Of Dashboard Declarations
@@ -171,7 +173,7 @@ CREATE INDEX idx_preset_time_bucket ON Preset(time_bucket);
 | `template.selected_cards TEXT` | Stores the frontend layout/KPI snapshot as serialized JSON text. |
 | `template.number_of_widgets` | Keeps a fast count for template filtering and listing. |
 | `preset.chart_type` | Determines which chart-specific preset columns are meaningful. |
-| `preset.metric`, `group_by`, `time_bucket`, `heatmap_mode`, `table_columns` | Stores reusable widget configuration. Unused fields are normalized to `NULL` by chart type. |
+| `preset.metric`, `group_by`, `time_bucket`, `heatmap_mode`, `table_columns`, `table_page_size`, `table_record_limit` | Stores reusable widget configuration. Unused fields are normalized to `NULL` by chart type. |
 | `widget.position` | Stores the slot position because the same preset can be reused in different slots. |
 | `widget.start_date`, `widget.end_date` | Stores date range per template widget because reused presets should not force a shared date range. |
 | `fk_widget_template ... ON DELETE CASCADE` | Automatically removes widget links when a template is deleted. |
@@ -188,7 +190,7 @@ CREATE INDEX idx_preset_time_bucket ON Preset(time_bucket);
 ```text
   [Vendor] 1 --------- * [Device] * --------- 1 [Station]
 
-  [Template] 1 --------- * [Widget] * --------- 1 [Preset]
+  [template] 1 --------- * [widget] * --------- 1 [preset]
        |                      |
        |                      └─ owns slot position and date range
        └─ cascade delete removes widget links only
@@ -200,8 +202,8 @@ CREATE INDEX idx_preset_time_bucket ON Preset(time_bucket);
 Under no circumstances may a SQL query contain a link or join between PostgreSQL and ClickHouse (e.g. via ClickHouse PostgreSQL engine or foreign data wrappers). All joining of databases must be handled in the Node.js application layer.
 
 ### 2. Cascading Delete Integrity
-* Removing a `Template` will automatically cascade-delete all of its `Widget` entities.
-* Deleting a `Preset` is blocked by the application while any `Widget` references it.
+* Removing a `template` row will automatically cascade-delete all of its `widget` rows.
+* Deleting a `preset` row is blocked by the application while any `widget` references it.
 * Presets are reusable; deleting a template removes only widget links, not preset rows.
 * Preset columns store widget configuration (`metric`, `group_by`, `time_bucket`, `heatmap_mode`, `table_columns`) rather than direct metadata foreign keys.
 * Preset columns are normalized by chart type; fields irrelevant to the chart type are stored as `NULL`.

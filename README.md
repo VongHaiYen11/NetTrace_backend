@@ -84,16 +84,6 @@ The frontend dev server binds to `127.0.0.1` by default. Set `VITE_API_BASE_URL`
 VITE_API_BASE_URL=http://localhost:3000 npm run dev
 ```
 
-## Current Dashboard Data Model
-
-| Table | Responsibility |
-| --- | --- |
-| `template` | Dashboard name, KPI/layout snapshot, timestamps, widget count |
-| `preset` | Reusable widget configuration only: chart type and chart-specific fields |
-| `widget` | Template slot link, `position`, `start_date`, `end_date` |
-
-Deleting a template deletes its widget links through PostgreSQL cascade, but presets remain reusable. Deleting a preset is blocked when it is still linked by any widget.
-
 ## Documentation
 
 | Document | Purpose |

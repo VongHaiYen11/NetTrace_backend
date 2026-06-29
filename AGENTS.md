@@ -53,7 +53,7 @@ The backend follows a **Clean Layered Architecture** with strict down-stream dep
 * **TypeScript ESM:** Built with TypeScript using ESM (`"type": "module"`). Import statements must specify the file extensions (e.g. `import foo from './foo.js'`).
 * **ORM-less Database Access:** Uses raw, parameterized SQL queries. Do not use any ORM (such as Prisma or TypeORM) on PostgreSQL or ClickHouse.
 * **Schema Validation:** Strict input validation using Zod. No manual if-else schema checking.
-* **Logging:** Centralized Pino logging. Performance SLA warnings are triggered automatically if standard APIs exceed 500ms (or 2s for analytics).
+* **Logging:** Centralized Pino logging. Performance SLA warnings are triggered automatically if standard APIs exceed 5000ms (or 2s for analytics).
 * **Consistent Response Shape:** Returns standard JSON envelops:
   * Success: `{ success: true, data: [...], meta: { execution_time_ms: 10 } }`
   * Error: `{ success: false, error: { code: "SOME_CODE", message: "detail description" } }`

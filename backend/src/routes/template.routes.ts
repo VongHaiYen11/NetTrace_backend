@@ -78,6 +78,18 @@ const router = Router();
  *           type: string
  *           nullable: true
  *           example: "alarm_id,severity,status"
+ *         table_page_size:
+ *           type: integer
+ *           nullable: true
+ *           maximum: 200
+ *           description: Records shown per page for table widgets.
+ *           example: 15
+ *         table_record_limit:
+ *           type: integer
+ *           nullable: true
+ *           maximum: 1000
+ *           description: Maximum records taken from the selected range for table widgets.
+ *           example: 200
  *     PresetResponse:
  *       type: object
  *       properties:
@@ -105,6 +117,12 @@ const router = Router();
  *           nullable: true
  *         table_columns:
  *           type: string
+ *           nullable: true
+ *         table_page_size:
+ *           type: integer
+ *           nullable: true
+ *         table_record_limit:
+ *           type: integer
  *           nullable: true
  *     TemplateWidget:
  *       type: object

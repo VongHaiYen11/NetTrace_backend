@@ -1,10 +1,11 @@
 import {
   QueryAlarmsRepository,
   QueryAlarmsParams,
+  AlarmRecord,
 } from '../repositories/query-alarms.repository.js';
 import { DeviceRepository, DeviceMetadata } from '../repositories/device.repository.js';
 import { ErrorRepository, ErrorMetadata } from '../repositories/error.repository.js';
-import { ServiceMetrics } from './shared.js';
+import { ServiceMetrics, splitDateRangeIntoChunks } from './shared.js';
 import { config } from '../configs/database.config.js';
 import { TtlMapCache } from './metadata-cache.js';
 
@@ -145,22 +146,45 @@ export class QueryAlarmsService {
           : undefined,
     };
 
-    const {
-      alarms,
-      total,
-      durationMs: chDuration,
-    } = await this.queryAlarmsRepo.queryAlarms(clickhouseParams);
-    metrics.clickhouse_query_time_ms += chDuration;
-    metrics.records_returned += alarms.length;
-    metrics.clickhouse_rows_returned = (metrics.clickhouse_rows_returned ?? 0) + alarms.length;
+    const chunks = splitDateRangeIntoChunks(params.from_time, params.to_time);
+    metrics.time_range_chunks = chunks.length;
+    const requestedOffset = params.offset ?? 0;
+    const requestedLimit = params.limit ?? 100;
+    const chunkLimit = requestedOffset + requestedLimit;
+    const chunkResults = await Promise.all(
+      chunks.map((chunk) =>
+        this.queryAlarmsRepo.queryAlarms({
+          ...clickhouseParams,
+          from_time: chunk.from_time,
+          to_time: chunk.to_time,
+          offset: 0,
+          limit: chunkLimit,
+        }),
+      ),
+    );
 
-    if (alarms.length === 0) {
+    let total: number | undefined;
+    const alarms = chunkResults.flatMap((result) => {
+      metrics.clickhouse_query_time_ms += result.durationMs;
+      metrics.clickhouse_rows_returned =
+        (metrics.clickhouse_rows_returned ?? 0) + result.alarms.length;
+      if (result.total !== undefined) {
+        total = (total ?? 0) + result.total;
+      }
+      return result.alarms;
+    });
+
+    alarms.sort((a, b) => this.compareAlarms(a, b, params.sort_by, params.sort_order));
+    const pagedAlarms = alarms.slice(requestedOffset, requestedOffset + requestedLimit);
+    metrics.records_returned += pagedAlarms.length;
+
+    if (pagedAlarms.length === 0) {
       return { alarms: [], total };
     }
 
     // 3. Extract unique IDs from alarms result set
-    const resultDeviceIds = [...new Set(alarms.map((a) => a.device_id))];
-    const resultErrorCodes = [...new Set(alarms.map((a) => a.error_code))];
+    const resultDeviceIds = [...new Set(pagedAlarms.map((a) => a.device_id))];
+    const resultErrorCodes = [...new Set(pagedAlarms.map((a) => a.error_code))];
     const missingDeviceIds = resultDeviceIds.filter((id) => !deviceMetadataCache.get(id));
     const missingErrorCodes = resultErrorCodes.filter((code) => !errorMetadataCache.get(code));
 
@@ -194,7 +218,7 @@ export class QueryAlarmsService {
       return acc;
     }, {});
 
-    const enrichedAlarms = alarms.map((alarm) => ({
+    const enrichedAlarms = pagedAlarms.map((alarm) => ({
       alarm_id: alarm.alarm_id,
       error_code: alarm.error_code,
       error_details: errorMap[alarm.error_code.toLowerCase()] || null,
@@ -209,5 +233,25 @@ export class QueryAlarmsService {
     }));
 
     return { alarms: enrichedAlarms, total };
+  }
+
+  private compareAlarms(
+    a: AlarmRecord,
+    b: AlarmRecord,
+    sortBy: QueryAlarmsParams['sort_by'],
+    sortOrder: QueryAlarmsParams['sort_order'],
+  ) {
+    const direction = sortOrder === 'asc' ? 1 : -1;
+    const getValue = (record: typeof a) => {
+      if (sortBy === 'severity') return record.severity;
+      if (sortBy === 'status') return record.status;
+      return record.time_created;
+    };
+
+    const left = getValue(a);
+    const right = getValue(b);
+    const primary = String(left).localeCompare(String(right));
+    if (primary !== 0) return primary * direction;
+    return String(a.alarm_id).localeCompare(String(b.alarm_id)) * direction;
   }
 }

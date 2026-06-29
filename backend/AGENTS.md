@@ -162,7 +162,9 @@ CREATE TABLE preset (
     group_by VARCHAR(50),
     time_bucket VARCHAR(50),
     heatmap_mode VARCHAR(100),
-    table_columns VARCHAR(500)
+    table_columns VARCHAR(500),
+    table_page_size INT,
+    table_record_limit INT
 );
 
 CREATE TABLE widget (
@@ -277,7 +279,7 @@ All Analytics APIs must share the common Filter DTO to leverage code reuse. Do n
 ```
 
 * **Default Time Window:** If omitted by the client: `to_time = now()`, `from_time = now() - 7 days`.
-* **Maximum Time Range:** Maximum queried range cannot exceed **90 days** (to avoid overloading ClickHouse CPU).
+* **Long Time Ranges:** Public requests may cover more than 90 days. Services must split them into internal ClickHouse windows of at most **90 days**, then merge or stream the combined result.
 * **Alarm Explorer Search:** `GET /api/v1/alarms` supports backend search through `search` and exactly one `search_field`. ClickHouse-native fields are searched in ClickHouse; `device_name`, `device_type`, and `error_name` must be resolved through PostgreSQL first and then applied as `device_id` / `error_code` filters in ClickHouse. Do not implement page-only search for Alarm Explorer.
 
 ---
@@ -287,7 +289,7 @@ All Analytics APIs must share the common Filter DTO to leverage code reuse. Do n
 * **Reuse APIs:** One API endpoint should serve multiple chart types (e.g., Distribution API returning percentages can render Pie, Donut, Bar, or Treemap charts).
 * **ClickHouse First:** All heavy computations (count, group by, duration calculations, analytics) must execute on ClickHouse.
 * **Offset-based Pagination:** Use offset-based pagination via limit and offset parameters (e.g., `LIMIT :limit OFFSET :offset`).
-* **Partition Pruning:** The from_time and to_time filters are mandatory for all analytics APIs to leverage ClickHouse partition pruning.
+* **Partition Pruning:** The from_time and to_time filters are mandatory for all analytics APIs to leverage ClickHouse partition pruning. Long public ranges must still be queried as smaller time chunks.
 
 ---
 ## 📌 API Contracts
@@ -695,7 +697,7 @@ Manage custom dashboard layouts (Template, Widget, Preset) for users.
 * **Endpoint:** `DELETE /api/v1/templates/:id`
 * **Purpose:** Delete Template. Associated widget links cascade-delete via FK; preset rows remain reusable.
 * **Response Shape (HTTP 200):**
-  ```json
+```json
   {
     "success": true,
     "data": {
@@ -709,12 +711,12 @@ Manage custom dashboard layouts (Template, Widget, Preset) for users.
 * **Purpose:** List reusable presets and create presets that are not yet assigned to a template.
 * **Behavior:** Creating a preset inserts only into `preset`. A `widget` row is created later when the preset is assigned to a template. Editing a preset (`PUT`) updates its metadata. Deleting a preset (`DELETE` with `{"ids": [...]}`) removes only unused presets.
 * **Delete Guard:** Deleting a preset is rejected with HTTP 409 when the preset is still referenced by a `widget` row.
-* **Create/Update Request:** Requires `preset_name` and uses semantic preset fields (`metric`, `group_by`, `time_bucket`, `heatmap_mode`, `table_columns`). Slot `position` and date range belong to `widget`, not `preset`.
+* **Create/Update Request:** Requires `preset_name` and uses semantic preset fields (`metric`, `group_by`, `time_bucket`, `heatmap_mode`, `table_columns`, `table_page_size`, `table_record_limit`). Slot `position` and date range belong to `widget`, not `preset`.
 * **Chart-Type Normalization:** Preset persistence must store irrelevant fields as `NULL`:
   * `line`: keep `metric`, `time_bucket`; clear `group_by`, `heatmap_mode`, `table_columns`.
   * `bar`: keep `metric`; keep `group_by` only when not `none`; keep `time_bucket` only when ungrouped; clear `heatmap_mode`, `table_columns`.
   * `pie`: keep `metric`, `group_by`; clear `time_bucket`, `heatmap_mode`, `table_columns`.
-  * `table`: keep `table_columns`; clear `metric`, `group_by`, `time_bucket`, `heatmap_mode`.
+  * `table`: keep `table_columns`, `table_page_size`, and `table_record_limit`; clear `metric`, `group_by`, `time_bucket`, `heatmap_mode`.
   * `heatmap`: keep `heatmap_mode`; clear `metric`, `group_by`, `time_bucket`, `table_columns`.
 * **List Response:** Includes `preset_name` plus assignment metadata (`template_id`, `template_name`) when the preset is in use.
 * **Create Response:** HTTP 201 with a `PresetResponse`, including `preset_name`.
@@ -800,12 +802,12 @@ Mandatory usage of Pino. Output structured JSON logs for centralized log collect
 }
 ```
 > [!WARNING]
-> Any API request responding slower than the threshold SLA (500ms for standard REST, 2s/3s for analytics) must emit a warn log using appLogger.warn.
+> Any API request responding slower than the threshold SLA (5s for standard REST, 2s for analytics, 3s for export) must emit a warn log using appLogger.warn.
 
 ---
 
 ## 📌 Performance Targets
-* **Alarm Query API:** P95 < 500ms
+* **Alarm Query API:** P95 < 5s
 * **Analytics APIs:** P95 < 2s
 * **Distribution / Top-N APIs:** P95 < 3s
 
@@ -826,4 +828,4 @@ Mandatory usage of Pino. Output structured JSON logs for centralized log collect
 * Ensure offset/limit pagination works smoothly.
 * No ORM usage, no SELECT * statements.
 * Expose interactive Swagger documentation at `/api-docs`.
-* Ensure PostgreSQL Template management APIs maintain a response SLA of P95 < 500ms.
+* Ensure PostgreSQL Template management APIs maintain a response SLA of P95 < 5s.

@@ -41,10 +41,11 @@ describe('Validation Layer Tests', () => {
       expect(result.message).toContain('earlier than');
     });
 
-    it('should reject when time range exceeds 90 days', () => {
+    it('should allow ranges longer than 90 days for service-side chunking', () => {
       const result = validateTimeRange('2026-01-01T00:00:00Z', '2026-05-01T00:00:00Z');
-      expect(result.isValid).toBe(false);
-      expect(result.code).toBe('TIME_RANGE_EXCEEDED');
+      expect(result.isValid).toBe(true);
+      expect(result.from!.toISOString()).toBe('2026-01-01T00:00:00.000Z');
+      expect(result.to!.toISOString()).toBe('2026-05-01T00:00:00.000Z');
     });
   });
 

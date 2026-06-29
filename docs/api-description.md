@@ -133,7 +133,7 @@ The heatmap response is already aggregated and does not return raw alarm rows.
 | `LowCardinality(String)` | Compresses repeated values such as `status` and `severity` and speeds grouping/filtering |
 | `PREWHERE` | Applies selective filters before loading large columns such as `raw_log` and `description` |
 | Explicit column projection | Avoids `SELECT *` and reduces I/O, memory, and network transfer |
-| Time range cap | Limits scans to 90 days to protect ClickHouse and API latency |
+| Time range chunking | Splits long public ranges into 90-day ClickHouse windows to protect ClickHouse and API latency |
 | Sort whitelist | Prevents unsafe dynamic SQL and keeps query plans predictable |
 | Optional compact detail level | Excludes large text columns when the UI does not need full details |
 
@@ -151,7 +151,7 @@ The heatmap response is already aggregated and does not return raw alarm rows.
 
 ## Guardrails
 
-- Time range cannot exceed 90 days.
+- Public time ranges may exceed 90 days. The service layer splits them into internal ClickHouse windows of at most 90 days, then merges aggregate/table results or streams export chunks.
 - Date-only inputs expand to full-day UTC ranges.
 - Pagination `limit` must be 1-1000.
 - Analytics group-by is capped at 3 dimensions.
@@ -161,7 +161,9 @@ The heatmap response is already aggregated and does not return raw alarm rows.
 
 ## Endpoint Details
 
-### `GET /api/v1/alarms`
+### Alarm Data
+
+#### `GET /api/v1/alarms`
 
 Returns paginated alarm records.
 
@@ -182,7 +184,7 @@ Example:
 curl -X GET "http://localhost:3000/api/v1/alarms?limit=20&offset=0&severity=critical"
 ```
 
-### `GET /api/v1/analytics/summary`
+#### `GET /api/v1/analytics/summary`
 
 Returns KPI aggregates:
 
@@ -198,7 +200,7 @@ Example:
 curl -X GET "http://localhost:3000/api/v1/analytics/summary?severity=critical"
 ```
 
-### `POST /api/v1/analytics/query`
+#### `POST /api/v1/analytics/query`
 
 Generic aggregation endpoint for chart widgets.
 
@@ -218,7 +220,7 @@ curl -X POST http://localhost:3000/api/v1/analytics/query \
   }'
 ```
 
-### `POST /api/v1/analytics/heatmap`
+#### `POST /api/v1/analytics/heatmap`
 
 Returns alarm density for weekday/hour or calendar display.
 
@@ -235,7 +237,7 @@ curl -X POST http://localhost:3000/api/v1/analytics/heatmap \
   }'
 ```
 
-### `GET /api/v1/metadata/options`
+#### `GET /api/v1/metadata/options`
 
 Returns searchable PostgreSQL metadata option lists:
 
@@ -250,7 +252,7 @@ Example:
 curl -X GET "http://localhost:3000/api/v1/metadata/options?search=core&limit=10"
 ```
 
-### `POST /api/v1/export`
+#### `POST /api/v1/export`
 
 Exports filtered alarm data.
 
@@ -345,6 +347,8 @@ curl -X POST http://localhost:3000/api/v1/presets \
 ```
 
 For this bar preset, `heatmap_mode` and `table_columns` are saved as `NULL`.
+Table presets may also include `table_page_size` (records per page, max 200) and
+`table_record_limit` (maximum records taken from the selected range, max 1000).
 
 #### `PUT /api/v1/presets/:id`
 
@@ -381,7 +385,7 @@ If any selected preset is used by a widget, the API returns HTTP 409 and does no
 | `line` | `metric`, `time_bucket` |
 | `bar` | `metric`, `group_by` when grouped, `time_bucket` when ungrouped |
 | `pie` | `metric`, `group_by` |
-| `table` | `table_columns` |
+| `table` | `table_columns`, `table_page_size`, `table_record_limit` |
 | `heatmap` | `heatmap_mode` |
 
 All other preset fields are stored as `NULL`.

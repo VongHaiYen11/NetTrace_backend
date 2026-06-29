@@ -1,6 +1,6 @@
 import { SummaryRepository, SummaryParams } from '../repositories/summary.repository.js';
 import { DeviceRepository } from '../repositories/device.repository.js';
-import { ServiceMetrics } from './shared.js';
+import { ServiceMetrics, splitDateRangeIntoChunks } from './shared.js';
 
 export class SummaryService {
   constructor(
@@ -65,16 +65,41 @@ export class SummaryService {
       }
     }
 
-    const { summary, durationMs } = await this.summaryRepo.getSummary({
-      from_time: params.from_time,
-      to_time: params.to_time,
-      severity: params.severity,
-      status: params.status,
-      device_id: finalDeviceIds,
-      error_code: params.error_code,
-    });
+    const chunks = splitDateRangeIntoChunks(params.from_time, params.to_time);
+    metrics.time_range_chunks = chunks.length;
+    const results = await Promise.all(
+      chunks.map((chunk) =>
+        this.summaryRepo.getSummary({
+          from_time: chunk.from_time,
+          to_time: chunk.to_time,
+          severity: params.severity,
+          status: params.status,
+          device_id: finalDeviceIds,
+          error_code: params.error_code,
+        }),
+      ),
+    );
 
-    metrics.clickhouse_query_time_ms += durationMs;
+    const affectedDeviceIds = new Set<string>();
+    const summary = results.reduce(
+      (acc, result) => {
+        metrics.clickhouse_query_time_ms += result.durationMs;
+        acc.totalAlarms += result.summary.totalAlarms;
+        acc.activeAlarms += result.summary.activeAlarms;
+        acc.closedAlarms += result.summary.closedAlarms;
+        acc.criticalAlarms += result.summary.criticalAlarms;
+        result.affectedDeviceIds.forEach((deviceId) => affectedDeviceIds.add(deviceId));
+        return acc;
+      },
+      {
+        totalAlarms: 0,
+        activeAlarms: 0,
+        closedAlarms: 0,
+        criticalAlarms: 0,
+        affectedDevices: 0,
+      },
+    );
+    summary.affectedDevices = affectedDeviceIds.size;
     metrics.records_returned += 1;
 
     return summary;

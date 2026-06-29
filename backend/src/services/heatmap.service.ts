@@ -1,6 +1,6 @@
 import { HeatmapRepository } from '../repositories/heatmap.repository.js';
 import { DeviceRepository } from '../repositories/device.repository.js';
-import { ServiceMetrics } from './shared.js';
+import { ServiceMetrics, splitDateRangeIntoChunks } from './shared.js';
 
 export class HeatmapService {
   constructor(
@@ -87,18 +87,25 @@ export class HeatmapService {
       }
     }
 
-    const { rows, durationMs } = await this.heatmapRepo.getHeatmap({
-      from_time,
-      to_time,
-      mode,
-      severity,
-      status,
-      device_id: finalDeviceIds,
-      error_code,
+    const chunks = splitDateRangeIntoChunks(from_time, to_time);
+    metrics.time_range_chunks = chunks.length;
+    const results = await Promise.all(
+      chunks.map((chunk) =>
+        this.heatmapRepo.getHeatmap({
+          from_time: chunk.from_time,
+          to_time: chunk.to_time,
+          mode,
+          severity,
+          status,
+          device_id: finalDeviceIds,
+          error_code,
+        }),
+      ),
+    );
+    const rows = results.flatMap((result) => {
+      metrics.clickhouse_query_time_ms += result.durationMs;
+      return result.rows;
     });
-
-    metrics.clickhouse_query_time_ms += durationMs;
-    metrics.records_returned += rows.length;
 
     // 2. Map response shape
     const weekdayNames = [
@@ -112,19 +119,36 @@ export class HeatmapService {
     ];
 
     if (mode === 'weekday') {
-      return rows.map((r) => {
+      const byCell = new Map<string, { day_of_week: unknown; hour: unknown; count: number }>();
+      rows.forEach((r) => {
+        const day = r.day_of_week ?? 0;
+        const hour = r.hour ?? 0;
+        const key = `${day}:${hour}`;
+        const current = byCell.get(key) ?? { day_of_week: day, hour, count: 0 };
+        current.count += r.count !== undefined ? Number(r.count) : 0;
+        byCell.set(key, current);
+      });
+
+      const data = Array.from(byCell.values()).map((r) => {
         const x = r.hour !== undefined ? Number(r.hour) : 0;
         const dayNum = Number(r.day_of_week);
         const y = weekdayNames[dayNum - 1] || 'Unknown';
-        const value = r.count !== undefined ? Number(r.count) : 0;
+        const value = Number(r.count);
         return { x, y, value };
       });
+      metrics.records_returned += data.length;
+      return data;
     } else {
-      return rows.map((r) => {
+      const byDay = new Map<string, number>();
+      rows.forEach((r) => {
         const day = r.day ? String(r.day) : '';
-        const value = r.count !== undefined ? Number(r.count) : 0;
+        byDay.set(day, (byDay.get(day) ?? 0) + (r.count !== undefined ? Number(r.count) : 0));
+      });
+      const data = Array.from(byDay.entries()).map(([day, value]) => {
         return { day, value };
       });
+      metrics.records_returned += data.length;
+      return data;
     }
   }
 }

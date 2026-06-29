@@ -94,41 +94,20 @@ Rules:
 - Reusing an existing preset creates only a widget link.
 - Date range and slot position belong to `widget`, not `preset`.
 - Preset fields are normalized by chart type; irrelevant fields are stored as `NULL`.
+- Table presets can store `table_columns`, `table_page_size`, and `table_record_limit`.
 
 ## Performance Guardrails
 
 | Guardrail | Value |
 | --- | --- |
-| Query time range | Max 90 days |
+| ClickHouse query window | Split into 90-day internal chunks for long ranges |
 | Pagination limit | Max 1000 |
 | Analytics group-by | Max 3 dimensions |
 | PostgreSQL timeout | 5 seconds |
 | ClickHouse timeout | 30 seconds |
 | Dynamic sort | Whitelisted fields only |
 
-Heavy analytics run in ClickHouse. Metadata enrichment is done in Node.js with hash maps and PostgreSQL batch lookups.
-
-## Environment
-
-Minimum `.env` shape:
-
-```env
-PORT=3000
-NODE_ENV=development
-
-PG_HOST=localhost
-PG_PORT=5432
-PG_USER=postgres
-PG_PASSWORD=postgres
-PG_DATABASE=noc_metadata
-PG_MAX_POOL=20
-PG_SSL=false
-
-CLICKHOUSE_HOST=http://localhost:8123
-CLICKHOUSE_USER=default
-CLICKHOUSE_PASSWORD=
-CLICKHOUSE_DATABASE=default
-```
+Heavy analytics run in ClickHouse. Metadata enrichment is done in Node.js with hash maps and PostgreSQL batch lookups. Requests can cover more than 90 days; services split those ranges into bounded ClickHouse queries and merge or stream the results before responding.
 
 ## Verification
 

@@ -10,6 +10,8 @@ export const createPresetSchema = z.object({
   time_bucket: nullableText(50),
   heatmap_mode: nullableText(100),
   table_columns: nullableText(500),
+  table_page_size: z.number().int().min(1).max(200).nullable().optional(),
+  table_record_limit: z.number().int().min(1).max(1000).nullable().optional(),
 });
 
 export const listPresetsQuerySchema = z.object({

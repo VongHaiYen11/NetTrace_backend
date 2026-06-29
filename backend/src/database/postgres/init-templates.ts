@@ -4,7 +4,7 @@ import pino from 'pino';
 const logger = pino({ name: 'init-templates' });
 
 export async function initTemplateTables(): Promise<void> {
-  logger.info('Initializing Template, Preset, and Widget tables in PostgreSQL...');
+  logger.info('Initializing template, preset, and widget tables in PostgreSQL...');
 
   const query = `
     CREATE TABLE IF NOT EXISTS template (
@@ -24,7 +24,9 @@ export async function initTemplateTables(): Promise<void> {
         group_by VARCHAR(50),
         time_bucket VARCHAR(50),
         heatmap_mode VARCHAR(100),
-        table_columns VARCHAR(500)
+        table_columns VARCHAR(500),
+        table_page_size INT,
+        table_record_limit INT
     );
 
     ALTER TABLE preset
@@ -59,7 +61,9 @@ export async function initTemplateTables(): Promise<void> {
         ADD COLUMN IF NOT EXISTS group_by VARCHAR(50),
         ADD COLUMN IF NOT EXISTS time_bucket VARCHAR(50),
         ADD COLUMN IF NOT EXISTS heatmap_mode VARCHAR(100),
-        ADD COLUMN IF NOT EXISTS table_columns VARCHAR(500);
+        ADD COLUMN IF NOT EXISTS table_columns VARCHAR(500),
+        ADD COLUMN IF NOT EXISTS table_page_size INT,
+        ADD COLUMN IF NOT EXISTS table_record_limit INT;
 
     CREATE TABLE IF NOT EXISTS widget (
         widget_id SERIAL PRIMARY KEY,
@@ -122,9 +126,9 @@ export async function initTemplateTables(): Promise<void> {
 
   try {
     await executePgQuery(query);
-    logger.info('PostgreSQL Template tables initialized successfully.');
+    logger.info('PostgreSQL template tables initialized successfully.');
   } catch (error) {
-    logger.error({ error }, 'Failed to initialize PostgreSQL Template tables.');
+    logger.error({ error }, 'Failed to initialize PostgreSQL template tables.');
     throw error;
   }
 }

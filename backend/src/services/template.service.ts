@@ -168,6 +168,8 @@ export class TemplateService {
         time_bucket: wData.time_bucket || null,
         heatmap_mode: wData.heatmap_mode || null,
         table_columns: wData.table_columns || null,
+        table_page_size: wData.table_page_size ?? null,
+        table_record_limit: wData.table_record_limit ?? null,
       }),
       client,
     );

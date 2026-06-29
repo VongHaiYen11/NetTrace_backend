@@ -37,6 +37,7 @@ import { cn } from '../../../utils/cn';
 import { decodeTableColumns } from '../../../utils/columns';
 import { normalizePresetFieldsByChartType } from '../../../utils/presetPayload';
 import type { WidgetKind, WidgetSettingsValues } from './WidgetSettingsDrawer';
+import { DatePicker, WeekPicker, getWeekRangeForDateValue } from './WeekPicker';
 
 export type DashboardWidgetConfig = WidgetSettingsValues & {
   id: string;
@@ -195,6 +196,23 @@ const defaultTableColumns: ExportColumn[] = [
   'description',
 ];
 
+const DEFAULT_TABLE_RECORD_LIMIT = 15;
+const DEFAULT_TABLE_TOTAL_RECORDS = 200;
+const MAX_TABLE_RECORD_LIMIT = 200;
+const MAX_TABLE_TOTAL_RECORDS = 1000;
+
+function normalizeTablePageSize(value: unknown) {
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) return DEFAULT_TABLE_RECORD_LIMIT;
+  return Math.min(MAX_TABLE_RECORD_LIMIT, Math.max(1, Math.trunc(numericValue)));
+}
+
+function normalizeTableRecordLimit(value: unknown) {
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) return DEFAULT_TABLE_TOTAL_RECORDS;
+  return Math.min(MAX_TABLE_TOTAL_RECORDS, Math.max(1, Math.trunc(numericValue)));
+}
+
 function getDisplayOptions(widget: DashboardWidgetConfig) {
   if (widget.chartType === 'table') {
     return [
@@ -231,7 +249,11 @@ function normalizeChartPatch(
     return { chartType, groupBy: current.groupBy === 'none' ? 'severity' : current.groupBy };
   }
   if (chartType === 'heatmap') {
-    return { chartType, groupBy: 'none', heatmapMode: current.heatmapMode ?? 'weekday', layoutSpan: 2 };
+    const heatmapMode = current.heatmapMode ?? 'weekday';
+    const dateRange = heatmapMode === 'calendar'
+      ? getYearDateRange(getYearFromDate(current.startDate))
+      : getWeekRangeForDateValue(current.startDate);
+    return { chartType, groupBy: 'none', heatmapMode, layoutSpan: 2, ...dateRange };
   }
   return { chartType, groupBy: 'none', layoutSpan: 2 };
 }
@@ -345,6 +367,10 @@ function getYearDateRange(yearValue: string) {
     startDate: `${year}-01-01`,
     endDate: year === currentYear ? getCurrentIsoDate() : `${year}-12-31`,
   };
+}
+
+function toDateInputValue(value: string) {
+  return value?.slice(0, 10) || '';
 }
 
 function getChartWidgets(widgets: DashboardWidgetConfig[]) {
@@ -480,6 +506,8 @@ function isWidgetSameAsPreset(widget: DashboardWidgetConfig, preset: PresetSumma
     timeBucket: widget.timeBucket,
     heatmapMode: widget.heatmapMode,
     tableColumns: widget.tableColumns,
+    tablePageSize: widget.tablePageSize,
+    tableRecordLimit: widget.tableRecordLimit,
   });
   const presetFields = normalizePresetFieldsByChartType({
     chartType,
@@ -488,6 +516,8 @@ function isWidgetSameAsPreset(widget: DashboardWidgetConfig, preset: PresetSumma
     timeBucket: preset.time_bucket,
     heatmapMode: preset.heatmap_mode,
     tableColumns: preset.table_columns,
+    tablePageSize: preset.table_page_size,
+    tableRecordLimit: preset.table_record_limit,
   });
   return (
     (widget.title || getDefaultWidgetTitle(widget)).trim() === getPresetDisplayName(preset) &&
@@ -496,8 +526,17 @@ function isWidgetSameAsPreset(widget: DashboardWidgetConfig, preset: PresetSumma
     widgetFields.group_by === presetFields.group_by &&
     widgetFields.time_bucket === presetFields.time_bucket &&
     widgetFields.heatmap_mode === presetFields.heatmap_mode &&
-    widgetFields.table_columns === presetFields.table_columns
+    widgetFields.table_columns === presetFields.table_columns &&
+    widgetFields.table_page_size === presetFields.table_page_size &&
+    widgetFields.table_record_limit === presetFields.table_record_limit
   );
+}
+
+function findMatchingPresetForWidget(
+  widget: DashboardWidgetConfig,
+  reusablePresets: PresetSummary[],
+) {
+  return reusablePresets.find((preset) => isWidgetSameAsPreset(widget, preset)) ?? null;
 }
 
 export function buildTemplateWidgetInputs(
@@ -511,7 +550,10 @@ export function buildTemplateWidgetInputs(
   );
 
   return getVisibleChartWidgets(widgets).map((widget) => {
-    const presetId = getReusablePresetId(widget);
+    const matchedPreset = getReusablePresetId(widget)
+      ? null
+      : findMatchingPresetForWidget(widget, reusablePresets);
+    const presetId = getReusablePresetId(widget) ?? matchedPreset?.preset_id ?? null;
     const sourcePreset = presetId
       ? reusablePresets.find((preset) => preset.preset_id === presetId)
       : null;
@@ -538,6 +580,8 @@ export function buildTemplateWidgetInputs(
             timeBucket: widget.timeBucket,
             heatmapMode: widget.heatmapMode,
             tableColumns: widget.tableColumns,
+            tablePageSize: widget.tablePageSize,
+            tableRecordLimit: widget.tableRecordLimit,
           }),
         };
       }
@@ -563,6 +607,8 @@ export function buildTemplateWidgetInputs(
         timeBucket: widget.timeBucket,
         heatmapMode: widget.heatmapMode,
         tableColumns: widget.tableColumns,
+        tablePageSize: widget.tablePageSize,
+        tableRecordLimit: widget.tableRecordLimit,
       }),
     };
   });
@@ -684,6 +730,8 @@ function applyPresetToWidget(
     timeBucket: normalizeTimeBucket(preset.time_bucket),
     heatmapMode: normalizeHeatmapMode(preset.heatmap_mode),
     tableColumns: normalizeTableColumns(preset.table_columns),
+    tablePageSize: preset.table_page_size ?? widget.tablePageSize ?? widget.tableRecordLimit ?? DEFAULT_TABLE_RECORD_LIMIT,
+    tableRecordLimit: preset.table_record_limit ?? widget.tableRecordLimit ?? DEFAULT_TABLE_TOTAL_RECORDS,
     layoutSpan: chartType === 'table' || chartType === 'heatmap' ? 2 : 1,
     startDate: widget.startDate,
     endDate: widget.endDate,
@@ -715,6 +763,8 @@ function applyTemplateWidgetsFromDb(
       timeBucket: normalizeTimeBucket(templateWidget.preset.time_bucket),
       heatmapMode: normalizeHeatmapMode(templateWidget.preset.heatmap_mode),
       tableColumns: normalizeTableColumns(templateWidget.preset.table_columns),
+      tablePageSize: templateWidget.preset.table_page_size ?? slot.tablePageSize ?? slot.tableRecordLimit ?? DEFAULT_TABLE_RECORD_LIMIT,
+      tableRecordLimit: templateWidget.preset.table_record_limit ?? slot.tableRecordLimit ?? DEFAULT_TABLE_TOTAL_RECORDS,
       layoutSpan: chartType === 'table' || chartType === 'heatmap' ? 2 : 1,
       startDate: normalizeTemplateDate(templateWidget.start_date, slot.startDate || ''),
       endDate: normalizeTemplateDate(templateWidget.end_date, slot.endDate || ''),
@@ -747,7 +797,8 @@ function createDashboardTemplateFromDetail(template: TemplateDetail): DashboardT
             widget.preset.preset_name || `Preset ${widget.preset.preset_id}`,
           ]),
         );
-        return snapshot.widgets.map((widget) => {
+        const widgetsWithPresetLinks = applyTemplateWidgetsFromDb(snapshot.widgets, template.widgets);
+        return widgetsWithPresetLinks.map((widget) => {
           if (widget.type.startsWith('kpi')) return widget;
           const presetName = presetNamesByPosition.get(widget.layoutOrder);
           return presetName ? { ...widget, title: presetName } : widget;
@@ -1014,6 +1065,8 @@ export function GeneralSettingsDrawer({
       info2: true,
       info3: true,
       tableColumns: defaultTableColumns,
+      tablePageSize: DEFAULT_TABLE_RECORD_LIMIT,
+      tableRecordLimit: DEFAULT_TABLE_TOTAL_RECORDS,
       preset: 'custom',
       startDate: '',
       endDate: '',
@@ -1040,6 +1093,8 @@ export function GeneralSettingsDrawer({
       info2: true,
       info3: true,
       tableColumns: defaultTableColumns,
+      tablePageSize: DEFAULT_TABLE_RECORD_LIMIT,
+      tableRecordLimit: DEFAULT_TABLE_TOTAL_RECORDS,
       preset: `preset:${preset.preset_id}`,
       startDate: '',
       endDate: '',
@@ -1129,7 +1184,8 @@ export function GeneralSettingsDrawer({
         selected_cards: buildTemplateSnapshot(normalizedWidgets, sourceLayoutCount),
         widgets: buildTemplateWidgetInputs(normalizedWidgets, savedPresets),
       });
-      const savedTemplate = createDashboardTemplateFromSaved(created.data);
+      const detail = await nettraceApi.getTemplateDetail(created.data.template_id);
+      const savedTemplate = createDashboardTemplateFromDetail(detail.data);
       if (savedTemplate) {
         setSavedTemplates((current) => [savedTemplate, ...current]);
         setSelectedTemplateId(savedTemplate.id);
@@ -1175,7 +1231,8 @@ export function GeneralSettingsDrawer({
         selected_cards: buildTemplateSnapshot(normalizedWidgets, sourceLayoutCount),
         widgets: buildTemplateWidgetInputs(normalizedWidgets, savedPresets),
       });
-      const savedTemplate = createDashboardTemplateFromSaved(updated.data);
+      const detail = await nettraceApi.getTemplateDetail(updated.data.template_id);
+      const savedTemplate = createDashboardTemplateFromDetail(detail.data);
       if (savedTemplate) {
         setSavedTemplates((current) =>
           current.map((item) => (item.id === savedTemplate.id ? savedTemplate : item)),
@@ -1943,7 +2000,7 @@ export function GeneralSettingsDrawer({
                                   const heatmapMode = event.target.value as WidgetSettingsValues['heatmapMode'];
                                   const yearRange = heatmapMode === 'calendar'
                                     ? getYearDateRange(getYearFromDate(selectedSlot.startDate))
-                                    : {};
+                                    : getWeekRangeForDateValue(selectedSlot.startDate);
                                   setDetailDraftWidgets((current) =>
                                     updateWidget(current, selectedSlot.id, { heatmapMode, ...yearRange }),
                                   );
@@ -1962,6 +2019,38 @@ export function GeneralSettingsDrawer({
                             </p>
                             {selectedSlot.chartType === 'table' ? (
                               <div className="space-y-3">
+                                <div className="grid gap-3 sm:grid-cols-2">
+                                  <Field label="Records per page" labelVariant="nested">
+                                    <Input
+                                      type="number"
+                                      min={1}
+                                      max={MAX_TABLE_RECORD_LIMIT}
+                                      value={selectedSlot.tablePageSize ?? selectedSlot.tableRecordLimit ?? DEFAULT_TABLE_RECORD_LIMIT}
+                                      onChange={(event) =>
+                                        setDetailDraftWidgets((current) =>
+                                          updateWidget(current, selectedSlot.id, {
+                                            tablePageSize: normalizeTablePageSize(event.target.value),
+                                          }),
+                                        )
+                                      }
+                                    />
+                                  </Field>
+                                  <Field label="Number of records" labelVariant="nested">
+                                    <Input
+                                      type="number"
+                                      min={1}
+                                      max={MAX_TABLE_TOTAL_RECORDS}
+                                      value={selectedSlot.tableRecordLimit ?? DEFAULT_TABLE_TOTAL_RECORDS}
+                                      onChange={(event) =>
+                                        setDetailDraftWidgets((current) =>
+                                          updateWidget(current, selectedSlot.id, {
+                                            tableRecordLimit: normalizeTableRecordLimit(event.target.value),
+                                          }),
+                                        )
+                                      }
+                                    />
+                                  </Field>
+                                </div>
                                 <div className="flex flex-wrap gap-2">
                                   <Button
                                     size="sm"
@@ -2095,6 +2184,24 @@ export function GeneralSettingsDrawer({
                                   />
                                 </Field>
                               </>
+                            ) : selectedSlot.chartType === 'heatmap' && selectedSlot.heatmapMode === 'weekday' ? (
+                              <>
+                                <p className="mb-3 font-mono text-base font-black tracking-normal text-medium">
+                                  Week
+                                </p>
+                                <div className="grid gap-4">
+                                  <Field label="" labelVariant="nested">
+                                    <WeekPicker
+                                      value={selectedSlot.startDate}
+                                      onChange={(range) => {
+                                        setDetailDraftWidgets((current) =>
+                                          updateWidget(current, selectedSlot.id, range),
+                                        );
+                                      }}
+                                    />
+                                  </Field>
+                                </div>
+                              </>
                             ) : (
                               <>
                                 <p className="mb-3 font-mono text-base font-black tracking-normal text-medium">
@@ -2102,23 +2209,29 @@ export function GeneralSettingsDrawer({
                                 </p>
                                 <div className="grid gap-4 sm:grid-cols-2">
                                   <Field label="Start date" labelVariant="nested">
-                                    <Input
-                                      type="date"
-                                      value={selectedSlot.startDate}
+                                    <DatePicker
+                                      value={toDateInputValue(selectedSlot.startDate)}
                                       onChange={(event) =>
                                         setDetailDraftWidgets((current) =>
-                                          updateWidget(current, selectedSlot.id, { startDate: event.target.value }),
+                                          updateWidget(
+                                            current,
+                                            selectedSlot.id,
+                                            { startDate: event },
+                                          ),
                                         )
                                       }
                                     />
                                   </Field>
                                   <Field label="End date" labelVariant="nested">
-                                    <Input
-                                      type="date"
-                                      value={selectedSlot.endDate}
+                                    <DatePicker
+                                      value={toDateInputValue(selectedSlot.endDate)}
                                       onChange={(event) =>
                                         setDetailDraftWidgets((current) =>
-                                          updateWidget(current, selectedSlot.id, { endDate: event.target.value }),
+                                          updateWidget(
+                                            current,
+                                            selectedSlot.id,
+                                            { endDate: event },
+                                          ),
                                         )
                                       }
                                     />

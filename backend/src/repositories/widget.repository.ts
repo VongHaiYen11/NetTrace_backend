@@ -77,7 +77,9 @@ export class WidgetRepository {
         p.group_by,
         p.time_bucket,
         p.heatmap_mode,
-        p.table_columns
+        p.table_columns,
+        p.table_page_size,
+        p.table_record_limit
       FROM widget w
       INNER JOIN preset p ON w.preset_id = p.preset_id
       WHERE w.template_id = $1
@@ -102,6 +104,8 @@ export class WidgetRepository {
         time_bucket: row.time_bucket,
         heatmap_mode: row.heatmap_mode,
         table_columns: row.table_columns,
+        table_page_size: row.table_page_size,
+        table_record_limit: row.table_record_limit,
       },
     }));
   }
